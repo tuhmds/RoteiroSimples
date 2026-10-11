@@ -1,0 +1,1 @@
+"""Bibliotecas padrão do RoteiroSimples."""

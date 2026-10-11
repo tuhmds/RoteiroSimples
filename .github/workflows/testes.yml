@@ -1,0 +1,18 @@
+name: Testes RS
+on:
+  push:
+  pull_request:
+jobs:
+  compilador:
+    strategy:
+      fail-fast: false
+      matrix:
+        so: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.so }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Testes de análise e execução nativa
+        run: python -m unittest discover -s testes -v

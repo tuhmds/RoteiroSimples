@@ -1,9 +1,10 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
-echo === RoteiroSimples (RS) 0.1 - Executavel nativo Windows ===
-echo.
-"%~dp0roteiro_windows.exe"
-echo.
-echo Pressione qualquer tecla para fechar esta janela.
-pause >nul
+if not exist roteiro_windows.exe (
+ echo O executavel ainda nao foi gerado. Execute COMPILAR_WINDOWS.bat.
+ pause
+ exit /b 1
+)
+roteiro_windows.exe
+pause

@@ -1,0 +1,11 @@
+inclua matematica
+início {
+    seja preço = 10
+    seja distancia = 5
+    seja taxa = multiplicar(distancia, 2)
+    escreva("Cálculo de entrega em reais inteiros:")
+    escreva(somar(preço, taxa))
+    escreva((10 + 5) * 2)
+    escreva(dividir(-17, 5))
+    escreva(resto(-17, 5))
+}

@@ -1,87 +1,81 @@
-# RoteiroSimples (RS) — Protótipo 0.1
+# RoteiroSimples (RS) — versão experimental 0.2
 
-**Objetivo:** construir uma linguagem de programação de propósito geral, simples de aprender, cuja sintaxe, mensagens de erro e documentação sejam concebidas em português brasileiro.
+Uma linguagem de programação **em português brasileiro**, com sintaxe simples e geração **direta de código de máquina x86-64**. Projeto experimental; ainda não é apropriado para sistemas em produção.
 
-Este pacote é **o primeiro experimento funcional**, não a linguagem completa. Ele recebe um arquivo `.rts` e produz **código de máquina x86-64 diretamente**, em um executável Windows (`.exe`, formato PE32+) ou Linux (formato ELF64). O compilador experimental foi escrito em Python 3 para acelerar a primeira etapa; os executáveis produzidos **não dependem de Python** e não passam por compiladores C, Rust ou montadores Assembly.
+## Primeiro programa com matemática
 
-## Teste imediato no Windows (sem instalar Python)
-
-1. Extraia o ZIP para uma pasta.
-2. Dê dois cliques em **`TESTAR_WINDOWS.bat`**. Ele abre o `.exe` já gerado e deixa a janela aberta para você conferir a saída.
-3. A saída esperada é:
-
-    Olá, mundo!
-    O RoteiroSimples está funcionando!
-
-**Teste real em Windows:** a versão anterior deste mesmo gerador, com a mesma geração de código, foi executada com sucesso pelo usuário no Windows em 11/10/2026. O pacote renomeado preserva o funcionamento do gerador; o executável atualizado deve ser testado novamente no seu computador.
-
-## Escrever e compilar seus próprios programas no Windows
-
-1. Instale Python 3 caso ainda não tenha. Python é necessário **para executar o compilador experimental**, não para executar o `.exe` criado.
-2. Abra `exemplos/ola.rts` no Bloco de Notas e mude a mensagem entre aspas.
-3. Dê dois cliques em **`COMPILAR_WINDOWS.bat`**, que recompila `exemplos/ola.rts` e executa a nova versão.
-
-Ou, no PowerShell aberto na pasta extraída:
-
-```powershell
-py -3 compilar.py exemplos\ola.rts --alvo windows -o meu_programa.exe
-.\meu_programa.exe
-```
-
-## Exemplo de código
+Arquivo `exemplos/matematica.rts`:
 
 ```text
+inclua matematica
 início {
-    escreva("Olá, mundo!")
-    escreva("O RoteiroSimples está funcionando!")
+    seja preço = 10
+    seja distancia = 5
+    seja taxa = multiplicar(distancia, 2)
+    escreva("Cálculo de entrega em reais inteiros:")
+    escreva(somar(preço, taxa))
+    escreva((10 + 5) * 2)
+    escreva(dividir(-17, 5))
+    escreva(resto(-17, 5))
 }
 ```
 
-### Regras que já funcionam
+Saída esperada:
 
-- O programa começa com `início {` e termina com `}` em linhas próprias.
-- Cada instrução `escreva("mensagem")` imprime um texto e acrescenta uma quebra de linha.
-- Caracteres acentuados são aceitos em UTF-8.
-- `\n` dentro da mensagem significa quebra de linha.
-- Linhas inteiras iniciadas com `//` são comentários.
-- A instrução `escreva` aceita ou não `;` no fim.
-- Erros de escrita dessa pequena sintaxe já são comunicados em português.
-
-### O que ainda NÃO funciona
-
-Variáveis (`seja`), contas, condições (`se`/`senão`), laços, funções, tipos, bibliotecas, interfaces, jogos, depuração e otimização. Esse código é um **primeiro compilador experimental de textos**, e não um compilador de uso geral. O alvo Windows utiliza a API do sistema `WriteFile` para saída, com página de código UTF-8; seu funcionamento real em consoles diferentes ainda precisa ser testado. Não existe assinatura digital, ASLR ou infraestrutura de segurança de compilador de produção nesta versão.
-
-## Linux x86-64
-
-```bash
-python3 compilar.py exemplos/ola.rts --alvo linux -o meu_programa
-./meu_programa
+```text
+Cálculo de entrega em reais inteiros:
+20
+30
+-3
+-2
 ```
 
-O executável Linux foi de fato executado e imprimiu os textos esperados neste ambiente.
+## Uso
 
-## Testes automatizados
+O compilador de desenvolvimento está escrito em **Python 3.10 ou superior**; os executáveis gerados **não usam Python**, C, Rust, LLVM nem montador externo.
+
+No Windows: execute `COMPILAR_WINDOWS.bat` (Python 3 instalado), ou rode:
+
+```powershell
+py -3 compilar.py exemplos\matematica.rts --alvo windows -o roteiro_windows.exe
+.\roteiro_windows.exe
+```
+
+No Linux x86-64:
+
+```bash
+python3 compilar.py exemplos/matematica.rts --alvo linux -o roteiro_linux
+./roteiro_linux
+```
+
+Para rodar os testes:
 
 ```bash
 python3 -m unittest discover -s testes -v
 ```
 
-Testam análise do código, erros simples, UTF-8 e execução nativa no Linux; a saída do compilador Windows tem verificação estática de estrutura PE e importações (não é um teste em execução Windows).
+## O que funciona
 
-## Como ele funciona por dentro
+- `início { ... }`, uma instrução por linha, `//` para comentários;
+- `escreva("texto")`, UTF-8, e `escreva(expressão numérica)`;
+- variáveis `seja nome = expressão` e atribuição `nome = expressão`;
+- números inteiros com sinal de 64 bits, incluindo negativos;
+- `+`, `-`, `*`, `/`, `%`, parênteses e precedência matemática;
+- `inclua matematica` com `somar`, `subtrair`, `multiplicar`, `dividir` e `resto`;
+- divisão entre inteiros com truncamento em direção a zero (por exemplo, -17 / 5 = -3);
+- erro de execução em português e saída com código 1 para divisão por zero e transbordamento específico `-2^63 / -1`;
+- compilação nativa ELF64 Linux e PE32+ Windows (x86-64).
 
-1. Lê o código em português do arquivo `.rts`.
-2. Identifica as instruções atualmente aceitas e valida a escrita.
-3. Constrói os bytes de instruções x86-64 e guarda as mensagens.
-4. Ajusta os deslocamentos dos endereços usados pelas instruções.
-5. Grava os cabeçalhos e as seções do arquivo ELF64 ou PE32+, com as chamadas necessárias ao sistema operacional.
+## Limitações e segurança
 
-## Próxima versão sugerida: 0.2
+- **Ainda não há decimais**, condições, laços, funções criadas pelo usuário, interfaces ou suporte a jogos;
+- a soma, subtração e multiplicação usam aritmética de 64 bits sem detecção de estouro (resultado modular);
+- o executável Windows **não foi executado nesta sessão**: possui validação estática de estrutura PE; o teste de execução real deve rodar num Windows;
+- o formato PE 0.2 é experimental e usa três seções limitadas a 4 KiB cada;
+- ainda não há assinatura de executáveis, PIE/ASLR ou proteção de compilador de produção;
+- cada comando ocupa uma linha; `inclua matematica` fica antes de `início`;
+- a biblioteca matemática contém **mapeamentos de operações para instruções nativas**, não uma biblioteca de execução em Python.
 
-Substituir a leitura simples de linhas por um analisador léxico e sintático de verdade. Em seguida, implementar variáveis e expressões (`seja preço = 10`, `escreva(preço + 2)`), com testes nos dois sistemas. Depois virão decisões, repetições e funções. Não vamos anunciar suporte a jogos ou aplicativos até haver compilador, biblioteca e ferramentas adequados.
+O código da implementação está em `sintaxe.py` (análise), `codigo_nativo.py` (geração direta de bytes AMD64), `bibliotecas/matematica.py` (nomes de operações) e `compilar.py` (linha de comando).
 
-**Nome oficial:** RoteiroSimples (RS). A extensão `.rts` evita conflito com a extensão `.rs` do Rust. A licença e o modelo de governança ainda não foram definidos.
-
-## Mudanças de identidade neste pacote
-
-Nome oficial **RoteiroSimples (RS)**, extensão `.rts`, mensagens dos scripts `.bat` e nomes dos executáveis atualizados. A lógica de geração de código de máquina foi preservada. A versão 0.1 continua limitada ao comando `escreva`.
+**Próximas etapas:** decimais e regras de precisão, comparação, `se`/`senão`, laços, tipos, bibliotecas e testes contínuos em Windows e Linux. Licença e governança ainda não escolhidas.
