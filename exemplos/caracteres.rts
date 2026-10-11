@@ -1,5 +1,5 @@
 // Comentário: nesta fase os comentários ocupam uma linha.
-início {
+inicio {
     escreva("Acentuação: ação, você, coração, ciência.")
     escreva("Quebra de linha embutida: primeira\nsegunda")
 }

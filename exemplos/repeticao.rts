@@ -1,5 +1,5 @@
 inclua matematica
-início {
+inicio {
     seja contador = 0
     seja soma = 0
 

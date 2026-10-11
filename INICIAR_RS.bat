@@ -5,7 +5,7 @@ cd /d "%~dp0"
 :MENU
 cls
 echo ==============================================
-echo         RoteiroSimples RS 0.4
+echo         RoteiroSimples RS 0.4.1
 echo ==============================================
 echo.
 echo  [1] Compilar e executar exemplo de repeticao

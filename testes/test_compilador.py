@@ -14,31 +14,31 @@ from codigo_nativo import compilar
 
 class TestesRS(unittest.TestCase):
     def test_analisador_entende_prioridade_e_biblioteca(self):
-        p = analisar_programa('inclua matematica\ninício {\n seja a = 3 + 4 * 2\n escreva(somar(a, 2))\n}')
+        p = analisar_programa('inclua matematica\ninicio {\n seja a = 3 + 4 * 2\n escreva(somar(a, 2))\n}')
         self.assertEqual(list(p.variaveis), ['a'])
         self.assertEqual(p.instrucoes[0][2], ('bin', '+', ('numero', 3), ('bin', '*', ('numero', 4), ('numero', 2))))
 
     def test_importacao_obrigatoria(self):
         with self.assertRaisesRegex(ErroCompilacao, 'inclua matematica'):
-            analisar_programa('início {\n escreva(somar(1, 2))\n}')
+            analisar_programa('inicio {\n escreva(somar(1, 2))\n}')
 
     def test_variavel_inexistente(self):
         with self.assertRaisesRegex(ErroCompilacao, 'não foi declarada'):
-            analisar_programa('início {\n escreva(valor)\n}')
+            analisar_programa('inicio {\n escreva(valor)\n}')
 
     def test_sem_linguagem_estrangeira_ou_texto_desconhecido(self):
         with self.assertRaisesRegex(ErroCompilacao, 'Linha 2'):
-            analisar_programa('início {\n print("Oi")\n}')
+            analisar_programa('inicio {\n print("Oi")\n}')
 
     def test_linha_e_comentario_em_string(self):
-        p = analisar_programa('início {\n escreva("https://exemplo.br") // válido\n}')
+        p = analisar_programa('inicio {\n escreva("https://exemplo.br") // válido\n}')
         self.assertEqual(p.instrucoes, [('texto', 'https://exemplo.br\n')])
 
     def test_linux_executa_textos_e_matematica(self):
         if sys.platform != 'linux' or os.uname().machine != 'x86_64':
             self.skipTest('Execução nativa requer Linux x86-64')
         fonte = '''inclua matematica
-início {
+inicio {
   seja a = 2
   seja b = 7
   escreva("Olá, RS!")
@@ -60,7 +60,7 @@ início {
     def test_linux_divisao_por_zero(self):
         if sys.platform != 'linux' or os.uname().machine != 'x86_64':
             self.skipTest('Execução nativa requer Linux x86-64')
-        programa = 'inclua matematica\ninício {\n seja x = 0\n escreva(dividir(10, x))\n}'
+        programa = 'inclua matematica\ninicio {\n seja x = 0\n escreva(dividir(10, x))\n}'
         r = self.executar_linux(programa)
         self.assertEqual(r.returncode, 1)
         self.assertIn('divisão por zero', r.stderr)
@@ -68,18 +68,18 @@ início {
     def test_linux_estouro_divisao(self):
         if sys.platform != 'linux' or os.uname().machine != 'x86_64':
             self.skipTest('Execução nativa requer Linux x86-64')
-        programa = 'início {\n escreva(-9223372036854775808 / -1)\n}'
+        programa = 'inicio {\n escreva(-9223372036854775808 / -1)\n}'
         r = self.executar_linux(programa)
         self.assertEqual(r.returncode, 1)
         self.assertIn('fora do limite', r.stderr)
 
     def test_comparacoes_precedencia_e_decisoes(self):
-        fonte = """início {
+        fonte = """inicio {
             seja a = 4
             seja b = 7
             se a + 3 == b {
                 escreva("igual")
-            } senão {
+            } senao {
                 escreva("diferente")
             }
         }"""
@@ -88,19 +88,19 @@ início {
         self.assertEqual(programa.instrucoes[2][1][0], 'comparacao')
 
     def test_variavel_local_no_bloco_rejeitada(self):
-        fonte = 'início {\n se 1 == 1 {\n seja x = 1\n }\n}'
+        fonte = 'inicio {\n se 1 == 1 {\n seja x = 1\n }\n}'
         with self.assertRaisesRegex(ErroCompilacao, 'declare variáveis antes'):
             analisar_programa(fonte)
 
     def test_linux_decisoes_e_comparacoes(self):
         if sys.platform != 'linux' or os.uname().machine != 'x86_64':
             self.skipTest('Requer Linux x86-64')
-        fonte = """início {
+        fonte = """inicio {
             seja x = 17
             seja y = 18
             se x >= y {
                 escreva("adulto")
-            } senão {
+            } senao {
                 escreva("menor")
             }
             se (3 + 4 * 2) == 11 {
@@ -122,7 +122,7 @@ início {
         self.assertEqual(r.stdout, 'menor\nonze\n1\n0\n1\n0\n0\n1\n')
 
     def test_parser_lacos_aninhados(self):
-        fonte = """início {
+        fonte = """inicio {
             seja i = 0
             enquanto i < 3 {
                 i = i + 1
@@ -141,22 +141,22 @@ início {
     def test_pare_e_continue_fora_do_laco_rejeitados(self):
         for palavra in ('pare', 'continue'):
             with self.subTest(palavra=palavra):
-                fonte = f'início {{\n {palavra}\n}}'
+                fonte = f'inicio {{\n {palavra}\n}}'
                 with self.assertRaisesRegex(ErroCompilacao, 'só pode ser usado'):
                     analisar_programa(fonte)
-                fonte_condicional = f'início {{\n se 1 {{\n {palavra}\n }}\n}}'
+                fonte_condicional = f'inicio {{\n se 1 {{\n {palavra}\n }}\n}}'
                 with self.assertRaisesRegex(ErroCompilacao, 'só pode ser usado'):
                     analisar_programa(fonte_condicional)
 
     def test_variavel_no_laco_rejeitada(self):
-        fonte = 'início {\n enquanto 1 {\n seja numero = 5\n }\n}'
+        fonte = 'inicio {\n enquanto 1 {\n seja numero = 5\n }\n}'
         with self.assertRaisesRegex(ErroCompilacao, 'declare variáveis antes'):
             analisar_programa(fonte)
 
     def test_linux_repeticao_continue_e_pare(self):
         if sys.platform != 'linux' or os.uname().machine != 'x86_64':
             self.skipTest('Requer Linux x86-64')
-        fonte = """início {
+        fonte = """inicio {
             seja contador = 0
             seja soma = 0
             enquanto contador < 7 {
@@ -182,7 +182,7 @@ início {
     def test_linux_lacos_aninhados(self):
         if sys.platform != 'linux' or os.uname().machine != 'x86_64':
             self.skipTest('Requer Linux x86-64')
-        fonte = """início {
+        fonte = """inicio {
             seja i = 0
             seja j = 0
             seja total = 0
@@ -209,7 +209,7 @@ início {
     def test_windows_lacos_quando_disponivel(self):
         if sys.platform != 'win32':
             self.skipTest('Requer Windows real')
-        fonte = """início {
+        fonte = """inicio {
             seja i = 0
             seja total = 0
             enquanto i < 5 {
@@ -232,7 +232,7 @@ início {
             self.assertEqual(r.stdout, '8\n')
 
     def test_windows_pe_e_contem_importacoes(self):
-        p = analisar_programa('inclua matematica\ninício {\n escreva(dividir(20, 4))\n}')
+        p = analisar_programa('inclua matematica\ninicio {\n escreva(dividir(20, 4))\n}')
         exe = compilar(p, 'windows')
         self.assertEqual(exe[:2], b'MZ')
         pos = struct.unpack_from('<I', exe, 0x3c)[0]
@@ -244,12 +244,12 @@ início {
     def test_windows_decisoes_quando_disponivel(self):
         if sys.platform != 'win32':
             self.skipTest('Requer Windows real')
-        fonte = """início {
+        fonte = """inicio {
             seja idade = 17
             seja limite = 18
             se idade >= limite {
                 escreva("adulto")
-            } senão {
+            } senao {
                 escreva("menor")
             }
             escreva(idade < limite)
@@ -264,7 +264,7 @@ início {
     def test_windows_execucao_quando_disponivel(self):
         if sys.platform != 'win32':
             self.skipTest('Requer Windows real')
-        fonte = 'inclua matematica\ninício {\n escreva(multiplicar(7, 6))\n}'
+        fonte = 'inclua matematica\ninicio {\n escreva(multiplicar(7, 6))\n}'
         with tempfile.TemporaryDirectory() as d:
             exe = Path(d) / 'teste.exe'
             exe.write_bytes(compilar(analisar_programa(fonte), 'windows'))

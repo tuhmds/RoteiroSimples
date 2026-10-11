@@ -1,5 +1,5 @@
 inclua matematica
-início {
+inicio {
     seja idade = 17
     seja limite = 18
     seja resultado = 0
@@ -8,7 +8,7 @@ início {
     se idade >= limite {
         escreva("Maior de idade")
         resultado = 1
-    } senão {
+    } senao {
         escreva("Menor de idade")
         resultado = 2
     }

@@ -1,8 +1,16 @@
-# RoteiroSimples (RS) — versão experimental 0.4
+# RoteiroSimples (RS) — versão experimental 0.4.1
 
 **RoteiroSimples** é um projeto experimental de linguagem de programação em português brasileiro. O compilador de desenvolvimento está escrito em Python 3.10+ e gera instruções x86-64 diretamente para executáveis Windows (PE32+) e Linux (ELF64), sem passar por C, Rust ou LLVM. Os programas gerados não precisam de Python para executar.
 
 > Estado do projeto: protótipo educacional. Ainda não é seguro para sistemas de produção.
+
+## Padrão da RS 0.4.1: sintaxe sem acentos
+
+**Regra oficial:** comandos, nomes de variáveis e bibliotecas usam apenas caracteres ASCII, como `inicio`, `senao`, `preco` e `matematica`. Não são aceitas grafias acentuadas como código. **Não haverá aliases automáticos** nem normalização Unicode de identificadores nesta fase.
+
+Textos entre aspas, comentários e mensagens de erro continuam em português brasileiro e aceitam UTF-8 normalmente: `escreva("Olá, coração!")`.
+
+**Mudança de compatibilidade:** programas anteriores que continham comandos ou nomes de variáveis com acentos devem trocar essas grafias pela forma sem acentos. Todos os exemplos e testes deste repositório foram atualizados.
 
 ## Comece aqui no Windows
 
@@ -21,7 +29,7 @@ O laço `enquanto` repete um bloco enquanto a condição for diferente de zero. 
 Arquivo `exemplos/repeticao.rts`: 
 
 ```text
-início {
+inicio {
     seja contador = 0
     enquanto contador < 5 {
         contador = contador + 1
@@ -38,7 +46,7 @@ início {
 
 Saída esperada: `1`, `2` e `4`, cada número em uma linha.
 
-Laços podem ser aninhados e conter decisões `se`/`senão`. `pare` e `continue` fora de um laço produzem erro de compilação. Por enquanto, todas as variáveis devem ser declaradas fora dos blocos `se` e `enquanto`. Um laço sem condição de saída pode executar indefinidamente.
+Laços podem ser aninhados e conter decisões `se`/`senao`. `pare` e `continue` fora de um laço produzem erro de compilação. Por enquanto, todas as variáveis devem ser declaradas fora dos blocos `se` e `enquanto`. Um laço sem condição de saída pode executar indefinidamente.
 
 ### Compilação manual
 
@@ -64,20 +72,20 @@ python3 -m unittest discover -s testes -v
 
 ## Recursos implementados
 
-- Programa `início { ... }`, instruções uma por linha e comentários `//`.
+- Programa `inicio { ... }`, instruções uma por linha e comentários `//`.
 - `escreva("texto")` em UTF-8 e `escreva(expressão numérica)`.
 - Variáveis `seja nome = expressão` e atribuição posterior `nome = expressão`.
 - Inteiros de 64 bits com sinal; expressões `+`, `-`, `*`, `/`, `%` e parênteses.
 - Biblioteca `inclua matematica`: `somar`, `subtrair`, `multiplicar`, `dividir`, `resto`.
 - Comparações `==`, `!=`, `<`, `<=`, `>` e `>=`, que retornam 1 (verdadeiro) ou 0 (falso).
-- `se condição { ... } senão { ... }`, incluindo blocos aninhados. `senão` é opcional.
+- `se condição { ... } senao { ... }`, incluindo blocos aninhados. `senao` é opcional.
 - **Novo na 0.4:** `enquanto`, `pare` e `continue`, com laços aninhados e emissão direta de saltos x86-64.
 - Erros em português; divisão por zero e divisão inteira fora do intervalo retornam código de erro 1.
 
 ## Limitações conhecidas
 
 - **Não há números decimais**, `para`, funções criadas pelo usuário, aplicativos gráficos, jogos ou integração com bibliotecas externas.
-- Por enquanto, variáveis precisam ser declaradas fora dos blocos `se`/`senão` e antes de serem utilizadas.
+- Por enquanto, variáveis precisam ser declaradas fora dos blocos `se`/`senao` e antes de serem utilizadas.
 - Soma, subtração e multiplicação usam resultados de 64 bits sem detecção de estouro.
 - Divisão inteira trunca em direção a zero (por exemplo, `-17 / 5` resulta em `-3`).
 - O executável Windows gerado não foi executado por este ambiente Linux; a execução deve ser validada num Windows real. A estrutura PE é verificada nos testes.

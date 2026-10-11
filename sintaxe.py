@@ -1,4 +1,4 @@
-"""Analisador do RoteiroSimples 0.4 (sem execução em Python)."""
+"""Analisador do RoteiroSimples 0.4.1 (sem execução em Python)."""
 import json
 import re
 from dataclasses import dataclass
@@ -116,6 +116,11 @@ def tokens(linha, numero):
         valor = achado.group()
         if valor.isspace():
             continue
+        if not valor.startswith('"') and not valor.isascii():
+            raise ErroCompilacao(
+                f"Linha {numero}: comando ou identificador com caractere nao ASCII: {valor!r}. "
+                "Escreva comandos e nomes sem acentos (ex.: inicio, senao, preco)."
+            )
         if valor.startswith('//'):
             break
         if len(valor) == 1 and valor not in '+-*/%=,;{}()<>!' and not (valor.isdecimal() or valor.isalpha()):
@@ -131,17 +136,17 @@ def analisar_programa(fonte):
     if linhas and linhas[0][1] == ['inclua', 'matematica']:
         importa = True
         linhas.pop(0)
-    if not linhas or linhas[0][1] != ['início', '{']:
-        raise ErroCompilacao("O programa deve começar com 'início {' (após os 'inclua').")
-    # Aceita tanto '} senão {' quanto '}' seguido de 'senão {' na linha seguinte.
+    if not linhas or linhas[0][1] != ['inicio', '{']:
+        raise ErroCompilacao("O programa deve começar com 'inicio {' (após os 'inclua').")
+    # Aceita tanto '} senao {' quanto '}' seguido de 'senao {' na linha seguinte.
     normalizadas = []
     for n, t in linhas[1:]:
-        if t == ['}', 'senão', '{']:
-            normalizadas.extend([(n, ['}']), (n, ['senão', '{'])])
+        if t == ['}', 'senao', '{']:
+            normalizadas.extend([(n, ['}']), (n, ['senao', '{'])])
         else:
             normalizadas.append((n, t))
     variaveis = {}
-    reservadas = {'início', 'seja', 'escreva', 'inclua', 'se', 'senão', 'enquanto', 'pare', 'continue'}
+    reservadas = {'inicio', 'seja', 'escreva', 'inclua', 'se', 'senao', 'enquanto', 'pare', 'continue'}
 
     def bloco(i, profundidade=0, em_laco=False):
         instrucoes = []
@@ -158,7 +163,7 @@ def analisar_programa(fonte):
                 cond = Expressao(t[1:-1], n, variaveis, importa).analisar()
                 verdadeiro, i = bloco(i+1, profundidade+1, em_laco)
                 falso = []
-                if i < len(normalizadas) and normalizadas[i][1] == ['senão', '{']:
+                if i < len(normalizadas) and normalizadas[i][1] == ['senao', '{']:
                     falso, i = bloco(i+1, profundidade+1, em_laco)
                 instrucoes.append(('se', cond, verdadeiro, falso))
                 continue
@@ -209,5 +214,5 @@ def analisar_programa(fonte):
         n, _ = normalizadas[proxima]
         raise ErroCompilacao(f'Linha {n}: conteúdo após o fim do programa.')
     if not instrucoes:
-        raise ErroCompilacao('Escreva pelo menos uma instrução dentro de início.')
+        raise ErroCompilacao('Escreva pelo menos uma instrução dentro de inicio.')
     return Programa(instrucoes, variaveis, importa)
