@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.2: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.3: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import sys
@@ -9,7 +9,7 @@ from codigo_nativo import compilar
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.2')
+    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.3')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--alvo', choices=['windows', 'linux'], default='windows')
     parser.add_argument('-o', '--saida', type=Path, help='arquivo executável de saída')

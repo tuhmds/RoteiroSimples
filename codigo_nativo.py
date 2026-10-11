@@ -61,6 +61,7 @@ class Gerador(Emissor):
     def __init__(self):
         super().__init__()
         self.rotulos = {}
+        self.proxima_condicao = 0
 
     def marcar(self, nome):
         if nome in self.rotulos:
@@ -93,6 +94,15 @@ def expressao(g, expr, variaveis, windows):
     elif tipo == 'neg':
         expressao(g, expr[1], variaveis, windows)
         g.bytes(b'\x48\xF7\xD8')  # neg rax
+    elif tipo == 'comparacao':
+        _, op, esquerda, direita = expr
+        expressao(g, esquerda, variaveis, windows)
+        g.bytes(b'\x50')  # salva o operando esquerdo
+        expressao(g, direita, variaveis, windows)
+        g.bytes(b'\x59')  # rcx = operando esquerdo
+        g.bytes(b'\x48\x39\xC1')  # cmp rcx, rax (inteiros com sinal)
+        codigo = {'==': 0x94, '!=': 0x95, '<': 0x9C, '<=': 0x9E, '>': 0x9F, '>=': 0x9D}[op]
+        g.bytes(bytes((0x0F, codigo, 0xC0)) + b'\x0F\xB6\xC0')  # setcc al; movzx eax,al
     elif tipo == 'bin':
         _, op, esquerda, direita = expr
         expressao(g, esquerda, variaveis, windows)
@@ -200,19 +210,37 @@ def montar_codigo(programa, windows):
         if frame:
             g.bytes(b'\x48\x81\xEC' + struct.pack('<I', frame))
 
-    for op in programa.instrucoes:
-        if op[0] == 'texto':
-            n = len(mensagens)
-            mensagens[n] = op[1]
-            escreve_literal(g, n, op[1], windows)
-        elif op[0] == 'atribua':
-            expressao(g, op[2], variaveis, windows)
-            i = variaveis[op[1]]
-            offset = -(16 + i * 8) if windows else -(8 + i * 8)
-            g.bytes(b'\x48\x89\x85' + struct.pack('<i', offset))
-        elif op[0] == 'imprima_num':
-            expressao(g, op[1], variaveis, windows)
-            g.chamada('imprimir_inteiro')
+    def emitir_bloco(instrucoes):
+        for op in instrucoes:
+            if op[0] == 'texto':
+                n = len(mensagens)
+                mensagens[n] = op[1]
+                escreve_literal(g, n, op[1], windows)
+            elif op[0] == 'atribua':
+                expressao(g, op[2], variaveis, windows)
+                i = variaveis[op[1]]
+                offset = -(16 + i * 8) if windows else -(8 + i * 8)
+                g.bytes(b'\x48\x89\x85' + struct.pack('<i', offset))
+            elif op[0] == 'imprima_num':
+                expressao(g, op[1], variaveis, windows)
+                g.chamada('imprimir_inteiro')
+            elif op[0] == 'se':
+                numero = g.proxima_condicao
+                g.proxima_condicao += 1
+                rotulo_falso = f'se_falso_{numero}'
+                rotulo_fim = f'se_fim_{numero}'
+                expressao(g, op[1], variaveis, windows)
+                g.bytes(b'\x48\x85\xC0')  # test rax,rax
+                g.salto(rotulo_falso, 'jz')
+                emitir_bloco(op[2])
+                if op[3]:
+                    g.salto(rotulo_fim)
+                g.marcar(rotulo_falso)
+                if op[3]:
+                    emitir_bloco(op[3])
+                    g.marcar(rotulo_fim)
+
+    emitir_bloco(programa.instrucoes)
 
     if windows:
         g.bytes(b'\x31\xC9')
@@ -265,7 +293,7 @@ def montar_pe(g, mensagens):
         enderecos[f'mensagem_{i}'] = base_dados + len(dados)
         dados += msg.encode('utf-8')
     if max(len(g.codigo), len(importacoes), len(dados)) > 0x1000:
-        raise ErroCompilacao('Programa grande demais para as seções fixas da versão 0.2 (4 KiB).')
+        raise ErroCompilacao('Programa grande demais para as seções fixas da versão 0.3 (4 KiB).')
     g.finalizar(base_codigo, enderecos)
     secoes = [(b'.text', bytes(g.codigo), base_codigo, 0x60000020),
               (b'.idata', bytes(importacoes), base_importacoes, 0xC0000040),

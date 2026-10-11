@@ -1,16 +1,27 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
-echo === RoteiroSimples 0.2 - Biblioteca matematica ===
+echo === RoteiroSimples RS 0.3 - compilar e executar ===
 echo.
-py -3 compilar.py exemplos\matematica.rts --alvo windows -o roteiro_windows.exe
+where py >nul 2>nul
 if errorlevel 1 (
- echo Erro ao compilar. Verifique se Python 3 esta instalado.
+ echo Python nao foi encontrado. Instale Python 3 e reabra o terminal.
+ pause
+ exit /b 1
+)
+py -3 compilar.py exemplos\decisoes.rts --alvo windows -o roteiro_windows.exe
+if errorlevel 1 (
+ echo.
+ echo Nao foi possivel compilar. Confira o erro acima.
  pause
  exit /b 1
 )
 echo.
-echo === Resultado ===
-roteiro_windows.exe
+echo === Saida do programa ===
+"%~dp0roteiro_windows.exe"
+set "RS_CODIGO=%errorlevel%"
 echo.
+echo O programa terminou com o codigo %RS_CODIGO%.
+echo Para continuar, abra INICIAR_RS.bat e escolha outra opcao.
 pause
+exit /b %RS_CODIGO%

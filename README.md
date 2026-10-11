@@ -1,81 +1,86 @@
-# RoteiroSimples (RS) — versão experimental 0.2
+# RoteiroSimples (RS) — versão experimental 0.3
 
-Uma linguagem de programação **em português brasileiro**, com sintaxe simples e geração **direta de código de máquina x86-64**. Projeto experimental; ainda não é apropriado para sistemas em produção.
+**RoteiroSimples** é um projeto experimental de linguagem de programação em português brasileiro. O compilador de desenvolvimento está escrito em Python 3.10+ e gera instruções x86-64 diretamente para executáveis Windows (PE32+) e Linux (ELF64), sem passar por C, Rust ou LLVM. Os programas gerados não precisam de Python para executar.
 
-## Primeiro programa com matemática
+> Estado do projeto: protótipo educacional. Ainda não é seguro para sistemas de produção.
 
-Arquivo `exemplos/matematica.rts`:
+## Comece aqui no Windows
+
+1. Baixe ou clone este repositório.
+2. Instale Python 3 e confirme que `py -3 --version` funciona no PowerShell.
+3. Dê dois cliques em **`INICIAR_RS.bat`**. O menu permanece disponível para você escolher as próximas operações.
+4. Escolha **1** para compilar e executar `exemplos/decisoes.rts`, **2** para editar no Bloco de Notas, **3** para executar os testes ou **4** para executar o último programa compilado.
+5. Escolha **0** para sair.
+
+**Importante:** `TESTAR_WINDOWS.bat` apenas executa um programa já compilado. Quando aparecer "pressione qualquer tecla", apertar uma tecla **encerra a janela**, não inicia uma nova etapa. Use `INICIAR_RS.bat` para trabalhar com o projeto.
+
+### Primeiro exemplo com decisões
+
+Arquivo `exemplos/decisoes.rts`:
 
 ```text
-inclua matematica
 início {
-    seja preço = 10
-    seja distancia = 5
-    seja taxa = multiplicar(distancia, 2)
-    escreva("Cálculo de entrega em reais inteiros:")
-    escreva(somar(preço, taxa))
-    escreva((10 + 5) * 2)
-    escreva(dividir(-17, 5))
-    escreva(resto(-17, 5))
+    seja idade = 17
+    se idade >= 18 {
+        escreva("Maior de idade")
+    } senão {
+        escreva("Menor de idade")
+    }
 }
 ```
 
-Saída esperada:
+Saída esperada: `Menor de idade`.
 
-```text
-Cálculo de entrega em reais inteiros:
-20
-30
--3
--2
-```
+### Compilação manual
 
-## Uso
-
-O compilador de desenvolvimento está escrito em **Python 3.10 ou superior**; os executáveis gerados **não usam Python**, C, Rust, LLVM nem montador externo.
-
-No Windows: execute `COMPILAR_WINDOWS.bat` (Python 3 instalado), ou rode:
+Windows, no PowerShell aberto na pasta do projeto:
 
 ```powershell
-py -3 compilar.py exemplos\matematica.rts --alvo windows -o roteiro_windows.exe
+py -3 compilar.py exemplos\decisoes.rts --alvo windows -o roteiro_windows.exe
 .\roteiro_windows.exe
 ```
 
-No Linux x86-64:
+Linux x86-64:
 
 ```bash
-python3 compilar.py exemplos/matematica.rts --alvo linux -o roteiro_linux
+python3 compilar.py exemplos/decisoes.rts --alvo linux -o roteiro_linux
 ./roteiro_linux
 ```
 
-Para rodar os testes:
+Para rodar os testes automatizados:
 
 ```bash
 python3 -m unittest discover -s testes -v
 ```
 
-## O que funciona
+## Recursos implementados
 
-- `início { ... }`, uma instrução por linha, `//` para comentários;
-- `escreva("texto")`, UTF-8, e `escreva(expressão numérica)`;
-- variáveis `seja nome = expressão` e atribuição `nome = expressão`;
-- números inteiros com sinal de 64 bits, incluindo negativos;
-- `+`, `-`, `*`, `/`, `%`, parênteses e precedência matemática;
-- `inclua matematica` com `somar`, `subtrair`, `multiplicar`, `dividir` e `resto`;
-- divisão entre inteiros com truncamento em direção a zero (por exemplo, -17 / 5 = -3);
-- erro de execução em português e saída com código 1 para divisão por zero e transbordamento específico `-2^63 / -1`;
-- compilação nativa ELF64 Linux e PE32+ Windows (x86-64).
+- Programa `início { ... }`, instruções uma por linha e comentários `//`.
+- `escreva("texto")` em UTF-8 e `escreva(expressão numérica)`.
+- Variáveis `seja nome = expressão` e atribuição posterior `nome = expressão`.
+- Inteiros de 64 bits com sinal; expressões `+`, `-`, `*`, `/`, `%` e parênteses.
+- Biblioteca `inclua matematica`: `somar`, `subtrair`, `multiplicar`, `dividir`, `resto`.
+- **Novo na 0.3:** comparações `==`, `!=`, `<`, `<=`, `>` e `>=`, que retornam 1 (verdadeiro) ou 0 (falso).
+- **Novo na 0.3:** `se condição { ... } senão { ... }`, incluindo blocos aninhados. `senão` é opcional.
+- Erros em português; divisão por zero e divisão inteira fora do intervalo retornam código de erro 1.
 
-## Limitações e segurança
+## Limitações conhecidas
 
-- **Ainda não há decimais**, condições, laços, funções criadas pelo usuário, interfaces ou suporte a jogos;
-- a soma, subtração e multiplicação usam aritmética de 64 bits sem detecção de estouro (resultado modular);
-- o executável Windows **não foi executado nesta sessão**: possui validação estática de estrutura PE; o teste de execução real deve rodar num Windows;
-- o formato PE 0.2 é experimental e usa três seções limitadas a 4 KiB cada;
-- ainda não há assinatura de executáveis, PIE/ASLR ou proteção de compilador de produção;
-- cada comando ocupa uma linha; `inclua matematica` fica antes de `início`;
-- a biblioteca matemática contém **mapeamentos de operações para instruções nativas**, não uma biblioteca de execução em Python.
+- **Não há números decimais**, funções criadas pelo usuário, laços, aplicativos gráficos, jogos ou integração com bibliotecas externas.
+- Por enquanto, variáveis precisam ser declaradas fora dos blocos `se`/`senão` e antes de serem utilizadas.
+- Soma, subtração e multiplicação usam resultados de 64 bits sem detecção de estouro.
+- Divisão inteira trunca em direção a zero (por exemplo, `-17 / 5` resulta em `-3`).
+- O executável Windows gerado não foi executado por este ambiente Linux; a execução deve ser validada num Windows real. A estrutura PE é verificada nos testes.
+- O formato PE atual usa três seções limitadas a 4 KiB cada. O compilador ainda não é endurecido para produção.
+- A biblioteca matemática mapeia operações para instruções nativas; não é uma biblioteca Python instalada nos executáveis.
 
-O código da implementação está em `sintaxe.py` (análise), `codigo_nativo.py` (geração direta de bytes AMD64), `bibliotecas/matematica.py` (nomes de operações) e `compilar.py` (linha de comando).
+## Organização do código
 
-**Próximas etapas:** decimais e regras de precisão, comparação, `se`/`senão`, laços, tipos, bibliotecas e testes contínuos em Windows e Linux. Licença e governança ainda não escolhidas.
+- `sintaxe.py`: análise léxica, expressões e instruções.
+- `codigo_nativo.py`: emissão de instruções AMD64 e formatos PE/ELF.
+- `bibliotecas/matematica.py`: nomes públicos das funções matemáticas.
+- `compilar.py`: interface de linha de comando.
+- `testes/`: verificações automatizadas, incluindo execução nativa no Linux e no Windows quando disponíveis.
+- `exemplos/`: programas `.rts` de referência.
+
+**Próximas etapas:** melhorar o tamanho dos executáveis, implementar laços e tipos, adicionar decimais com regras explícitas de precisão, ampliar a biblioteca padrão e as verificações automatizadas. Ainda não foi escolhida uma licença.

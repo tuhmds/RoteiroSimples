@@ -1,4 +1,4 @@
-"""Analisador pequeno do RoteiroSimples 0.2 (sem execução em Python)."""
+"""Analisador do RoteiroSimples 0.3 (sem execução em Python)."""
 import json
 import re
 from dataclasses import dataclass
@@ -15,7 +15,7 @@ class Programa:
     importa_matematica: bool
 
 
-REGEX = re.compile(r'\s+|"(?:\\.|[^"\\])*"|\d+|[^\W\d]\w*|[()+*/%=,;{}-]|.', re.UNICODE)
+REGEX = re.compile(r'\s+|"(?:\\.|[^"\\])*"|\d+|[^\W\d]\w*|==|!=|<=|>=|[()+*/%=,;{}<>!-]|.', re.UNICODE)
 
 
 class Expressao:
@@ -35,9 +35,16 @@ class Expressao:
         return atual
 
     def analisar(self):
-        expr = self.soma()
+        expr = self.comparacao()
         if self.olhar() is not None:
             raise ErroCompilacao(f"Linha {self.linha}: trecho inesperado: {self.olhar()!r}.")
+        return expr
+
+    def comparacao(self):
+        expr = self.soma()
+        if self.olhar() in ('==', '!=', '<', '<=', '>', '>='):
+            operador = self.consumir()
+            expr = ('comparacao', operador, expr, self.soma())
         return expr
 
     def soma(self):
@@ -66,7 +73,7 @@ class Expressao:
     def primario(self):
         token = self.consumir()
         if token == '(':
-            expr = self.soma()
+            expr = self.comparacao()
             self.consumir(')')
             return expr
         if token.isascii() and token.isdecimal():
@@ -82,9 +89,9 @@ class Expressao:
                 if token not in OPERACOES:
                     raise ErroCompilacao(f"Linha {self.linha}: função matemática desconhecida: {token}.")
                 self.consumir('(')
-                a = self.soma()
+                a = self.comparacao()
                 self.consumir(',')
-                b = self.soma()
+                b = self.comparacao()
                 self.consumir(')')
                 return ('bin', OPERACOES[token], a, b)
             if token not in self.variaveis:
@@ -111,7 +118,7 @@ def tokens(linha, numero):
             continue
         if valor.startswith('//'):
             break
-        if len(valor) == 1 and valor not in '+-*/%=,;{}()' and not (valor.isdecimal() or valor.isalpha()):
+        if len(valor) == 1 and valor not in '+-*/%=,;{}()<>!' and not (valor.isdecimal() or valor.isalpha()):
             raise ErroCompilacao(f"Linha {numero}: caractere inválido: {valor!r}.")
         encontrados.append(valor)
     return encontrados
@@ -126,41 +133,70 @@ def analisar_programa(fonte):
         linhas.pop(0)
     if not linhas or linhas[0][1] != ['início', '{']:
         raise ErroCompilacao("O programa deve começar com 'início {' (após os 'inclua').")
-    if len(linhas) < 2 or linhas[-1][1] != ['}']:
-        raise ErroCompilacao("O programa deve terminar com '}' em uma linha separada.")
-    instr = []
-    variaveis = {}
-    for n, t in linhas[1:-1]:
-        if t and t[-1] == ';':
-            t = t[:-1]
-        if not t:
-            continue
-        if t[:2] == ['escreva', '('] and t[-1] == ')':
-            expr = t[2:-1]
-            if len(expr) == 1 and expr[0].startswith('"'):
-                try:
-                    valor = json.loads(expr[0])
-                except (ValueError, UnicodeError) as exc:
-                    raise ErroCompilacao(f'Linha {n}: texto inválido.') from exc
-                instr.append(('texto', valor + '\n'))
-            else:
-                instr.append(('imprima_num', Expressao(expr, n, variaveis, importa).analisar()))
-        elif t[0] == 'seja' and len(t) >= 4 and t[2] == '=':
-            nome = t[1]
-            if not re.fullmatch(r'[^\W\d]\w*', nome, re.UNICODE):
-                raise ErroCompilacao(f'Linha {n}: nome de variável inválido.')
-            if nome in variaveis or nome in ('início', 'seja', 'escreva', 'inclua'):
-                raise ErroCompilacao(f"Linha {n}: variável '{nome}' duplicada ou reservada.")
-            expr = Expressao(t[3:], n, variaveis, importa).analisar()
-            variaveis[nome] = len(variaveis)
-            instr.append(('atribua', nome, expr))
-        elif len(t) >= 3 and t[1] == '=':
-            nome = t[0]
-            if nome not in variaveis:
-                raise ErroCompilacao(f"Linha {n}: variável '{nome}' não foi declarada.")
-            instr.append(('atribua', nome, Expressao(t[2:], n, variaveis, importa).analisar()))
+    # Aceita tanto '} senão {' quanto '}' seguido de 'senão {' na linha seguinte.
+    normalizadas = []
+    for n, t in linhas[1:]:
+        if t == ['}', 'senão', '{']:
+            normalizadas.extend([(n, ['}']), (n, ['senão', '{'])])
         else:
-            raise ErroCompilacao(f'Linha {n}: instrução desconhecida ou incompleta.')
-    if not instr:
+            normalizadas.append((n, t))
+    variaveis = {}
+    reservadas = {'início', 'seja', 'escreva', 'inclua', 'se', 'senão', 'enquanto'}
+
+    def bloco(i, profundidade=0):
+        instrucoes = []
+        while i < len(normalizadas):
+            n, t = normalizadas[i]
+            if t == ['}']:
+                return instrucoes, i + 1
+            if t[-1] == ';':
+                t = t[:-1]
+            if not t:
+                i += 1
+                continue
+            if len(t) >= 4 and t[0] == 'se' and t[-1] == '{':
+                cond = Expressao(t[1:-1], n, variaveis, importa).analisar()
+                verdadeiro, i = bloco(i+1, profundidade+1)
+                falso = []
+                if i < len(normalizadas) and normalizadas[i][1] == ['senão', '{']:
+                    falso, i = bloco(i+1, profundidade+1)
+                instrucoes.append(('se', cond, verdadeiro, falso))
+                continue
+            if t[:2] == ['escreva', '('] and t[-1] == ')':
+                expr = t[2:-1]
+                if len(expr) == 1 and expr[0].startswith('"'):
+                    try:
+                        valor = json.loads(expr[0])
+                    except (ValueError, UnicodeError) as exc:
+                        raise ErroCompilacao(f'Linha {n}: texto inválido.') from exc
+                    instrucoes.append(('texto', valor + '\n'))
+                else:
+                    instrucoes.append(('imprima_num', Expressao(expr, n, variaveis, importa).analisar()))
+            elif t[0] == 'seja' and len(t) >= 4 and t[2] == '=':
+                if profundidade:
+                    raise ErroCompilacao(f'Linha {n}: declare variáveis antes dos blocos se/senão nesta versão.')
+                nome = t[1]
+                if not re.fullmatch(r'[^\W\d]\w*', nome, re.UNICODE):
+                    raise ErroCompilacao(f'Linha {n}: nome de variável inválido.')
+                if nome in variaveis or nome in reservadas:
+                    raise ErroCompilacao(f"Linha {n}: variável '{nome}' duplicada ou reservada.")
+                expr = Expressao(t[3:], n, variaveis, importa).analisar()
+                variaveis[nome] = len(variaveis)
+                instrucoes.append(('atribua', nome, expr))
+            elif len(t) >= 3 and t[1] == '=':
+                nome = t[0]
+                if nome not in variaveis:
+                    raise ErroCompilacao(f"Linha {n}: variável '{nome}' não foi declarada.")
+                instrucoes.append(('atribua', nome, Expressao(t[2:], n, variaveis, importa).analisar()))
+            else:
+                raise ErroCompilacao(f'Linha {n}: instrução desconhecida ou incompleta.')
+            i += 1
+        raise ErroCompilacao('Bloco sem fechamento: faltou uma linha com } .')
+
+    instrucoes, proxima = bloco(0)
+    if proxima != len(normalizadas):
+        n, _ = normalizadas[proxima]
+        raise ErroCompilacao(f'Linha {n}: conteúdo após o fim do programa.')
+    if not instrucoes:
         raise ErroCompilacao('Escreva pelo menos uma instrução dentro de início.')
-    return Programa(instr, variaveis, importa)
+    return Programa(instrucoes, variaveis, importa)

@@ -73,6 +73,54 @@ início {
         self.assertEqual(r.returncode, 1)
         self.assertIn('fora do limite', r.stderr)
 
+    def test_comparacoes_precedencia_e_decisoes(self):
+        fonte = """início {
+            seja a = 4
+            seja b = 7
+            se a + 3 == b {
+                escreva("igual")
+            } senão {
+                escreva("diferente")
+            }
+        }"""
+        programa = analisar_programa(fonte)
+        self.assertEqual(programa.instrucoes[2][0], 'se')
+        self.assertEqual(programa.instrucoes[2][1][0], 'comparacao')
+
+    def test_variavel_local_no_bloco_rejeitada(self):
+        fonte = 'início {\n se 1 == 1 {\n seja x = 1\n }\n}'
+        with self.assertRaisesRegex(ErroCompilacao, 'declare variáveis antes'):
+            analisar_programa(fonte)
+
+    def test_linux_decisoes_e_comparacoes(self):
+        if sys.platform != 'linux' or os.uname().machine != 'x86_64':
+            self.skipTest('Requer Linux x86-64')
+        fonte = """início {
+            seja x = 17
+            seja y = 18
+            se x >= y {
+                escreva("adulto")
+            } senão {
+                escreva("menor")
+            }
+            se (3 + 4 * 2) == 11 {
+                escreva("onze")
+            }
+            se x < y {
+                se y != 0 {
+                    escreva(1)
+                }
+            }
+            escreva(x >= y)
+            escreva(x <= y)
+            escreva(x > y)
+            escreva(x == y)
+            escreva(x != y)
+        }"""
+        r = self.executar_linux(fonte)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, 'menor\nonze\n1\n0\n1\n0\n0\n1\n')
+
     def test_windows_pe_e_contem_importacoes(self):
         p = analisar_programa('inclua matematica\ninício {\n escreva(dividir(20, 4))\n}')
         exe = compilar(p, 'windows')

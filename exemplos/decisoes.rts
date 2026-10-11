@@ -1,0 +1,20 @@
+inclua matematica
+início {
+    seja idade = 17
+    seja limite = 18
+    seja resultado = 0
+
+    escreva("RoteiroSimples RS 0.3: decisões")
+    se idade >= limite {
+        escreva("Maior de idade")
+        resultado = 1
+    } senão {
+        escreva("Menor de idade")
+        resultado = 2
+    }
+    escreva(resultado)
+
+    se (3 + 4 * 2) == 11 {
+        escreva("A precedência matemática funciona!")
+    }
+}
