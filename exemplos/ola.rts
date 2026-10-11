@@ -1,0 +1,4 @@
+início {
+    escreva("Olá, mundo!")
+    escreva("O RoteiroSimples está funcionando!")
+}
