@@ -131,6 +131,26 @@ início {
         for nome in [b'KERNEL32.dll', b'WriteFile', b'ExitProcess', b'GetStdHandle']:
             self.assertIn(nome, exe)
 
+    def test_windows_decisoes_quando_disponivel(self):
+        if sys.platform != 'win32':
+            self.skipTest('Requer Windows real')
+        fonte = """início {
+            seja idade = 17
+            seja limite = 18
+            se idade >= limite {
+                escreva("adulto")
+            } senão {
+                escreva("menor")
+            }
+            escreva(idade < limite)
+        }"""
+        with tempfile.TemporaryDirectory() as d:
+            exe = Path(d) / 'decisoes.exe'
+            exe.write_bytes(compilar(analisar_programa(fonte), 'windows'))
+            r = subprocess.run([str(exe)], capture_output=True, encoding='utf-8', timeout=5)
+            self.assertEqual(r.returncode, 0)
+            self.assertEqual(r.stdout, 'menor\n1\n')
+
     def test_windows_execucao_quando_disponivel(self):
         if sys.platform != 'win32':
             self.skipTest('Requer Windows real')
