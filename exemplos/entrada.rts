@@ -1,0 +1,12 @@
+inicio {
+    seja idade = 0
+    escreva("Qual e a sua idade? Digite um numero inteiro:")
+    leia(idade)
+    se idade >= 18 {
+        escreva("Voce e maior de idade.")
+    } senao {
+        escreva("Voce e menor de idade.")
+    }
+    escreva("Idade informada:")
+    escreva(idade)
+}

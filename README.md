@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.5
+# RoteiroSimples (RS) — versão experimental 0.6
 
 **RoteiroSimples** é um projeto experimental de linguagem de programação em português brasileiro. O compilador de desenvolvimento está escrito em Python 3.10+ e gera instruções x86-64 diretamente para executáveis Windows (PE32+) e Linux (ELF64), sem passar por C, Rust ou LLVM. Os programas gerados não precisam de Python para executar.
 
@@ -12,7 +12,7 @@ Textos entre aspas, comentários e mensagens de erro continuam em português bra
 
 **Mudança de compatibilidade:** programas anteriores que continham comandos ou nomes de variáveis com acentos devem trocar essas grafias pela forma sem acentos. Todos os exemplos e testes deste repositório foram atualizados.
 
-## Novo na RS 0.5: repeticao com `para`
+## Incluído desde a RS 0.5: repeticao com `para`
 
 A linguagem continua usando **comandos e identificadores sem acentos**. Textos entre aspas e comentarios continuam aceitando portugues brasileiro em UTF-8.
 
@@ -31,12 +31,31 @@ inicio {
 
 Variaveis com `seja` ainda devem ser declaradas fora de blocos `para`, `enquanto` ou `se` nesta versao.
 
+## RS 0.6 — leitura de inteiros e primeiros cuidados de memória
+
+```text
+inicio {
+    seja idade = 0
+    escreva("Qual é a sua idade?")
+    leia(idade)
+    se idade >= 18 {
+        escreva("Maior de idade")
+    } senao {
+        escreva("Menor de idade")
+    }
+}
+```
+
+`leia` recebe **uma variável inteira já declarada**, lê stdin nativamente e aceita sinal opcional, espaços, LF/CRLF e EOF após dígitos. Entradas vazias, letras, decimais e valores fora do intervalo de inteiros com sinal de 64 bits causam erro (código 1). O programa gerado não usa Python, mas a leitura inicial ainda é byte a byte e não está otimizada.
+
+**Primeira otimização:** carga de constantes com instruções `mov` de 5 ou 7 bytes quando possível (em vez de sempre 10 bytes), sem alterar resultados ou flags. Cálculo dos endereços locais na pilha centralizado. Veja [arquitetura, ponteiros, memória e otimizações](docs/ARQUITETURA_E_OTIMIZACOES.md). Ponteiros brutos e heap ainda não estão implementados.
+
 ## Comece aqui no Windows
 
 1. Baixe ou clone este repositório.
 2. Instale Python 3 e confirme que `py -3 --version` funciona no PowerShell.
 3. Dê dois cliques em **`INICIAR_RS.bat`**. O menu permanece disponível para você escolher as próximas operações.
-4. Escolha **1** para compilar e executar `exemplos/para.rts`, **2** para editar no Bloco de Notas, **3** para executar os testes ou **4** para executar o último programa compilado.
+4. Escolha **1** para compilar e executar `exemplos/entrada.rts`, **2** para editar no Bloco de Notas, **3** para executar os testes ou **4** para executar o último programa compilado.
 5. Escolha **0** para sair.
 
 **Importante:** `TESTAR_WINDOWS.bat` apenas executa um programa já compilado. Quando aparecer "pressione qualquer tecla", apertar uma tecla **encerra a janela**, não inicia uma nova etapa. Use `INICIAR_RS.bat` para trabalhar com o projeto.
@@ -45,7 +64,7 @@ Variaveis com `seja` ainda devem ser declaradas fora de blocos `para`, `enquanto
 
 O laço `enquanto` repete um bloco enquanto a condição for diferente de zero. `pare` interrompe o laço mais interno e `continue` passa para a próxima iteração do laço mais interno.
 
-Arquivo `exemplos/para.rts`: 
+Arquivo `exemplos/entrada.rts`: 
 
 ```text
 inicio {
@@ -72,14 +91,14 @@ Laços podem ser aninhados e conter decisões `se`/`senao`. `pare` e `continue` 
 Windows, no PowerShell aberto na pasta do projeto:
 
 ```powershell
-py -3 compilar.py exemplos\para.rts --alvo windows -o roteiro_windows.exe
+py -3 compilar.py exemplos\entrada.rts --alvo windows -o roteiro_windows.exe
 .\roteiro_windows.exe
 ```
 
 Linux x86-64:
 
 ```bash
-python3 compilar.py exemplos/para.rts --alvo linux -o roteiro_linux
+python3 compilar.py exemplos/entrada.rts --alvo linux -o roteiro_linux
 ./roteiro_linux
 ```
 
@@ -104,7 +123,7 @@ python3 -m unittest discover -s testes -v
 
 ## Limitações conhecidas
 
-- **Não há números decimais**, funções criadas pelo usuário, aplicativos gráficos, jogos ou integração com bibliotecas externas.
+- **Não há números decimais, entrada de texto**, funções criadas pelo usuário, aplicativos gráficos, jogos ou integração com bibliotecas externas.
 - Por enquanto, variáveis precisam ser declaradas fora dos blocos `se`/`senao` e antes de serem utilizadas.
 - Soma, subtração e multiplicação usam resultados de 64 bits sem detecção de estouro.
 - Divisão inteira trunca em direção a zero (por exemplo, `-17 / 5` resulta em `-3`).
@@ -121,4 +140,4 @@ python3 -m unittest discover -s testes -v
 - `testes/`: verificações automatizadas, incluindo execução nativa no Linux e no Windows quando disponíveis.
 - `exemplos/`: programas `.rts` de referência.
 
-**Próximas etapas:** entrada de dados e tipos, adicionar decimais com regras explícitas de precisão, ampliar a biblioteca padrão e as verificações automatizadas. Ainda não foi escolhida uma licença.
+**Próximas etapas:** tipos, referências seguras, entrada em blocos, números decimais, IR e benchmarks. Ainda não foi escolhida uma licença.

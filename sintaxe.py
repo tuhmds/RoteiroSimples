@@ -1,4 +1,4 @@
-"""Analisador do RoteiroSimples 0.5 (sem execução em Python)."""
+"""Analisador do RoteiroSimples 0.6 (sem execução em Python)."""
 import json
 import re
 from dataclasses import dataclass
@@ -146,7 +146,7 @@ def analisar_programa(fonte):
         else:
             normalizadas.append((n, t))
     variaveis = {}
-    reservadas = {'inicio', 'seja', 'escreva', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue'}
+    reservadas = {'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue'}
 
     def bloco(i, profundidade=0, em_laco=False):
         instrucoes = []
@@ -209,7 +209,13 @@ def analisar_programa(fonte):
                 instrucoes.append((t[0],))
                 i += 1
                 continue
-            if t[:2] == ['escreva', '('] and t[-1] == ')':
+            if t[:2] == ['leia', '('] and t[-1] == ')':
+                if len(t) != 4 or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', t[2]):
+                    raise ErroCompilacao(f'Linha {n}: use leia(nome_de_variavel).')
+                if t[2] not in variaveis:
+                    raise ErroCompilacao(f"Linha {n}: declare a variável '{t[2]}' com seja antes de leia.")
+                instrucoes.append(('leia_int', t[2]))
+            elif t[:2] == ['escreva', '('] and t[-1] == ')':
                 expr = t[2:-1]
                 if len(expr) == 1 and expr[0].startswith('"'):
                     try:
