@@ -1,4 +1,4 @@
-"""Analisador do RoteiroSimples 0.3 (sem execução em Python)."""
+"""Analisador do RoteiroSimples 0.4 (sem execução em Python)."""
 import json
 import re
 from dataclasses import dataclass
@@ -141,9 +141,9 @@ def analisar_programa(fonte):
         else:
             normalizadas.append((n, t))
     variaveis = {}
-    reservadas = {'início', 'seja', 'escreva', 'inclua', 'se', 'senão', 'enquanto'}
+    reservadas = {'início', 'seja', 'escreva', 'inclua', 'se', 'senão', 'enquanto', 'pare', 'continue'}
 
-    def bloco(i, profundidade=0):
+    def bloco(i, profundidade=0, em_laco=False):
         instrucoes = []
         while i < len(normalizadas):
             n, t = normalizadas[i]
@@ -154,13 +154,24 @@ def analisar_programa(fonte):
             if not t:
                 i += 1
                 continue
-            if len(t) >= 4 and t[0] == 'se' and t[-1] == '{':
+            if len(t) >= 3 and t[0] == 'se' and t[-1] == '{':
                 cond = Expressao(t[1:-1], n, variaveis, importa).analisar()
-                verdadeiro, i = bloco(i+1, profundidade+1)
+                verdadeiro, i = bloco(i+1, profundidade+1, em_laco)
                 falso = []
                 if i < len(normalizadas) and normalizadas[i][1] == ['senão', '{']:
-                    falso, i = bloco(i+1, profundidade+1)
+                    falso, i = bloco(i+1, profundidade+1, em_laco)
                 instrucoes.append(('se', cond, verdadeiro, falso))
+                continue
+            if len(t) >= 3 and t[0] == 'enquanto' and t[-1] == '{':
+                cond = Expressao(t[1:-1], n, variaveis, importa).analisar()
+                corpo, i = bloco(i+1, profundidade+1, True)
+                instrucoes.append(('enquanto', cond, corpo))
+                continue
+            if t in (['pare'], ['continue']):
+                if not em_laco:
+                    raise ErroCompilacao(f"Linha {n}: '{t[0]}' só pode ser usado dentro de um laço enquanto.")
+                instrucoes.append((t[0],))
+                i += 1
                 continue
             if t[:2] == ['escreva', '('] and t[-1] == ')':
                 expr = t[2:-1]
@@ -174,7 +185,7 @@ def analisar_programa(fonte):
                     instrucoes.append(('imprima_num', Expressao(expr, n, variaveis, importa).analisar()))
             elif t[0] == 'seja' and len(t) >= 4 and t[2] == '=':
                 if profundidade:
-                    raise ErroCompilacao(f'Linha {n}: declare variáveis antes dos blocos se/senão nesta versão.')
+                    raise ErroCompilacao(f'Linha {n}: declare variáveis antes dos blocos de decisão ou repetição nesta versão.')
                 nome = t[1]
                 if not re.fullmatch(r'[^\W\d]\w*', nome, re.UNICODE):
                     raise ErroCompilacao(f'Linha {n}: nome de variável inválido.')

@@ -210,7 +210,7 @@ def montar_codigo(programa, windows):
         if frame:
             g.bytes(b'\x48\x81\xEC' + struct.pack('<I', frame))
 
-    def emitir_bloco(instrucoes):
+    def emitir_bloco(instrucoes, laco=None):
         for op in instrucoes:
             if op[0] == 'texto':
                 n = len(mensagens)
@@ -232,13 +232,35 @@ def montar_codigo(programa, windows):
                 expressao(g, op[1], variaveis, windows)
                 g.bytes(b'\x48\x85\xC0')  # test rax,rax
                 g.salto(rotulo_falso, 'jz')
-                emitir_bloco(op[2])
+                emitir_bloco(op[2], laco)
                 if op[3]:
                     g.salto(rotulo_fim)
                 g.marcar(rotulo_falso)
                 if op[3]:
-                    emitir_bloco(op[3])
+                    emitir_bloco(op[3], laco)
                     g.marcar(rotulo_fim)
+            elif op[0] == 'enquanto':
+                numero = g.proxima_condicao
+                g.proxima_condicao += 1
+                inicio = f'enquanto_inicio_{numero}'
+                fim = f'enquanto_fim_{numero}'
+                g.marcar(inicio)
+                expressao(g, op[1], variaveis, windows)
+                g.bytes(b'\x48\x85\xC0')  # test rax, rax
+                g.salto(fim, 'jz')
+                emitir_bloco(op[2], (inicio, fim))
+                g.salto(inicio)
+                g.marcar(fim)
+            elif op[0] == 'pare':
+                if laco is None:
+                    raise ValueError('Uso de pare fora de um laço (erro interno).')
+                g.salto(laco[1])
+            elif op[0] == 'continue':
+                if laco is None:
+                    raise ValueError('Uso de continue fora de um laço (erro interno).')
+                g.salto(laco[0])
+            else:
+                raise ValueError(f'Instrução interna desconhecida: {op!r}')
 
     emitir_bloco(programa.instrucoes)
 
@@ -293,7 +315,7 @@ def montar_pe(g, mensagens):
         enderecos[f'mensagem_{i}'] = base_dados + len(dados)
         dados += msg.encode('utf-8')
     if max(len(g.codigo), len(importacoes), len(dados)) > 0x1000:
-        raise ErroCompilacao('Programa grande demais para as seções fixas da versão 0.3 (4 KiB).')
+        raise ErroCompilacao('Programa grande demais para as seções fixas da versão 0.4 (4 KiB).')
     g.finalizar(base_codigo, enderecos)
     secoes = [(b'.text', bytes(g.codigo), base_codigo, 0x60000020),
               (b'.idata', bytes(importacoes), base_importacoes, 0xC0000040),

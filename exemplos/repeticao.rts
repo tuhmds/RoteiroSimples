@@ -1,0 +1,19 @@
+inclua matematica
+início {
+    seja contador = 0
+    seja soma = 0
+
+    escreva("RoteiroSimples RS 0.4: repetição")
+    enquanto contador < 7 {
+        contador = contador + 1
+        se contador == 3 {
+            continue
+        }
+        se contador == 6 {
+            pare
+        }
+        soma = somar(soma, contador)
+    }
+    escreva("Soma dos números 1, 2, 4 e 5:")
+    escreva(soma)
+}

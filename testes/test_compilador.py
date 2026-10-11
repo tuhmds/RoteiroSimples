@@ -121,6 +121,116 @@ início {
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout, 'menor\nonze\n1\n0\n1\n0\n0\n1\n')
 
+    def test_parser_lacos_aninhados(self):
+        fonte = """início {
+            seja i = 0
+            enquanto i < 3 {
+                i = i + 1
+                se i == 2 {
+                    continue
+                }
+                se i == 3 {
+                    pare
+                }
+            }
+        }"""
+        programa = analisar_programa(fonte)
+        self.assertEqual(programa.instrucoes[1][0], 'enquanto')
+        self.assertEqual(programa.instrucoes[1][2][1][2][0], ('continue',))
+
+    def test_pare_e_continue_fora_do_laco_rejeitados(self):
+        for palavra in ('pare', 'continue'):
+            with self.subTest(palavra=palavra):
+                fonte = f'início {{\n {palavra}\n}}'
+                with self.assertRaisesRegex(ErroCompilacao, 'só pode ser usado'):
+                    analisar_programa(fonte)
+                fonte_condicional = f'início {{\n se 1 {{\n {palavra}\n }}\n}}'
+                with self.assertRaisesRegex(ErroCompilacao, 'só pode ser usado'):
+                    analisar_programa(fonte_condicional)
+
+    def test_variavel_no_laco_rejeitada(self):
+        fonte = 'início {\n enquanto 1 {\n seja numero = 5\n }\n}'
+        with self.assertRaisesRegex(ErroCompilacao, 'declare variáveis antes'):
+            analisar_programa(fonte)
+
+    def test_linux_repeticao_continue_e_pare(self):
+        if sys.platform != 'linux' or os.uname().machine != 'x86_64':
+            self.skipTest('Requer Linux x86-64')
+        fonte = """início {
+            seja contador = 0
+            seja soma = 0
+            enquanto contador < 7 {
+                contador = contador + 1
+                se contador == 3 {
+                    continue
+                }
+                se contador == 6 {
+                    pare
+                }
+                soma = soma + contador
+            }
+            escreva(soma)
+            escreva(contador)
+            enquanto 0 {
+                escreva("não deve aparecer")
+            }
+        }"""
+        r = self.executar_linux(fonte)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, '12\n6\n')
+
+    def test_linux_lacos_aninhados(self):
+        if sys.platform != 'linux' or os.uname().machine != 'x86_64':
+            self.skipTest('Requer Linux x86-64')
+        fonte = """início {
+            seja i = 0
+            seja j = 0
+            seja total = 0
+            enquanto i < 3 {
+                j = 0
+                enquanto j < 4 {
+                    j = j + 1
+                    se j == 2 {
+                        continue
+                    }
+                    se j == 4 {
+                        pare
+                    }
+                    total = total + 1
+                }
+                i = i + 1
+            }
+            escreva(total)
+        }"""
+        r = self.executar_linux(fonte)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, '6\n')
+
+    def test_windows_lacos_quando_disponivel(self):
+        if sys.platform != 'win32':
+            self.skipTest('Requer Windows real')
+        fonte = """início {
+            seja i = 0
+            seja total = 0
+            enquanto i < 5 {
+                i = i + 1
+                se i == 2 {
+                    continue
+                }
+                total = total + i
+                se i == 4 {
+                    pare
+                }
+            }
+            escreva(total)
+        }"""
+        with tempfile.TemporaryDirectory() as d:
+            exe = Path(d) / 'lacos.exe'
+            exe.write_bytes(compilar(analisar_programa(fonte), 'windows'))
+            r = subprocess.run([str(exe)], capture_output=True, encoding='utf-8', timeout=5)
+            self.assertEqual(r.returncode, 0)
+            self.assertEqual(r.stdout, '8\n')
+
     def test_windows_pe_e_contem_importacoes(self):
         p = analisar_programa('inclua matematica\ninício {\n escreva(dividir(20, 4))\n}')
         exe = compilar(p, 'windows')
