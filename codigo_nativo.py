@@ -69,7 +69,7 @@ class Gerador(Emissor):
         self.rotulos[nome] = len(self.codigo)
 
     def salto(self, nome, tipo='jmp'):
-        prefixo = {'jmp': b'\xE9', 'jz': b'\x0F\x84', 'jnz': b'\x0F\x85', 'jns': b'\x0F\x89'}[tipo]
+        prefixo = {'jmp': b'\xE9', 'jz': b'\x0F\x84', 'jnz': b'\x0F\x85', 'jns': b'\x0F\x89', 'jg': b'\x0F\x8F', 'jl': b'\x0F\x8C', 'jo': b'\x0F\x80'}[tipo]
         self.relativo(prefixo, nome)
 
     def chamada(self, nome):
@@ -251,6 +251,33 @@ def montar_codigo(programa, windows):
                 emitir_bloco(op[2], (inicio, fim))
                 g.salto(inicio)
                 g.marcar(fim)
+            elif op[0] == 'para':
+                _, nome, inicial, final, passo, corpo = op
+                numero = g.proxima_condicao
+                g.proxima_condicao += 1
+                inicio = f'para_inicio_{numero}'
+                incremento = f'para_incremento_{numero}'
+                fim = f'para_fim_{numero}'
+                deslocamento = -(16 + variaveis[nome]*8) if windows else -(8 + variaveis[nome]*8)
+                # Avalia o inicio uma vez e guarda o contador na pilha.
+                expressao(g, inicial, variaveis, windows)
+                g.bytes(b'\x48\x89\x85' + struct.pack('<i', deslocamento))
+                g.marcar(inicio)
+                # O limite e avaliado a cada iteracao; fim inclusivo.
+                expressao(g, final, variaveis, windows)
+                g.bytes(b'\x50')  # push limite
+                g.bytes(b'\x48\x8B\x85' + struct.pack('<i', deslocamento))  # contador em RAX
+                g.bytes(b'\x59\x48\x39\xC8')  # pop RCX; cmp RAX, RCX
+                g.salto(fim, 'jg' if passo > 0 else 'jl')
+                emitir_bloco(corpo, (incremento, fim))
+                g.marcar(incremento)
+                carregar_numero(g, passo)  # passo em RAX
+                g.bytes(b'\x48\x8B\x8D' + struct.pack('<i', deslocamento))
+                g.bytes(b'\x48\x01\xC8')  # add RAX,RCX
+                g.salto(fim, 'jo')  # encerra ao exceder os limites do inteiro
+                g.bytes(b'\x48\x89\x85' + struct.pack('<i', deslocamento))
+                g.salto(inicio)
+                g.marcar(fim)
             elif op[0] == 'pare':
                 if laco is None:
                     raise ValueError('Uso de pare fora de um laço (erro interno).')
@@ -315,7 +342,7 @@ def montar_pe(g, mensagens):
         enderecos[f'mensagem_{i}'] = base_dados + len(dados)
         dados += msg.encode('utf-8')
     if max(len(g.codigo), len(importacoes), len(dados)) > 0x1000:
-        raise ErroCompilacao('Programa grande demais para as seções fixas da versão 0.4 (4 KiB).')
+        raise ErroCompilacao('Programa grande demais para as seções fixas da versão 0.5 (4 KiB).')
     g.finalizar(base_codigo, enderecos)
     secoes = [(b'.text', bytes(g.codigo), base_codigo, 0x60000020),
               (b'.idata', bytes(importacoes), base_importacoes, 0xC0000040),

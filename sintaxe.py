@@ -1,4 +1,4 @@
-"""Analisador do RoteiroSimples 0.4.1 (sem execução em Python)."""
+"""Analisador do RoteiroSimples 0.5 (sem execução em Python)."""
 import json
 import re
 from dataclasses import dataclass
@@ -146,7 +146,7 @@ def analisar_programa(fonte):
         else:
             normalizadas.append((n, t))
     variaveis = {}
-    reservadas = {'inicio', 'seja', 'escreva', 'inclua', 'se', 'senao', 'enquanto', 'pare', 'continue'}
+    reservadas = {'inicio', 'seja', 'escreva', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue'}
 
     def bloco(i, profundidade=0, em_laco=False):
         instrucoes = []
@@ -172,9 +172,40 @@ def analisar_programa(fonte):
                 corpo, i = bloco(i+1, profundidade+1, True)
                 instrucoes.append(('enquanto', cond, corpo))
                 continue
+            if len(t) >= 7 and t[0] == 'para' and t[-1] == '{':
+                # Sintaxe: para nome de inicio ate fim [passo inteiro] {
+                nome = t[1]
+                if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', nome) or nome in reservadas:
+                    raise ErroCompilacao(f'Linha {n}: nome de contador invalido no para.')
+                if t[2] != 'de' or 'ate' not in t[3:-1]:
+                    raise ErroCompilacao(f"Linha {n}: use 'para nome de inicio ate fim [passo numero] {{'.")
+                pos_ate = t.index('ate', 3)
+                if pos_ate == 3:
+                    raise ErroCompilacao(f'Linha {n}: informe o valor inicial do para.')
+                pos_passo = t.index('passo', pos_ate+1) if 'passo' in t[pos_ate+1:-1] else len(t)-1
+                if pos_passo == pos_ate+1:
+                    raise ErroCompilacao(f'Linha {n}: informe o valor final do para.')
+                inicial = Expressao(t[3:pos_ate], n, variaveis, importa).analisar()
+                final = Expressao(t[pos_ate+1:pos_passo], n, variaveis, importa).analisar()
+                passo = 1
+                if pos_passo < len(t)-1:
+                    partes = t[pos_passo+1:-1]
+                    if not partes or len(partes) > 2 or (len(partes) == 2 and partes[0] != '-'):
+                        raise ErroCompilacao(f'Linha {n}: passo precisa ser um numero inteiro constante.')
+                    numero = partes[-1]
+                    if not numero.isascii() or not numero.isdecimal():
+                        raise ErroCompilacao(f'Linha {n}: passo precisa ser um numero inteiro constante.')
+                    passo = int(numero) * (-1 if len(partes) == 2 else 1)
+                    if passo == 0 or abs(passo) > (1 << 63)-1:
+                        raise ErroCompilacao(f'Linha {n}: passo precisa estar entre -9223372036854775807 e 9223372036854775807, sem zero.')
+                if nome not in variaveis:
+                    variaveis[nome] = len(variaveis)
+                corpo, i = bloco(i+1, profundidade+1, True)
+                instrucoes.append(('para', nome, inicial, final, passo, corpo))
+                continue
             if t in (['pare'], ['continue']):
                 if not em_laco:
-                    raise ErroCompilacao(f"Linha {n}: '{t[0]}' só pode ser usado dentro de um laço enquanto.")
+                    raise ErroCompilacao(f"Linha {n}: '{t[0]}' só pode ser usado dentro de um laço.")
                 instrucoes.append((t[0],))
                 i += 1
                 continue

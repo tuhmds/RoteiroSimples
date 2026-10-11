@@ -1,0 +1,15 @@
+inclua matematica
+inicio {
+    seja soma = 0
+    escreva("RS 0.5: contagem de um ate cinco")
+    para numero de 1 ate 5 {
+        escreva(numero)
+        soma = somar(soma, numero)
+    }
+    escreva("Soma:")
+    escreva(soma)
+    escreva("Contagem regressiva de dois em dois:")
+    para numero de 5 ate 1 passo -2 {
+        escreva(numero)
+    }
+}
