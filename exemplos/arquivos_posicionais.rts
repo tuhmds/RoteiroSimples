@@ -1,0 +1,17 @@
+// RS 0.35: escreve e consulta uma pagina sem substituir o arquivo todo.
+inicio {
+    seja pagina: texto[64]
+    seja estado = 0
+
+    copie(pagina, "Entrega 101")
+    grave_trecho("dados_teste.rsd", pagina, 4096, estado)
+    escreva(estado)
+
+    limpe(pagina)
+    carregue_trecho("dados_teste.rsd", pagina, 4096, 11, estado)
+    se estado >= 0 {
+        escreva(pagina)
+    } senao {
+        escreva(estado)
+    }
+}

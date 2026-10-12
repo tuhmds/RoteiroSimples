@@ -10,6 +10,31 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
 
+## RS 0.35 — acesso binário posicional (em desenvolvimento)
+
+Dois comandos permitem modificar partes de arquivos sem truncar o conteúdo
+e recuperar resultados de I/O sem encerrar o programa:
+
+```text
+inicio {
+    seja pagina: texto[100]
+    seja estado = 0
+    copie(pagina, "Entrega 101")
+    grave_trecho("banco.rsd", pagina, 4096, estado)
+    carregue_trecho("banco.rsd", pagina, 4096, 11, estado)
+    escreva(estado)
+}
+```
+
+`estado` recebe a quantidade de bytes processados (`0` inclusive no EOF)
+ou códigos negativos para falha de abertura, operação, parâmetros e
+fechamento. Os dados são bytes arbitrários, embora o armazenamento inicial
+ainda seja `texto[N]`. A gravação não é atômica nem durável após quedas de
+energia; sincronização e transações permanecem pendentes.
+
+Veja [a especificação das operações](docs/ARQUIVOS_POSICIONAIS_RS_0_35.md)
+e [o exemplo executável](exemplos/arquivos_posicionais.rts).
+
 ## RS 0.34 — persistência nativa de arquivos (experimental)
 
 Dois comandos permitem salvar e carregar os bytes de um buffer `texto[N]`
