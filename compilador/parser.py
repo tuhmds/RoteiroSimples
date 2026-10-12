@@ -7,6 +7,19 @@ from .lexico import tokens
 from .semantica import ContextoSemantico
 
 def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _retorno=None, _registros=None):
+    # O analisador público também compreende resultados genéricos, e não só
+    # a interface de linha de comando. Isso mantém a integração com testes,
+    # ferramentas e compiladores que invocam analisar_programa diretamente.
+    if (_linhas is None and _contexto is None and _assinaturas is None and
+            _retorno is None and re.search(r'\\b(?:resultado|sucesso|falha)\\s*\\[|\\bpropague\\b', fonte)):
+        from pathlib import Path
+        from .modulos import FontesReunidas, OrigemLinha
+        from .resultados_genericos import preparar_resultados_genericos
+        origens = tuple(OrigemLinha(Path('<codigo_rs>'), numero, texto)
+                        for numero, texto in enumerate(fonte.splitlines(), 1))
+        preparados = preparar_resultados_genericos(FontesReunidas(fonte, origens, ()))
+        if preparados.texto != fonte:
+            return analisar_programa(preparados.texto)
     linhas = (_linhas if _linhas is not None else
              [(n, tokens(l, n)) for n, l in enumerate(fonte.splitlines(), 1)])
     linhas = [(n, t) for n, t in linhas if t]
