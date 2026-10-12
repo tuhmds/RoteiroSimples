@@ -161,12 +161,6 @@ class TestesListasDinamicas(unittest.TestCase):
             inicio {
                 escreva(1)
             }""",
-            """inicio {
-                para i de 0 ate 3 {
-                    seja colecao: lista[]
-                    adicione(colecao, i)
-                }
-            }""",
         ]
         for fonte in proibidos:
             with self.subTest(fonte=fonte):
@@ -186,6 +180,111 @@ class TestesListasDinamicas(unittest.TestCase):
         }"""
         r=executar(fonte)
         self.assertEqual((r.returncode,r.stdout),(0,'3\n30\n77\n'))
+
+
+    def test_rs033_mover_propriedade_e_reutilizar_destino(self):
+        fonte = """inicio {
+            seja origem: lista[]
+            seja destino: lista[]
+            adicione(origem, 11)
+            adicione(origem, 22)
+            adicione(destino, 99)
+            mova(destino, origem)
+            escreva(tamanho(destino))
+            escreva(destino[0])
+            escreva(destino[1])
+            mova(origem, destino)
+            escreva(origem[1])
+        }"""
+        r = executar(fonte)
+        self.assertEqual((r.returncode, r.stdout), (0, '2\n11\n22\n22\n'), r.stderr)
+
+    def test_rs033_origem_movida_inacessivel(self):
+        fonte = """inicio {
+            seja fonte: lista[]
+            seja alvo: lista[]
+            adicione(fonte, 5)
+            mova(alvo, fonte)
+            escreva(tamanho(fonte))
+        }"""
+        r = executar(fonte)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('liber', (r.stdout + r.stderr).lower())
+
+    def test_rs033_blocos_em_lacos_e_desvios(self):
+        fonte = """inicio {
+            seja soma = 0
+            para i de 1 ate 6 {
+                seja itens: lista[]
+                adicione(itens, i)
+                se i == 3 {
+                    seja provisoria: lista[]
+                    adicione(provisoria, 123)
+                    continue
+                }
+                se i == 6 {
+                    seja provisoria: lista[]
+                    adicione(provisoria, 999)
+                    pare
+                }
+                soma = soma + itens[0]
+            }
+            escreva(soma)
+        }"""
+        r = executar(fonte)
+        self.assertEqual((r.returncode, r.stdout), (0, '12\n'), r.stderr)
+
+    def test_rs033_retorno_antecipado_sem_descritor_nao_iniciado(self):
+        fonte = """funcao valor(n: inteiro) -> inteiro {
+            se n == 1 {
+                seja imediata: lista[]
+                adicione(imediata, 7)
+                retorne imediata[0]
+            }
+            seja posterior: lista[]
+            adicione(posterior, 9)
+            retorne posterior[0]
+        }
+        inicio {
+            escreva(valor(1))
+            escreva(valor(2))
+        }"""
+        r = executar(fonte)
+        self.assertEqual((r.returncode, r.stdout), (0, '7\n9\n'), r.stderr)
+
+    def test_rs033_movimento_proprio_e_copias_proibidos(self):
+        erros = [
+            """inicio {
+                seja dados: lista[]
+                mova(dados, dados)
+            }""",
+            """inicio {
+                seja dados: lista[]
+                seja copia = dados
+            }""",
+            """inicio {
+                seja dados: lista[]
+                mova(dados, 8)
+            }""",
+        ]
+        for codigo in erros:
+            with self.subTest(codigo=codigo):
+                with self.assertRaises(ErroCompilacao):
+                    analisar_programa(codigo)
+
+    def test_rs033_dono_externo_sobrevive_ao_continue(self):
+        fonte = """inicio {
+            seja externo: lista[]
+            adicione(externo, 41)
+            para i de 1 ate 3 {
+                seja temporaria: lista[]
+                adicione(temporaria, i)
+                continue
+            }
+            escreva(externo[0])
+        }"""
+        r = executar(fonte)
+        self.assertEqual((r.returncode, r.stdout), (0, '41\n'), r.stderr)
 
 if __name__ == '__main__':
     unittest.main()

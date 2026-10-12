@@ -1,0 +1,12 @@
+// RS 0.33: uma lista pode sair de um laco por transferencia.
+inicio {
+    seja principal: lista[]
+    para i de 1 ate 4 {
+        seja temporaria: lista[]
+        adicione(temporaria, i * 10)
+        se i == 4 {
+            mova(principal, temporaria)
+        }
+    }
+    escreva(principal[0])
+}

@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.32
+# RoteiroSimples (RS) — versão experimental 0.33 (em desenvolvimento)
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -10,7 +10,37 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
 
-## Novo na RS 0.32 — listas dinâmicas e propriedade exclusiva
+## RS 0.33 — transferência de propriedade e duração por escopo
+
+A RS agora implementa `mova(destino, origem)` para `lista[]`. A operação
+libera o antigo destino, transfere o armazenamento da origem **sem copiar
+elementos** e invalida a origem. Usá-la novamente sem outra transferência
+causa um erro controlado.
+
+Listas dinâmicas podem ser declaradas em blocos `se`, `enquanto` e
+`para`. A saída normal, `pare` e `continue` liberam as listas locais;
+`retorne` libera os descritores ativos da função, mesmo que existam
+declarações não alcançadas.
+
+```text
+inicio {
+    seja principal: lista[]
+    para i de 1 ate 4 {
+        seja temporaria: lista[]
+        adicione(temporaria, i * 10)
+        se i == 4 {
+            mova(principal, temporaria)
+        }
+    }
+    escreva(principal[0])
+}
+```
+
+**Saída esperada:** `40`. Empréstimos entre funções e listas dinâmicas de
+elementos genéricos continuam pendentes; RS permanece experimental.
+Leia `docs/PROPRIEDADE_E_ESCOPOS_RS_0_33.md`.
+
+## Histórico: RS 0.32 — listas dinâmicas e propriedade exclusiva
 
 A linguagem agora reconhece **lista[]**, com armazenamento nativo que cresce conforme os dados são adicionados e é liberado automaticamente no fim da função ou do programa proprietário.
 
@@ -422,7 +452,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**RS 0.33 (planejamento):** transferência explícita de propriedade, tipos de empréstimo, limpeza de memória em todos os caminhos de escopo e elementos genéricos em listas dinâmicas. Memória dinâmica para textos e dados compostos virá depois, com verificações nativas específicas.
+**RS 0.33 (validação em andamento):** `mova` e liberação por escopo implementados. Empréstimos seguros, elementos genéricos em listas dinâmicas, textos dinâmicos e dados compostos ficam para incrementos seguintes.
 
 O projeto ainda é experimental, não pronto para produção. Não estamos acrescentando níveis de otimização.
 
