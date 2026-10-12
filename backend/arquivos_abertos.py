@@ -91,6 +91,8 @@ def emitir_comando(g, op, variaveis, tipos, windows, mensagens, endereco_buffer,
             _emitir(g, '58')
         elif comando == 'sincronize_recurso':
             g.chamada('rs_sincronizar_recurso')
+        elif comando == 'bloqueie_recurso':
+            g.chamada('rs_bloquear_recurso')
         else:
             nome_buffer = op[2]
             dados, comprimento, capacidade = endereco_buffer(
@@ -229,6 +231,23 @@ def _rotina_sincronizar(g, windows):
         _emitir(g, '48 C7 C0 FA FF FF FF C3')
 
 
+def _rotina_bloquear(g, windows):
+    """Bloqueio sem espera: Linux flock; Windows já abre share=0."""
+    g.marcar('rs_bloquear_recurso')
+    if windows:
+        # CreateFileA usa dwShareMode=0 desde a abertura: outro processo
+        # não pode abrir simultaneamente. Não fingimos LockFileEx adicional.
+        _emitir(g, '31 C0 C3')
+    else:
+        # flock(fd, LOCK_EX | LOCK_NB) = syscall 73, flags 6.
+        _emitir(g, 'B8 49 00 00 00 BE 06 00 00 00 0F 05 48 85 C0')
+        falha = 'rs_bloquear_falha'
+        g.salto(falha, 'js')
+        _emitir(g, '31 C0 C3')
+        g.marcar(falha)
+        _emitir(g, '48 C7 C0 F9 FF FF FF C3') # -7
+
+
 def _rotina_transferir(g, windows, gravar):
     nome = 'rs_recurso_gravar' if gravar else 'rs_recurso_ler'
     loop = nome+'_volta'
@@ -293,5 +312,6 @@ def emitir_rotinas(g, windows):
     _rotina_abrir(g, windows)
     _rotina_fechar(g, windows)
     _rotina_sincronizar(g, windows)
+    _rotina_bloquear(g, windows)
     _rotina_transferir(g, windows, gravar=True)
     _rotina_transferir(g, windows, gravar=False)
