@@ -2,6 +2,7 @@
 import struct
 from compilador.erros import ErroCompilacao
 from .base import alinhar
+from .desenrolamento_windows import gerar_desenrolamentos
 
 def construir_importacoes(base_rva, nomes):
     conteudo = bytearray(40)
@@ -93,6 +94,18 @@ def montar_pe(g, mensagens):
               (b'.idata', bytes(importacoes), base_importacoes, 0xC0000040),
               (b'.rdata', bytes(dados), base_dados, 0x40000040),
               (b'.reloc', realocacoes, base_relocacoes, 0x42000040)]
+    base_xdados = alinhar(base_relocacoes + len(realocacoes), 0x1000)
+    tabela_funcoes, dados_desenrolamento = gerar_desenrolamentos(
+        g, base_codigo, base_xdados)
+    base_pdados = 0
+    if tabela_funcoes:
+        # Dados de desenrolamento e tabela de funções são somente leitura.
+        # Nunca adicionar metadados artificiais para quadros com sondagem.
+        base_pdados = alinhar(base_xdados + len(dados_desenrolamento), 0x1000)
+        secoes.extend((
+            (b'.xdata', dados_desenrolamento, base_xdados, 0x40000040),
+            (b'.pdata', tabela_funcoes, base_pdados, 0x40000040),
+        ))
     descritores = []
     tamanho_cabecalho = alinhar(0x98 + 0xF0 + len(secoes) * 40, 0x200)
     off = tamanho_cabecalho
@@ -117,8 +130,9 @@ def montar_pe(g, mensagens):
     struct.pack_into('<I', opt, 36, 0x200)
     struct.pack_into('<HHHH', opt, 40, 6, 0, 0, 0)
     struct.pack_into('<HH', opt, 48, 6, 0)
-    struct.pack_into('<I', opt, 56,
-                     alinhar(base_relocacoes + len(realocacoes), 0x1000))
+    fim_imagem = (base_pdados + len(tabela_funcoes) if tabela_funcoes
+                  else base_relocacoes + len(realocacoes))
+    struct.pack_into('<I', opt, 56, alinhar(fim_imagem, 0x1000))
     struct.pack_into('<I', opt, 60, tamanho_cabecalho)
     # DYNAMIC_BASE | NX_COMPAT: realocação DIR64 é efetiva e validada.
     # HIGH_ENTROPY_VA permanece DESLIGADO: os testes de execução de
@@ -130,6 +144,10 @@ def montar_pe(g, mensagens):
     struct.pack_into('<II', opt, 112 + 8, base_importacoes, 40)
     struct.pack_into('<II', opt, 112 + 8 * 5,
                      base_relocacoes, len(realocacoes))
+    if tabela_funcoes:
+        # IMAGE_DIRECTORY_ENTRY_EXCEPTION = 3
+        struct.pack_into('<II', opt, 112 + 8 * 3,
+                         base_pdados, len(tabela_funcoes))
     struct.pack_into('<II', opt, 112 + 8 * 12, base_importacoes + inicio_iat, tamanho_iat)
     cabecalho[0x98:0x98 + 0xF0] = opt
     pos = 0x98 + 0xF0
