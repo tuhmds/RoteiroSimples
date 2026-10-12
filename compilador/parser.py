@@ -154,7 +154,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     contexto = _contexto or ContextoSemantico(importa, assinaturas, registros)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'capacidade', 'copie', 'junte', 'limpe', 'funcao', 'retorne', 'tipo'}
+    reservadas = {'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'capacidade', 'copie', 'junte', 'limpe', 'funcao', 'retorne', 'tipo'}
 
     def indice_lista(partes, linha):
         if '[' not in partes or partes[-1] != ']':
@@ -323,6 +323,57 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     if tipo_impresso not in ('inteiro', 'logico'):
                         raise ErroCompilacao(f'Linha {n}: escreva exige número, lógico ou buffer de texto.')
                     adicionar(('imprima_num', arvore), n, t)
+            elif t[0] in ('grave_trecho', 'carregue_trecho') and t[1:2] == ['('] and t[-1:] == [')']:
+                # Separa vírgulas exteriores: argumentos numéricos podem
+                # conter chamadas com múltiplos parâmetros.
+                partes = []
+                inicio_parte = 2
+                parenteses = 0
+                colchetes = 0
+                for posicao_token in range(2, len(t) - 1):
+                    item = t[posicao_token]
+                    if item == ',' and parenteses == 0 and colchetes == 0:
+                        partes.append(t[inicio_parte:posicao_token])
+                        inicio_parte = posicao_token + 1
+                    elif item == '(':
+                        parenteses += 1
+                    elif item == ')':
+                        parenteses -= 1
+                    elif item == '[':
+                        colchetes += 1
+                    elif item == ']':
+                        colchetes -= 1
+                partes.append(t[inicio_parte:-1])
+                gravar = t[0] == 'grave_trecho'
+                if (len(partes) != (4 if gravar else 5)
+                        or any(not parte for parte in partes)
+                        or len(partes[0]) != 1 or not partes[0][0].startswith('"')):
+                    raise ErroCompilacao(
+                        f'Linha {n}: use {t[0]}("dados.rsd", buffer, posicao, '
+                        + ('estado).' if gravar else 'quantidade, estado).'))
+                try:
+                    caminho = json.loads(str(partes[0][0]))
+                except (ValueError, UnicodeError) as exc:
+                    raise ErroCompilacao(f'Linha {n}: nome de arquivo invalido.') from exc
+                if (not isinstance(caminho, str) or not 1 <= len(caminho) <= 240
+                        or not re.fullmatch(r'[A-Za-z0-9_./-]+', caminho, re.ASCII)
+                        or caminho.startswith('/') or caminho.endswith('/')
+                        or any(parte in ('', '.', '..') for parte in caminho.split('/'))):
+                    raise ErroCompilacao(
+                        f'Linha {n}: arquivo deve ter caminho relativo ASCII, sem . ou .. como pasta.')
+                nome, _ = texto_destino(partes[1], n)
+                deslocamento, _ = expressao_tipada(partes[2], n, 'inteiro')
+                parte_estado = partes[3] if gravar else partes[4]
+                if len(parte_estado) != 1:
+                    raise ErroCompilacao(f'Linha {n}: estado deve ser variavel inteira.')
+                estado = contexto.resolver(str(parte_estado[0]))
+                if tipos.get(estado) != 'inteiro':
+                    raise ErroCompilacao(f'Linha {n}: estado deve ser variavel inteira declarada.')
+                if gravar:
+                    adicionar(('grave_trecho', caminho, nome, deslocamento, estado), n, t)
+                else:
+                    quantidade, _ = expressao_tipada(partes[3], n, 'inteiro')
+                    adicionar(('carregue_trecho', caminho, nome, deslocamento, quantidade, estado), n, t)
             elif t[0] in ('grave_arquivo', 'carregue_arquivo') and t[1:2] == ['('] and t[-1:] == [')']:
                 if len(t) != 6 or t[3] != ',' or not t[2].startswith('"'):
                     raise ErroCompilacao(f'Linha {n}: use {t[0]}("arquivo.txt", variavel_texto).')
@@ -589,6 +640,11 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 expressoes = ((instrucao[2],) if tag in ('atribua', 'copie_composto') else
                              (instrucao[2], instrucao[3]) if tag == 'atribua_indice' else
                              (instrucao[1],))
+                for expressao in expressoes:
+                    nomes |= chamadas_expressao(expressao)
+            if tag in ('grave_trecho', 'carregue_trecho'):
+                expressoes = ((instrucao[3],) if tag == 'grave_trecho'
+                             else (instrucao[3], instrucao[4]))
                 for expressao in expressoes:
                     nomes |= chamadas_expressao(expressao)
             if tag in ('se', 'enquanto', 'para'):

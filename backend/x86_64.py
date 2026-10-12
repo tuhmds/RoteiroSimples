@@ -1,7 +1,7 @@
 """Emissão nativa de instruções AMD64, leitura/escrita e saltos."""
 import struct
 from compilador.erros import ErroCompilacao
-from . import listas_dinamicas, arquivos
+from . import listas_dinamicas, arquivos, arquivos_posicionais
 from .base import Emissor, alinhar
 
 class Gerador(Emissor):
@@ -774,6 +774,10 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                         for op in percorrer_instrucoes(programa.instrucoes))
                     or any(op[0] in ('grave_arquivo', 'carregue_arquivo')
                         for f in g.funcoes.values() for op in percorrer_instrucoes(f.programa.instrucoes)))
+    tem_arquivos_posicionais = (any(op[0] in ('grave_trecho', 'carregue_trecho')
+                        for op in percorrer_instrucoes(programa.instrucoes))
+                    or any(op[0] in ('grave_trecho', 'carregue_trecho')
+                        for f in g.funcoes.values() for op in percorrer_instrucoes(f.programa.instrucoes)))
     tipos = getattr(programa, 'tipos', {})
     tem_dinamicas = any(listas_dinamicas.eh_lista_dinamica(t)
                         for t in tipos.values()) or any(
@@ -853,6 +857,9 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             elif op[0] in ('grave_arquivo', 'carregue_arquivo'):
                 arquivos.emitir_comando(g, op, variaveis, tipos, windows, mensagens,
                                         _endereco_buffer, deslocamento_variavel)
+            elif op[0] in ('grave_trecho', 'carregue_trecho'):
+                arquivos_posicionais.emitir_comando(g, op, variaveis, tipos, windows,
+                    mensagens, _endereco_buffer, deslocamento_variavel, expressao)
             elif op[0] == 'leia_texto':
                 nome = op[1]
                 dados, comprimento, capacidade = _endereco_buffer(variaveis, nome, tipos, windows)
@@ -1144,6 +1151,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         listas_dinamicas.emitir_rotinas(g, windows)
     if tem_arquivos:
         arquivos.emitir_rotinas(g, windows)
+    if tem_arquivos_posicionais:
+        arquivos_posicionais.emitir_rotinas(g, windows)
     imprime_inteiro(g, windows)
     if tem_leitura:
         emitir_cache_entrada(g, windows, slots)

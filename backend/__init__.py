@@ -23,7 +23,7 @@ def compilar(programa, alvo, otimizar=True, nivel=1):
                 return True
         return False
 
-    if (any(op[0] in ('grave_arquivo', 'carregue_arquivo')
+    if (any(op[0] in ('grave_arquivo', 'carregue_arquivo', 'grave_trecho', 'carregue_trecho')
             for op in percorrer_instrucoes(programa.instrucoes))
             or getattr(programa, 'funcoes', None) or getattr(programa, 'registros', None)
             or getattr(programa, 'escopos_locais', False) or contem_copia_composta(programa.instrucoes)

@@ -45,6 +45,10 @@ def montar_pe(g, mensagens):
         nomes.extend(['CreateFileA', 'CloseHandle'])
         if 'ReadFile' not in nomes:
             nomes.append('ReadFile')
+    if 'rs_trecho_gravar' in g.rotulos:
+        for nome in ('CreateFileA', 'CloseHandle', 'ReadFile', 'SetFilePointerEx'):
+            if nome not in nomes:
+                nomes.append(nome)
     importacoes, enderecos, inicio_iat, tamanho_iat = construir_importacoes(base_importacoes, nomes)
     base_dados = alinhar(base_importacoes + len(importacoes), 0x1000)
     dados = bytearray()
