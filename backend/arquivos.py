@@ -6,7 +6,10 @@ Erros encerram o processo com diagnóstico; nunca há truncamento silencioso.
 """
 import struct
 from . import politica_caminhos
-from .desenrolamento_windows import registrar_quadro_auxiliar
+from .desenrolamento_windows import (
+    registrar_quadro_auxiliar, emitir_prologo_auxiliar,
+    emitir_epilogo_auxiliar,
+)
 
 
 def _emitir(g, hexadecimais):
@@ -30,14 +33,14 @@ def emitir_comando(g, instrucao, variaveis, tipos, windows, mensagens,
         g.bytes(b'\x48\x89\x85' + struct.pack('<i', comprimento))
 
 
-def _prologo(g):
-    _emitir(g, '55 48 89 E5 48 83 EC 60')
+def _prologo(g, windows):
+    emitir_prologo_auxiliar(g, windows, 96)
     _emitir(g, '48 89 7D F8 48 89 75 F0 48 89 55 E8')  # caminho, dados, limite
     _emitir(g, '48 C7 45 D8 00 00 00 00')  # bytes transferidos
 
 
-def _fecho(g):
-    _emitir(g, '48 89 EC 5D C3')
+def _fecho(g, windows):
+    emitir_epilogo_auxiliar(g, windows)
 
 
 def _abrir_linux(g, gravar):
@@ -147,7 +150,7 @@ def _rotina(g, windows, gravar):
     termino = nome + '_termino'
     prova = nome + '_prova'
     g.marcar(nome)
-    _prologo(g)
+    _prologo(g, windows)
     _abrir(g, windows, gravar)
     g.marcar(loop)
     _emitir(g, '48 8B 45 E8 48 3B 45 D8')  # limite vs total
@@ -191,7 +194,7 @@ def _rotina(g, windows, gravar):
         g.salto('erro_arquivo_capacidade', 'jnz')
     g.marcar(termino)
     _fechar(g, windows)
-    _fecho(g)
+    _fecho(g, windows)
 
 
 def emitir_rotinas(g, windows):

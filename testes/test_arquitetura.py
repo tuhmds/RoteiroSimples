@@ -60,12 +60,10 @@ class TestesArquiteturaRS09(unittest.TestCase):
 
     def test_binarios_iguais_versao_041(self):
         """Confere novas assinaturas PE/ELF, mantendo originais historicas: 9 programas x 2 sistemas x 2 níveis de otimização."""
-        fixture = json.loads((RAIZ / 'testes/fixtures/rs0414_binarios_08.json').read_text(encoding='utf-8'))
+        fixture = json.loads((RAIZ / 'testes/fixtures/rs0415_binarios_08.json').read_text(encoding='utf-8'))
         self.assertEqual(len(fixture), 9)
         comparados = 0
         for arquivo, esperados in fixture.items():
-            if arquivo in ('entrada.rts', 'tipos.rts'):
-                continue  # RS 0.19 substitui explicitamente a rotina nativa de E/S.
             programa = analisar_programa((RAIZ / 'exemplos' / arquivo).read_text(encoding='utf-8-sig'))
             for config, digest in esperados.items():
                 with self.subTest(arquivo=arquivo, config=config):
@@ -73,7 +71,7 @@ class TestesArquiteturaRS09(unittest.TestCase):
                     binario = compilador_nativo(programa, alvo, otimizar=nivel == 'O1')
                     self.assertEqual(hashlib.sha256(binario).hexdigest(), digest)
                     comparados += 1
-        self.assertEqual(comparados, 28)
+        self.assertEqual(comparados, 36)
 
     def test_cli_e_ir_tem_os_mesmos_comandos(self):
         with tempfile.TemporaryDirectory() as pasta:

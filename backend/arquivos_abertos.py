@@ -10,7 +10,11 @@ Rotinas recebem argumentos em registradores da convenção interna RS:
 """
 import struct
 from . import politica_caminhos
-from .desenrolamento_windows import registrar_quadro_auxiliar
+from .desenrolamento_windows import (
+    registrar_quadro_auxiliar, registrar_quadro_empilhado,
+    registrar_rotina_folha, emitir_prologo_auxiliar,
+    emitir_epilogo_auxiliar,
+)
 
 
 def _emitir(g, hexa):
@@ -196,7 +200,7 @@ def _rotina_caminho_verificado(g, windows):
     Aceita apenas [A-Za-z0-9_][A-Za-z0-9_.-]*, até 240 bytes.
     """
     g.marcar('rs_abrir_caminho_verificado')
-    _emitir(g, '55 48 89 E5 48 81 EC 30 01 00 00')  # 304 bytes
+    emitir_prologo_auxiliar(g, windows, 304)  # 304 bytes
     _emitir(g, '48 89 7D F8 48 89 75 F0 48 89 55 E8')
     invalido='rs_caminho_invalido'
     loop='rs_caminho_loop'
@@ -251,12 +255,12 @@ def _rotina_caminho_verificado(g, windows):
     g.marcar(invalido)
     _emitir(g, '48 C7 C0 FD FF FF FF') # -3
     g.marcar(fim)
-    _emitir(g, '48 89 EC 5D C3')
+    emitir_epilogo_auxiliar(g, windows)
 
 
 def _rotina_abrir(g, windows):
     g.marcar('rs_abrir_recurso')
-    _emitir(g, '55 48 89 E5 48 83 EC 40')
+    emitir_prologo_auxiliar(g, windows, 64)
     _emitir(g, '48 89 7D F8 48 89 75 F0')
     if windows:
         ler = 'rs_abrir_modo_leitura'
@@ -324,20 +328,24 @@ def _rotina_abrir(g, windows):
         g.salto(ok, 'jns')
         _emitir(g, '48 C7 C0 FF FF FF FF')
         g.marcar(ok)
-    _emitir(g, '48 89 EC 5D C3')
+    emitir_epilogo_auxiliar(g, windows)
 
 
 def _rotina_fechar(g, windows):
     g.marcar('rs_fechar_recurso')
     if windows:
-        _emitir(g, '48 89 F9 48 83 EC 28')
+        _emitir(g, '48 83 EC 28 48 89 F9')
         g.relativo(b'\xFF\x15', 'CloseHandle')
-        _emitir(g, '48 83 C4 28 85 C0')
+        _emitir(g, '85 C0')
         falha='rs_fechar_falha'
+        fim='rs_fechar_fim'
         g.salto(falha, 'jz')
-        _emitir(g, '31 C0 C3')
+        _emitir(g, '31 C0')
+        g.salto(fim)
         g.marcar(falha)
-        _emitir(g, '48 C7 C0 FC FF FF FF C3')
+        _emitir(g, '48 C7 C0 FC FF FF FF')
+        g.marcar(fim)
+        _emitir(g, '48 83 C4 28 C3')
     else:
         _emitir(g, 'B8 03 00 00 00 0F 05 48 85 C0')
         falha='rs_fechar_falha'
@@ -350,14 +358,18 @@ def _rotina_fechar(g, windows):
 def _rotina_sincronizar(g, windows):
     g.marcar('rs_sincronizar_recurso')
     if windows:
-        _emitir(g, '48 89 F9 48 83 EC 28')
+        _emitir(g, '48 83 EC 28 48 89 F9')
         g.relativo(b'\xFF\x15', 'FlushFileBuffers')
-        _emitir(g, '48 83 C4 28 85 C0')
+        _emitir(g, '85 C0')
         falha='rs_sincronizar_falha'
+        fim='rs_sincronizar_fim'
         g.salto(falha, 'jz')
-        _emitir(g, '31 C0 C3')
+        _emitir(g, '31 C0')
+        g.salto(fim)
         g.marcar(falha)
-        _emitir(g, '48 C7 C0 FA FF FF FF C3')
+        _emitir(g, '48 C7 C0 FA FF FF FF')
+        g.marcar(fim)
+        _emitir(g, '48 83 C4 28 C3')
     else:
         _emitir(g, 'B8 4A 00 00 00 0F 05 48 85 C0')
         falha='rs_sincronizar_falha'
@@ -392,7 +404,7 @@ def _rotina_transferir(g, windows, gravar):
     invalido=nome+'_invalido'
     fim=nome+'_fim'
     g.marcar(nome)
-    _emitir(g, '55 48 89 E5 48 83 EC 60')
+    emitir_prologo_auxiliar(g, windows, 96)
     _emitir(g, '48 89 7D F8 48 89 75 F0 48 89 55 E8 48 89 4D E0')
     _emitir(g, '48 C7 45 D0 00 00 00 00')
     _emitir(g, '48 83 7D E0 00')
@@ -441,7 +453,7 @@ def _rotina_transferir(g, windows, gravar):
     g.marcar(invalido)
     _emitir(g, '48 C7 C0 FD FF FF FF')
     g.marcar(fim)
-    _emitir(g, '48 89 EC 5D C3')
+    emitir_epilogo_auxiliar(g, windows)
 
 
 def emitir_rotinas(g, windows):
@@ -452,8 +464,14 @@ def emitir_rotinas(g, windows):
     if windows:
         registrar_quadro_auxiliar(g, 'rs_abrir_recurso')
     _rotina_fechar(g, windows)
+    if windows:
+        registrar_quadro_empilhado(g, 'rs_fechar_recurso', (), 40)
     _rotina_sincronizar(g, windows)
+    if windows:
+        registrar_quadro_empilhado(g, 'rs_sincronizar_recurso', (), 40)
     _rotina_bloquear(g, windows)
+    if windows:
+        registrar_rotina_folha(g, 'rs_bloquear_recurso')
     _rotina_transferir(g, windows, gravar=True)
     if windows:
         registrar_quadro_auxiliar(g, 'rs_recurso_gravar')

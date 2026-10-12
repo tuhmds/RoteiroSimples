@@ -4,6 +4,11 @@ from compilador.erros import ErroCompilacao
 from . import listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros, arquivos_abertos, publicacao_atomica, politica_caminhos
 from compilador.disposicao_tipos import palavras_tipo as _palavras_tipo
 from .base import Emissor, alinhar
+from .desenrolamento_windows import registrar_quadro_empilhado
+
+# Salvamentos anteriores a RBP preservam os deslocamentos dos locais.
+SALVAMENTOS_WINDOWS = bytes.fromhex('56 57 41 54 41 55 41 56 41 57')
+RESTAURACOES_WINDOWS = bytes.fromhex('41 5F 41 5E 41 5D 41 5C 5F 5E')
 
 class Gerador(Emissor):
     def __init__(self):
@@ -163,13 +168,13 @@ def _copiar_palavras(g, origem, destino, quantidade):
     g.salto(rotulo, 'jnz')
 
 
-def _copiar_para_retorno(g, origem, quantidade):
+def _copiar_para_retorno(g, origem, quantidade, windows=False):
     """O chamador fornece endereço de destino na palavra oculta de retorno."""
     numero = g.proxima_condicao
     g.proxima_condicao += 1
     rotulo = f'retornar_composto_{numero}'
     g.bytes(b'\x4C\x8D\x95' + struct.pack('<i', origem))
-    g.bytes(b'\x4C\x8B\x5D\x18')   # mov r11,[rbp+24]
+    g.bytes(b'\x4C\x8B\x5D' + bytes((80 if windows else 24,)))
     g.bytes(b'\xB9' + struct.pack('<I', quantidade)) # mov ecx,count
     g.marcar(rotulo)
     g.bytes(b'\x49\x8B\x02\x49\x89\x03')
@@ -229,7 +234,7 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
             empilhados += quantidade
         if composto_retorno:
             if destino_composto == '__rs_retorno_externo':
-                g.bytes(b'\x48\x8B\x45\x18') # carrega ponteiro do chamador anterior
+                g.bytes(b'\x48\x8B\x45' + bytes((80 if windows else 24,)))
             else:
                 destino = deslocamento_variavel(variaveis, destino_composto, windows)
                 g.bytes(b'\x48\x8D\x85' + struct.pack('<i', destino))
@@ -339,7 +344,7 @@ def escreve_literal(g, indice, mensagem, windows, manipulador='saida'):
         g.relativo(b'\x48\x8D\x15', f'mensagem_{indice}')  # rdx = string
         g.bytes(b'\x41\xB8' + struct.pack('<I', len(dados)))
         g.relativo(b'\x4C\x8D\x0D', 'contador')
-        g.bytes(b'\xC7\x44\x24\x20\x00\x00\x00\x00')
+        g.bytes(b'\x48\xC7\x44\x24\x20\x00\x00\x00\x00')
         g.relativo(b'\xFF\x15', 'WriteFile')
     else:
         g.bytes(b'\xB8\x01\x00\x00\x00')  # eax=sys_write
@@ -378,9 +383,10 @@ def imprime_inteiro(g, windows):
         g.bytes(b'\x49\x29\xF8')  # sub r8,rdi => tamanho
         g.bytes(b'\x48\x89\xFA\x48\x89\xD9')  # mov rdx,rdi; mov rcx,rbx
         g.relativo(b'\x4C\x8D\x0D', 'contador')
-        g.bytes(b'\xC7\x44\x24\x20\x00\x00\x00\x00')
+        g.bytes(b'\x48\xC7\x44\x24\x20\x00\x00\x00\x00')
         g.relativo(b'\xFF\x15', 'WriteFile')
         g.bytes(b'\x48\x81\xC4' + struct.pack('<I', 0x80) + b'\x5F\xC3')
+        registrar_quadro_empilhado(g, 'imprimir_inteiro', ['rdi'], 128)
     else:
         g.bytes(b'\x48\x8D\x54\x24\x40')  # lea rdx,[rsp+64]
         g.bytes(b'\x48\x29\xFA')  # sub rdx,rdi
@@ -407,8 +413,8 @@ TAMANHO_CACHE_ENTRADA = 1024
 
 
 def _offsets_cache_entrada(slots, windows):
-    # All offsets are relative to the main frame pointer (RBP); never to a
-    # short-lived helper frame. In Windows [rbp-8] stores the saved RBX.
+    # Deslocamentos relativos ao RBP principal, nunca ao quadro auxiliar.
+    # No Windows a palavra RBP-8 fica reservada por compatibilidade dos locais.
     base = -(16 + slots * 8) if windows else -(8 + slots * 8)
     capacidade = 256 if windows else TAMANHO_CACHE_ENTRADA
     return base, base - 8, base - 8 - capacidade
@@ -424,7 +430,9 @@ def emitir_cache_entrada(g, windows, slots):
     cursor, quantidade, buffer = _offsets_cache_entrada(slots, windows)
     bloco = 256 if windows else TAMANHO_CACHE_ENTRADA
     g.marcar('entrada_proximo_byte')
-    g.bytes(b'\x56')  # push rsi: preserve pointer to caller's UTF-8 buffer
+    g.bytes(b'\x56')  # preserva o ponteiro do buffer do chamador
+    if windows:
+        g.bytes(b'\x48\x83\xEC\x30')
     g.bytes(b'\x48\x8B\x85' + struct.pack('<i', cursor))
     g.bytes(b'\x48\x3B\x85' + struct.pack('<i', quantidade))
     g.salto('entrada_tem_byte', 'jb')
@@ -432,7 +440,6 @@ def emitir_cache_entrada(g, windows, slots):
         # Entering helper: rsp%16=8; push rsi -> aligned, 0x30 keeps it.
         # shadow space [rsp+0..0x1f], overlapped NULL at +0x20,
         # bytes-read DWORD at +0x28.
-        g.bytes(b'\x48\x83\xEC\x30')
         g.bytes(b'\x4C\x89\xE1')  # rcx = R12 = handle stdin
         g.bytes(b'\x48\x8D\x95' + struct.pack('<i', buffer))  # rdx = buffer
         g.bytes(b'\x41\xB8' + struct.pack('<I', bloco))
@@ -446,14 +453,11 @@ def emitir_cache_entrada(g, windows, slots):
         g.salto('entrada_windows_eof', 'je')
         g.bytes(b'\x83\xF8\x26')  # ERROR_HANDLE_EOF (38)
         g.salto('entrada_windows_eof', 'je')
-        g.bytes(b'\x48\x83\xC4\x30')
         g.salto('entrada_falha')
         g.marcar('entrada_windows_eof')
-        g.bytes(b'\x48\x83\xC4\x30')
         g.salto('entrada_eof')
         g.marcar('entrada_windows_ok')
         g.bytes(b'\x8B\x44\x24\x28') # eax=nread
-        g.bytes(b'\x48\x83\xC4\x30')
     else:
         g.bytes(b'\x31\xC0\x31\xFF')  # read fd0
         g.bytes(b'\x48\x8D\xB5' + struct.pack('<i', buffer))
@@ -478,7 +482,11 @@ def emitir_cache_entrada(g, windows, slots):
     g.marcar('entrada_falha')
     g.bytes(b'\x48\xC7\xC0\xFF\xFF\xFF\xFF')
     g.marcar('entrada_retorno')
+    if windows:
+        g.bytes(b'\x48\x83\xC4\x30')
     g.bytes(b'\x5E\xC3')  # pop rsi; ret
+    if windows:
+        registrar_quadro_empilhado(g, 'entrada_proximo_byte', ['rsi'], 48)
 
 def ler_inteiro(g, windows):
     """Leitura de um inteiro ASCII com sinal em stdin, sem alocacao dinamica.
@@ -571,6 +579,8 @@ def ler_inteiro(g, windows):
     g.marcar('leia_retornar')
     g.bytes(b'\x48\x83\xC4\x40' if windows else b'\x48\x83\xC4\x10')
     g.bytes(b'\x41\x5F\x41\x5E\x41\x5D\xC3')  # pop r15 r14 r13; ret
+    if windows:
+        registrar_quadro_empilhado(g, 'ler_inteiro', ['r13', 'r14', 'r15'], 64)
 
 
 def _endereco_buffer(variaveis, nome, tipos, windows):
@@ -587,7 +597,7 @@ def _imprimir_buffer(g, nome, variaveis, tipos, windows):
         g.bytes(b'\x48\x8D\x95' + struct.pack('<i', dados))  # RDX=bytes
         g.bytes(b'\x44\x8B\x85' + struct.pack('<i', comprimento))  # R8D=tamanho
         g.relativo(b'\x4C\x8D\x0D', 'contador')
-        g.bytes(b'\xC7\x44\x24\x20\x00\x00\x00\x00')
+        g.bytes(b'\x48\xC7\x44\x24\x20\x00\x00\x00\x00')
         g.relativo(b'\xFF\x15', 'WriteFile')
     else:
         g.bytes(b'\xB8\x01\x00\x00\x00\xBF\x01\x00\x00\x00')
@@ -723,6 +733,9 @@ def ler_buffer_texto(g, windows):
     g.bytes(b'\x4C\x89\xE8') # RAX=count
     g.bytes(b'\x48\x83\xC4\x48' if windows else b'\x48\x83\xC4\x18')
     g.bytes(b'\x5E\x41\x5F\x41\x5E\x41\x5D\xC3')
+    if windows:
+        registrar_quadro_empilhado(g, 'ler_buffer_texto',
+                                  ['r13', 'r14', 'r15', 'rsi'], 72)
 
 
 def reservar_pilha(g, bytes_reservados, windows=False):
@@ -814,8 +827,12 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                         for t in tipos.values()) or any(
         listas_dinamicas.eh_lista_dinamica(t)
         for f in g.funcoes.values() for t in f.programa.tipos.values())
-    tem_listas = tem_dinamicas or any(isinstance(t, tuple) and t[0] == 'lista' for t in tipos.values())
-    tem_textos = any(isinstance(t, tuple) and t[0] == 'texto' for t in tipos.values())
+    tipos_do_programa = tuple(tipos.values()) + tuple(
+        t for f in g.funcoes.values() for t in f.programa.tipos.values())
+    tem_listas = tem_dinamicas or any(
+        isinstance(t, tuple) and t[0] == 'lista' for t in tipos_do_programa)
+    tem_textos = any(
+        isinstance(t, tuple) and t[0] == 'texto' for t in tipos_do_programa)
     tem_bytes = any(isinstance(t, tuple) and t[0] == 'bytes'
                     for t in tipos.values()) or any(
         isinstance(t, tuple) and t[0] == 'bytes'
@@ -838,7 +855,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         n = slots
         frame = ((8 * n + memoria_cache + 0x38 + 15) // 16) * 16 + 8
         g.marcar('rs_inicio_principal')
-        g.bytes(b'\x55\x48\x89\xE5\x53')  # push rbp; mov rbp,rsp; push rbx
+        g.bytes(SALVAMENTOS_WINDOWS)
+        g.bytes(b'\x53\x55\x48\x89\xE5')  # push rbx; push rbp; mov rbp,rsp
         reservar_pilha(g, frame, windows)
         g.marcar('rs_fim_prologo_principal')
         g.desenrolamentos.append({
@@ -846,6 +864,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             'fim': 'rs_fim_principal',
             'fim_prologo': 'rs_fim_prologo_principal',
             'quadro': frame,
+            'prologo': 'usuario_preservado',
         })
         g.bytes(b'\xB9' + struct.pack('<I', 65001))
         g.relativo(b'\xFF\x15', 'SetConsoleOutputCP')
@@ -1131,7 +1150,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                     elif op[1][0] == 'var':
                         _copiar_para_retorno(g,
                             deslocamento_variavel(variaveis, op[1][1], windows),
-                            _palavras_tipo(g.funcoes[funcao_atual].retorno, g.registros))
+                            _palavras_tipo(g.funcoes[funcao_atual].retorno, g.registros), windows)
                     else:
                         raise ValueError('Retorno composto exige variável ou chamada.')
                 else:
@@ -1189,13 +1208,14 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         g.marcar(f'funcao_{nome}')
         if windows:
             n_frame = (((n_slots+1)*8 + 0x38 + 15)//16)*16+8
-            g.bytes(b'\x55\x48\x89\xE5\x53')
+            g.bytes(SALVAMENTOS_WINDOWS)
+            g.bytes(b'\x53\x55\x48\x89\xE5')
         else:
             n_frame = alinhar((n_slots+1)*8, 16)
             g.bytes(b'\x55\x48\x89\xE5')
         # A profundidade é limitada por bytes acumulados de quadros; o
         # controle ocorre ANTES de reservar a pilha da chamada atual.
-        g.bytes(b'\x48\x8B\x45\x10')  # mov rax,[rbp+16]
+        g.bytes(b'\x48\x8B\x45' + bytes((72 if windows else 16,)))
         custo = n_frame + 128  # margem conservadora para CALL, argumentos e temporários
         if custo > 0x7FFFFFFF:
             g.salto('erro_recursao_limite')
@@ -1214,6 +1234,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 'fim': f'rs_fim_funcao_{nome}',
                 'fim_prologo': rotulo_prologo,
                 'quadro': n_frame,
+                'prologo': 'usuario_preservado',
             })
         if tem_dinamicas:
             listas_dinamicas.inicializar_inativas(g, variaveis, tipos, windows)
@@ -1225,6 +1246,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         g.bytes(b'\x48\x89\x85' + struct.pack('<i', deslocamento_variavel(variaveis, '__rs_uso_pilha', windows)))
         total_palavras = sum(_palavras_tipo(t, g.registros) for _, t in funcao.parametros)
         base_argumentos = 32 if _composto(funcao.retorno, g.registros) else 24
+        if windows:
+            base_argumentos += 56
         indice_palavra = 0
         for interno, tipo in funcao.parametros:
             quantidade = _palavras_tipo(tipo, g.registros)
@@ -1255,7 +1278,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                     arquivos_abertos.emitir_auto_fechar(g, variaveis, recurso_nome, windows)
             g.bytes(b'\x48\x8B\x85' + struct.pack('<i',retorno_guardado))
         if windows:
-            g.bytes(b'\x48\x8D\x65\xF8\x5B\x5D\xC3')  # restaura RBX e retorna
+            g.bytes(b'\x48\x8D\x65\x00\x5D\x5B' + RESTAURACOES_WINDOWS + b'\xC3')
             g.marcar(f'rs_fim_funcao_{nome}')
         else:
             g.bytes(b'\x48\x89\xEC\x5D\xC3')

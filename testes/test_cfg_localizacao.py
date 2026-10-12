@@ -143,11 +143,9 @@ class TestesCFG(unittest.TestCase):
         self.assertIn('style="dashed"', g.para_dot())
 
     def test_cfg_e_so_analise_nao_muda_binarios(self):
-        fixture = json.loads((RAIZ/'testes/fixtures/rs0414_binarios_08.json').read_text(encoding='utf-8'))
+        fixture = json.loads((RAIZ/'testes/fixtures/rs0415_binarios_08.json').read_text(encoding='utf-8'))
         contador = 0
         for nome, esperados in fixture.items():
-            if nome in ('entrada.rts', 'tipos.rts'):
-                continue  # Entrada bufferizada altera os bytes gerados intencionalmente.
             p = analisar_programa((RAIZ/'exemplos'/nome).read_text(encoding='utf-8-sig'))
             for config, hash_esperado in esperados.items():
                 alvo, opt = config.split('/')
@@ -158,7 +156,7 @@ class TestesCFG(unittest.TestCase):
                 self.assertEqual(hashlib.sha256(dados).hexdigest(), hash_esperado,
                                  (nome, config))
                 contador += 1
-        self.assertEqual(contador, 28)
+        self.assertEqual(contador, 36)
 
     def test_cli_exibe_cfg_e_salva_dot(self):
         with tempfile.TemporaryDirectory() as d:

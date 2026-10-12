@@ -6,7 +6,10 @@ Linux: renameat + fsync de '.'; Windows: MoveFileExA(REPLACE|WRITE_THROUGH).
 O chamador deve fechar arquivos e sincronizar o provisório ANTES da troca.
 """
 import struct
-from .desenrolamento_windows import registrar_quadro_auxiliar
+from .desenrolamento_windows import (
+    registrar_quadro_auxiliar, emitir_prologo_auxiliar,
+    emitir_epilogo_auxiliar,
+)
 
 
 def _em(g, texto):
@@ -29,7 +32,7 @@ def emitir_comando(g, op, variaveis, windows, mensagens, deslocamento_variavel):
 
 def emitir_rotina(g, windows, mensagens):
     g.marcar('rs_publicar_arquivo')
-    _em(g, '55 48 89 E5 48 83 EC 30')
+    emitir_prologo_auxiliar(g, windows, 48)
     _em(g, '48 89 7D F8 48 89 75 F0')
     falha_troca = 'rs_publicar_falha_troca'
     falha_persistencia = 'rs_publicar_falha_persistencia'
@@ -88,6 +91,6 @@ def emitir_rotina(g, windows, mensagens):
     g.marcar(falha_persistencia)
     _em(g, '48 C7 C0 F7 FF FF FF') # -9
     g.marcar(fim)
-    _em(g, '48 89 EC 5D C3')
+    emitir_epilogo_auxiliar(g, windows)
     if windows:
         registrar_quadro_auxiliar(g, 'rs_publicar_arquivo')

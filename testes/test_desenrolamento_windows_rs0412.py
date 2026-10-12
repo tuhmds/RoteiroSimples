@@ -62,23 +62,25 @@ class TestesDesenrolamentoWindowsRS0412(unittest.TestCase):
     def test_descricao_semantica_de_quadros_e_prologos(self):
         programa=analisar_programa(exemplo_funcoes())
         emissor,mensagens=montar_codigo(programa,True)
-        self.assertEqual(len(emissor.desenrolamentos),3)
+        self.assertEqual(len(emissor.desenrolamentos),4)
         for d in emissor.desenrolamentos:
+            if d['inicio'] == 'imprimir_inteiro':
+                continue
             with self.subTest(nome=d['inicio']):
                 inicio=emissor.rotulos[d['inicio']]
                 fim=emissor.rotulos[d['fim']]
                 fim_prologo=emissor.rotulos[d['fim_prologo']]
                 self.assertTrue(0 <= inicio < fim_prologo < fim)
-                self.assertEqual(emissor.codigo[inicio:inicio+5],
-                                 b'\x55\x48\x89\xE5\x53')
+                self.assertEqual(emissor.codigo[inicio:inicio+15],
+                                 bytes.fromhex('56 57 41 54 41 55 41 56 41 57 53 55 48 89 E5'))
                 self.assertEqual(emissor.codigo[fim_prologo-7:fim_prologo][:3],
                                  b'\x48\x81\xEC')
                 quadro,=struct.unpack_from('<I',emissor.codigo,fim_prologo-4)
                 self.assertEqual(quadro,d['quadro'])
                 self.assertLess(quadro,4096)
         tabela,dados=gerar_desenrolamentos(emissor,0x1000,0x9000)
-        self.assertEqual(len(tabela),3*12)
-        self.assertEqual(len(dados),3*16)
+        self.assertEqual(len(tabela),4*12)
+        self.assertEqual(len(dados),3*28+8)
 
     def test_pe_registra_intervalos_nativos_sem_inventar_metadados(self):
         programa=analisar_programa(exemplo_funcoes())
@@ -88,7 +90,7 @@ class TestesDesenrolamentoWindowsRS0412(unittest.TestCase):
         self.assertIn('.pdata',secoes)
         self.assertIn('.xdata',secoes)
         self.assertEqual(rva_tabela,secoes['.pdata'][0])
-        self.assertEqual(tamanho_tabela,36)
+        self.assertEqual(tamanho_tabela,48)
         tabela=localizar(imagem,secoes,rva_tabela,tamanho_tabela)
         ult=0
         cobertura=set()
@@ -99,15 +101,21 @@ class TestesDesenrolamentoWindowsRS0412(unittest.TestCase):
             ult=fim
             self.assertTrue(secoes['.xdata'][0]<=info
                             <secoes['.xdata'][0]+secoes['.xdata'][1])
-            descriptor=localizar(imagem,secoes,info,16)
+            descriptor=localizar(imagem,secoes,info,8)
+            cobertura.add(ini)
+            if ini == 0x1000+emissor.rotulos['imprimir_inteiro']:
+                self.assertEqual(descriptor, bytes((1,8,2,0,8,0xF2,1,0x70)))
+                continue
+            descriptor=localizar(imagem,secoes,info,28)
             self.assertEqual(descriptor[0],1)    # versão UNWIND_INFO
-            self.assertEqual(descriptor[2],5)    # 5 slots UNWIND_CODE
+            self.assertEqual(descriptor[2],11)    # oito registradores, frame e alocacao
             self.assertEqual(descriptor[3]&15,5) # RBP como frame
             self.assertGreaterEqual(descriptor[1],12)
             self.assertEqual(descriptor[4],descriptor[1])  # após SUB
             self.assertEqual(descriptor[5]&15,1)  # UWOP_ALLOC_LARGE
-            self.assertEqual(descriptor[8:14],
-                             bytes((5,0x30,4,3,1,0x50)))
+            self.assertEqual(descriptor[8:26],
+                             bytes((15,3,12,0x50,11,0x30,10,0xF0,8,0xE0,
+                                    6,0xD0,4,0xC0,2,0x70,1,0x60)))
             quadro,=struct.unpack_from('<H',descriptor,6)
             self.assertGreater(quadro,0)
             self.assertLess(quadro*8,4096)
@@ -129,12 +137,12 @@ class TestesDesenrolamentoWindowsRS0412(unittest.TestCase):
         self.assertTrue(emissor.exige_sondagem_pilha)
         self.assertIn('rs_sondar_pilha',emissor.rotulos)
         tabela,dados=gerar_desenrolamentos(emissor,0x1000,0x9000)
-        self.assertEqual(len(tabela),12)
-        self.assertEqual(len(dados),16)
-        self.assertEqual(dados[2],5)
+        self.assertEqual(len(tabela),24)
+        self.assertEqual(len(dados),36)
+        self.assertEqual(dados[2],11)
         pe=compilar(programa,'windows',otimizar=False,nivel=0)
         diretorio,secoes=campos_pe(pe)
-        self.assertEqual(diretorio[1],12)
+        self.assertEqual(diretorio[1],24)
         self.assertIn('.pdata',secoes)
         self.assertIn('.xdata',secoes)
 
@@ -146,8 +154,8 @@ class TestesDesenrolamentoWindowsRS0412(unittest.TestCase):
         }"""
         emissor,_=montar_codigo(analisar_programa(fonte),True)
         tabela,infos=gerar_desenrolamentos(emissor,0x1000,0x9000)
-        self.assertEqual(len(tabela),12)
-        self.assertEqual(infos[2],6)  # UWOP_ALLOC_LARGE com 3 slots
+        self.assertEqual(len(tabela),24)
+        self.assertEqual(infos[2],12)  # UWOP_ALLOC_LARGE com 3 slots
         self.assertEqual(infos[5],0x11)  # opInfo=1, operacao=1
         tamanho,=struct.unpack_from('<I',infos,6)
         self.assertEqual(tamanho,emissor.desenrolamentos[0]['quadro'])

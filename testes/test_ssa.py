@@ -191,12 +191,10 @@ class TestesSSA(unittest.TestCase):
             self.assertTrue(any(b['phis'] for b in data['blocos']))
 
     def test_regressao_binarios_rs041(self):
-        referencia = json.loads((RAIZ/'testes/fixtures/rs0414_binarios_11.json').read_text(encoding='utf-8'))
+        referencia = json.loads((RAIZ/'testes/fixtures/rs0415_binarios_11.json').read_text(encoding='utf-8'))
         self.assertEqual(len(referencia), 72)
         for chave, digest in referencia.items():
             nome, alvo, nivel = chave.split('|')
-            if nome in ('exemplos/entrada.rts', 'exemplos/tipos.rts'):
-                continue  # RS 0.19 substituiu a implementacao anterior de leitura nativa.
             with self.subTest(programa=nome, alvo=alvo, nivel=nivel):
                 programa = analisar_programa((RAIZ/nome).read_text(encoding='utf-8'))
                 binario = compilar(programa, alvo, otimizar=nivel != 'O0', nivel=int(nivel[-1]))
