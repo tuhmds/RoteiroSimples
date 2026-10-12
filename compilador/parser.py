@@ -11,7 +11,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     # a interface de linha de comando. Isso mantém a integração com testes,
     # ferramentas e compiladores que invocam analisar_programa diretamente.
     if (_linhas is None and _contexto is None and _assinaturas is None and
-            _retorno is None and re.search(r'\\b(?:resultado|sucesso|falha)\\s*\\[|\\bpropague\\b', fonte)):
+            _retorno is None and re.search(r'\b(?:resultado|sucesso|falha)\s*\[|\bpropague\b', fonte)):
         from pathlib import Path
         from .modulos import FontesReunidas, OrigemLinha
         from .resultados_genericos import preparar_resultados_genericos
