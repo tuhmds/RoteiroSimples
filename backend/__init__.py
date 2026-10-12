@@ -10,7 +10,7 @@ def compilar(programa, alvo, otimizar=True, nivel=1):
         raise ValueError('Alvo desconhecido: use windows ou linux.')
     ir = construir_ir(programa, otimizar=otimizar, nivel=min(nivel, 3))
     legado = programa_para_backend(ir)
-    tem_listas = any(isinstance(t, tuple) and t[0] == 'lista' for t in programa.tipos.values())
+    tem_listas = any(isinstance(t, tuple) and t[0] in ('lista', 'texto') for t in programa.tipos.values())
     if nivel >= 4 and otimizar and not tem_listas:
         from .ssa_x86_64 import construir_backend_ssa, emissor_ssa
         ssa, aloc = construir_backend_ssa(ir, coalescer=(nivel >= 6))

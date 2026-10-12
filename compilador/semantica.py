@@ -33,7 +33,9 @@ class ContextoSemantico:
         return arvore, tipo
 
     def registrar(self, nome, tipo, linha):
-        tamanho = tipo[2] if isinstance(tipo, tuple) and tipo[0] == 'lista' else 1
+        tamanho = (tipo[2] if isinstance(tipo, tuple) and tipo[0] == 'lista'
+                   else 1 + (tipo[1] + 7)//8 if isinstance(tipo, tuple) and tipo[0] == 'texto'
+                   else 1)
         if self.total_slots + tamanho > MAX_VARIAVEIS:
             raise ErroCompilacao(
                 f'Linha {linha}: limite temporário de {MAX_VARIAVEIS} posições de memória excedido.')

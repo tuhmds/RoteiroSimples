@@ -1,0 +1,13 @@
+inicio {
+    seja nome: texto[48]
+    seja outro: texto[32]
+    copie(nome, "Olá, ")
+    copie(outro, "mundo 🌎")
+    junte(nome, outro)
+    escreva(nome)
+    escreva(tamanho(nome))
+    escreva(capacidade(nome))
+    limpe(outro)
+    leia(outro)
+    escreva(outro)
+}

@@ -22,7 +22,7 @@ class Gerador(Emissor):
         self.rotulos[nome] = len(self.codigo)
 
     def salto(self, nome, tipo='jmp'):
-        prefixo = {'jmp': b'\xE9', 'jz': b'\x0F\x84', 'jnz': b'\x0F\x85', 'jns': b'\x0F\x89', 'jg': b'\x0F\x8F', 'jl': b'\x0F\x8C', 'jo': b'\x0F\x80', 'je': b'\x0F\x84', 'jne': b'\x0F\x85', 'jb': b'\x0F\x82', 'ja': b'\x0F\x87', 'js': b'\x0F\x88', 'jle': b'\x0F\x8E', 'jge': b'\x0F\x8D'}[tipo]
+        prefixo = {'jmp': b'\xE9', 'jz': b'\x0F\x84', 'jnz': b'\x0F\x85', 'jns': b'\x0F\x89', 'jg': b'\x0F\x8F', 'jl': b'\x0F\x8C', 'jo': b'\x0F\x80', 'je': b'\x0F\x84', 'jne': b'\x0F\x85', 'jb': b'\x0F\x82', 'ja': b'\x0F\x87', 'js': b'\x0F\x88', 'jle': b'\x0F\x8E', 'jge': b'\x0F\x8D', 'jbe': b'\x0F\x86'}[tipo]
         inicio = len(self.codigo)
         self.relativo(prefixo, nome)
         if self._saltos_curtos_ssa and nome.startswith('ssa_'):
@@ -132,7 +132,9 @@ def _checar_indice(g, expr_indice, tamanho, variaveis, windows):
 
 
 def _total_slots(programa):
-    return max((indice + (tipo[2] if isinstance(tipo, tuple) and tipo[0] == 'lista' else 1)
+    return max((indice + (tipo[2] if isinstance(tipo, tuple) and tipo[0] == 'lista'
+                            else 1 + (tipo[1]+7)//8 if isinstance(tipo, tuple) and tipo[0] == 'texto'
+                            else 1)
                 for nome, indice in programa.variaveis.items()
                 for tipo in (getattr(programa, 'tipos', {}).get(nome, 'inteiro'),)), default=0)
 
@@ -141,6 +143,9 @@ def expressao(g, expr, variaveis, windows, registradores=None):
     tipo = expr[0]
     if tipo in ('numero', 'logico'):
         carregar_numero(g, expr[1])
+    elif tipo == 'tamanho_texto':
+        offset = deslocamento_variavel(variaveis, expr[1], windows)
+        g.bytes(b'\x48\x8B\x85' + struct.pack('<i', offset))
     elif tipo == 'indice':
         nome, indice, tamanho = expr[1:]
         _checar_indice(g, indice, tamanho, variaveis, windows)
@@ -392,11 +397,190 @@ def ler_inteiro(g, windows):
     g.bytes(b'\x41\x5F\x41\x5E\x41\x5D\xC3')  # pop r15 r14 r13; ret
 
 
+def _endereco_buffer(variaveis, nome, tipos, windows):
+    capacidade = tipos[nome][1]
+    dados = deslocamento_variavel(variaveis, nome, windows) - 8 * ((capacidade+7)//8)
+    comprimento = deslocamento_variavel(variaveis, nome, windows)
+    return dados, comprimento, capacidade
+
+
+def _imprimir_buffer(g, nome, variaveis, tipos, windows):
+    dados, comprimento, _ = _endereco_buffer(variaveis, nome, tipos, windows)
+    if windows:
+        g.bytes(b'\x48\x89\xD9')  # RCX = stdout
+        g.bytes(b'\x48\x8D\x95' + struct.pack('<i', dados))  # RDX=bytes
+        g.bytes(b'\x44\x8B\x85' + struct.pack('<i', comprimento))  # R8D=tamanho
+        g.relativo(b'\x4C\x8D\x0D', 'contador')
+        g.bytes(b'\xC7\x44\x24\x20\x00\x00\x00\x00')
+        g.relativo(b'\xFF\x15', 'WriteFile')
+    else:
+        g.bytes(b'\xB8\x01\x00\x00\x00\xBF\x01\x00\x00\x00')
+        g.bytes(b'\x48\x8D\xB5' + struct.pack('<i', dados))
+        g.bytes(b'\x48\x8B\x95' + struct.pack('<i', comprimento))
+        g.bytes(b'\x0F\x05')
+
+
+def _copiar_para_buffer(g, nome, origem, anexar, variaveis, tipos, windows, mensagens):
+    dados, comprimento, capacidade = _endereco_buffer(variaveis, nome, tipos, windows)
+    if origem[0] == 'literal':
+        literal = origem[1]
+        tamanho = len(literal.encode('utf-8'))
+        indice = len(mensagens)
+        mensagens[indice] = literal
+        carregar_numero(g, tamanho)
+        g.bytes(b'\x48\x89\xC1')  # RCX=tamanho
+    else:
+        dados_origem, comprimento_origem, _ = _endereco_buffer(variaveis, origem[1], tipos, windows)
+        g.bytes(b'\x48\x8B\x8D' + struct.pack('<i', comprimento_origem))
+    if anexar:
+        g.bytes(b'\x48\x8B\x85' + struct.pack('<i', comprimento))
+    else:
+        g.bytes(b'\x31\xC0')  # RAX=0
+    g.bytes(b'\x48\x01\xC8')  # soma novo comprimento + bytes adicionados
+    g.bytes(b'\x48\x3D' + struct.pack('<I', capacidade))
+    g.salto('erro_texto_capacidade', 'ja')
+    g.bytes(b'\x48\x8D\xBD' + struct.pack('<i', dados))
+    if anexar:
+        g.bytes(b'\x4C\x8B\x85' + struct.pack('<i', comprimento))  # R8=velho tamanho
+        g.bytes(b'\x4C\x01\xC7')  # add rdi,r8
+    if origem[0] == 'literal':
+        g.relativo(b'\x48\x8D\x35', f'mensagem_{indice}')
+    else:
+        g.bytes(b'\x48\x8D\xB5' + struct.pack('<i', dados_origem))
+    g.bytes(b'\xFC\xF3\xA4')  # cld; rep movsb
+    g.bytes(b'\x48\x89\x85' + struct.pack('<i', comprimento))
+
+
+def ler_buffer_texto(g, windows):
+    """Leitura linha-a-linha em bytes UTF-8, sem ultrapassar capacidade."""
+    g.marcar('ler_buffer_texto')
+    # RSI aponta para os dados, EDX informa a capacidade.
+    g.bytes(b'\x41\x55\x41\x56\x41\x57\x56')  # preserva r13/r14/r15/rsi
+    g.bytes(b'\x48\x83\xEC\x48' if windows else b'\x48\x83\xEC\x18')
+    capoff = 0x40 if windows else 0x10
+    g.bytes(b'\x48\x89\x54\x24' + bytes([capoff]))  # cap = rdx
+    if not windows:
+        g.bytes(b'\x48\x89\x74\x24\x08') # salva ptr do buffer (rsi)
+    g.bytes(b'\x45\x31\xED\x45\x31\xF6\x45\x31\xFF')
+    # r13=count, r14=continuation bytes remaining, r15=first continuation constraint
+    g.marcar('texto_ler_byte')
+    if windows:
+        g.bytes(b'\x4C\x89\xE1')  # rcx=handle stdin
+        g.bytes(b'\x48\x8D\x54\x24\x30') # rdx=single byte ptr
+        g.bytes(b'\x41\xB8\x01\x00\x00\x00') # n=1
+        g.bytes(b'\x4C\x8D\x4C\x24\x38') # &nread
+        g.bytes(b'\xC7\x44\x24\x20\x00\x00\x00\x00')
+        g.relativo(b'\xFF\x15', 'ReadFile')
+        g.bytes(b'\x85\xC0')
+        g.salto('texto_leitura_ok', 'jnz')
+        g.relativo(b'\xFF\x15', 'GetLastError')
+        g.bytes(b'\x83\xF8\x6D') # 109 broken pipe
+        g.salto('texto_concluir', 'jz')
+        g.bytes(b'\x83\xF8\x26') # 38 EOF
+        g.salto('texto_concluir', 'jz')
+        g.salto('erro_texto_entrada')
+        g.marcar('texto_leitura_ok')
+        g.bytes(b'\x8B\x44\x24\x38\x85\xC0')
+        g.salto('texto_concluir', 'jz')
+        g.bytes(b'\x44\x8A\x54\x24\x30')
+    else:
+        g.bytes(b'\x31\xC0\x31\xFF') # read fd=0
+        g.bytes(b'\x48\x89\xE6') # ponteiro temporario da leitura (RSP)
+        g.bytes(b'\xBA\x01\x00\x00\x00\x0F\x05')
+        # A leitura usa [rsp]; o ponteiro de destino foi salvo em [rsp+8].
+        g.bytes(b'\x48\x8B\x74\x24\x08')
+        g.bytes(b'\x48\x85\xC0')
+        g.salto('erro_texto_entrada', 'js')
+        g.salto('texto_concluir', 'jz')
+        g.bytes(b'\x44\x8A\x14\x24')
+    g.bytes(b'\x41\x80\xFA\x0A') # byte == LF
+    g.salto('texto_concluir', 'jz')
+    g.bytes(b'\x45\x85\xF6') # r14>0?
+    g.salto('texto_validar_cont', 'jnz')
+    # Novo codepoint: ASCII; ou inicio multibyte UTF-8 legal.
+    g.bytes(b'\x41\x80\xFA\x80')
+    g.salto('texto_armazena', 'jb')
+    g.bytes(b'\x41\x80\xFA\xC2')
+    g.salto('erro_texto_utf8', 'jb')
+    g.bytes(b'\x41\x80\xFA\xDF')
+    g.salto('texto_dois', 'jbe')
+    g.bytes(b'\x41\x80\xFA\xEF')
+    g.salto('texto_tres', 'jbe')
+    g.bytes(b'\x41\x80\xFA\xF4')
+    g.salto('texto_quatro', 'jbe')
+    g.salto('erro_texto_utf8')
+    g.marcar('texto_dois')
+    g.bytes(b'\x41\xBE\x01\x00\x00\x00')
+    g.salto('texto_armazena')
+    g.marcar('texto_tres')
+    g.bytes(b'\x41\xBE\x02\x00\x00\x00')
+    g.bytes(b'\x41\x80\xFA\xE0')
+    g.salto('texto_tipo_e0', 'je')
+    g.bytes(b'\x41\x80\xFA\xED')
+    g.salto('texto_tipo_ed', 'je')
+    g.salto('texto_armazena')
+    g.marcar('texto_tipo_e0')
+    g.bytes(b'\x41\xBF\x01\x00\x00\x00')
+    g.salto('texto_armazena')
+    g.marcar('texto_tipo_ed')
+    g.bytes(b'\x41\xBF\x02\x00\x00\x00')
+    g.salto('texto_armazena')
+    g.marcar('texto_quatro')
+    g.bytes(b'\x41\xBE\x03\x00\x00\x00')
+    g.bytes(b'\x41\x80\xFA\xF0')
+    g.salto('texto_tipo_f0', 'je')
+    g.bytes(b'\x41\x80\xFA\xF4')
+    g.salto('texto_tipo_f4', 'je')
+    g.salto('texto_armazena')
+    g.marcar('texto_tipo_f0')
+    g.bytes(b'\x41\xBF\x03\x00\x00\x00')
+    g.salto('texto_armazena')
+    g.marcar('texto_tipo_f4')
+    g.bytes(b'\x41\xBF\x04\x00\x00\x00')
+    g.salto('texto_armazena')
+    g.marcar('texto_validar_cont')
+    g.bytes(b'\x41\x80\xFA\x80')
+    g.salto('erro_texto_utf8', 'jb')
+    g.bytes(b'\x41\x80\xFA\xBF')
+    g.salto('erro_texto_utf8', 'ja')
+    for flag, bound, salto in [(1,0xA0,'jb'),(2,0x9F,'ja'),(3,0x90,'jb'),(4,0x8F,'ja')]:
+        rotulo=f'texto_flag_{flag}_fim'
+        g.bytes(b'\x41\x83\xFF' + bytes([flag]))
+        g.salto(rotulo, 'jne')
+        g.bytes(b'\x41\x80\xFA' + bytes([bound]))
+        g.salto('erro_texto_utf8', salto)
+        g.marcar(rotulo)
+    g.bytes(b'\x41\xFF\xCE\x45\x31\xFF') # --r14; r15=0
+    g.marcar('texto_armazena')
+    g.bytes(b'\x4C\x3B\x6C\x24' + bytes([capoff])) # cmp count,cap
+    g.salto('erro_texto_capacidade', 'jge')
+    g.bytes(b'\x46\x88\x14\x2E') # [rsi+r13]=r10b
+    g.bytes(b'\x49\xFF\xC5') # ++count
+    g.salto('texto_ler_byte')
+    g.marcar('texto_concluir')
+    g.bytes(b'\x45\x85\xF6')
+    g.salto('erro_texto_utf8', 'jnz')
+    # Trata CRLF sem incluir CR no texto retornado.
+    g.bytes(b'\x4D\x85\xED')
+    g.salto('texto_retorno', 'jz')
+    g.bytes(b'\x42\x0F\xB6\x44\x2E\xFF') # last byte
+    g.bytes(b'\x83\xF8\x0D')
+    g.salto('texto_retorno', 'jne')
+    g.bytes(b'\x49\xFF\xCD')
+    g.marcar('texto_retorno')
+    g.bytes(b'\x4C\x89\xE8') # RAX=count
+    g.bytes(b'\x48\x83\xC4\x48' if windows else b'\x48\x83\xC4\x18')
+    g.bytes(b'\x5E\x41\x5F\x41\x5E\x41\x5D\xC3')
+
+
 def montar_codigo(programa, windows, emissor_alternativo=None):
     g = Gerador()
     variaveis = programa.variaveis
     mensagens = {}
-    tem_leitura = any(op[0] in ('leia_int', 'leia_indice') for op in percorrer_instrucoes(programa.instrucoes))
+    tem_leitura = any(op[0] in ('leia_int', 'leia_indice', 'leia_texto') for op in percorrer_instrucoes(programa.instrucoes))
+    tipos = getattr(programa, 'tipos', {})
+    tem_textos = any(isinstance(t, tuple) and t[0] == 'texto' for t in tipos.values())
+    tem_leitura_texto = any(op[0] == 'leia_texto' for op in percorrer_instrucoes(programa.instrucoes))
     slots = _total_slots(programa)
     if windows:
         n = slots
@@ -405,6 +589,9 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         g.bytes(b'\x48\x81\xEC' + struct.pack('<I', frame))
         g.bytes(b'\xB9' + struct.pack('<I', 65001))
         g.relativo(b'\xFF\x15', 'SetConsoleOutputCP')
+        if tem_leitura_texto:
+            g.bytes(b'\xB9' + struct.pack('<I',65001))
+            g.relativo(b'\xFF\x15', 'SetConsoleCP')
         g.bytes(b'\xB9\xF5\xFF\xFF\xFF')
         g.relativo(b'\xFF\x15', 'GetStdHandle')
         g.bytes(b'\x48\x89\xC3')  # RBX = stdout handle
@@ -424,6 +611,31 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 n = len(mensagens)
                 mensagens[n] = op[1]
                 escreve_literal(g, n, op[1], windows)
+            elif op[0] == 'crie_texto':
+                nome, capacidade = op[1:]
+                dados, comprimento, _ = _endereco_buffer(variaveis, nome, tipos, windows)
+                g.bytes(b'\x31\xC0')
+                for k in range(1+(capacidade+7)//8):
+                    g.bytes(b'\x48\x89\x85' + struct.pack('<i', comprimento - 8*k))
+            elif op[0] == 'modifique_texto':
+                _, modo, nome, origem = op
+                _copiar_para_buffer(g, nome, origem, modo=='junte', variaveis, tipos, windows, mensagens)
+            elif op[0] == 'limpe_texto':
+                comprimento = deslocamento_variavel(variaveis, op[1], windows)
+                g.bytes(b'\x31\xC0\x48\x89\x85' + struct.pack('<i', comprimento))
+            elif op[0] == 'imprima_texto':
+                _imprimir_buffer(g, op[1], variaveis, tipos, windows)
+                msg_indice = len(mensagens)
+                mensagens[msg_indice] = '\n'
+                escreve_literal(g, msg_indice, '\n', windows)
+            elif op[0] == 'leia_texto':
+                nome = op[1]
+                dados, comprimento, capacidade = _endereco_buffer(variaveis, nome, tipos, windows)
+                g.bytes(b'\x48\x8D\xB5' + struct.pack('<i', dados)) # RSI=buffer
+                carregar_numero(g, capacidade)
+                g.bytes(b'\x48\x89\xC2') # RDX=cap
+                g.chamada('ler_buffer_texto')
+                g.bytes(b'\x48\x89\x85' + struct.pack('<i', comprimento))
             elif op[0] == 'crie_lista':
                 nome, tamanho = op[1:]
                 inicio = deslocamento_variavel(variaveis, nome, windows)
@@ -535,8 +747,10 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     else:
         g.bytes(b'\xB8\x3C\x00\x00\x00\x31\xFF\x0F\x05')
     imprime_inteiro(g, windows)
-    if tem_leitura:
+    if tem_leitura and any(op[0] in ('leia_int', 'leia_indice') for op in percorrer_instrucoes(programa.instrucoes)):
         ler_inteiro(g, windows)
+    if tem_leitura_texto:
+        ler_buffer_texto(g, windows)
 
     primeiro_erro = len(mensagens)
     for indice, msg in [(primeiro_erro, 'Erro: divisão por zero.\n'),
@@ -565,11 +779,26 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             g.relativo(b'\xFF\x15', 'ExitProcess')
         else:
             g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
-    if tem_leitura:
+    if tem_leitura and any(op[0] in ('leia_int', 'leia_indice') for op in percorrer_instrucoes(programa.instrucoes)):
         for indice, msg, rotulo in [
             (len(mensagens), 'Erro: entrada invalida; digite um numero inteiro.\n', 'erro_entrada_invalida'),
             (len(mensagens)+1, 'Erro: numero fora do limite de 64 bits.\n', 'erro_entrada_limite'),
         ]:
+            mensagens[indice] = msg
+            g.marcar(rotulo)
+            escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
+            if windows:
+                g.bytes(b'\xB9\x01\x00\x00\x00')
+                g.relativo(b'\xFF\x15', 'ExitProcess')
+            else:
+                g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+    if tem_textos:
+        for msg, rotulo in [
+            ('Erro: texto excede a capacidade do buffer.\n', 'erro_texto_capacidade'),
+            ('Erro: sequencia UTF-8 invalida.\n', 'erro_texto_utf8'),
+            ('Erro: falha ao ler texto.\n', 'erro_texto_entrada'),
+        ]:
+            indice = len(mensagens)
             mensagens[indice] = msg
             g.marcar(rotulo)
             escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')

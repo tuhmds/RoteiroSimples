@@ -74,10 +74,20 @@ class Expressao:
                 nome = self.consumir()
                 self.consumir(')')
                 tipo = getattr(self, 'tipos', {}).get(nome)
-                if not isinstance(tipo, tuple) or tipo[0] != 'lista':
-                    raise ErroCompilacao(f'Linha {self.linha}: tamanho() exige uma lista.')
-                return NoExpressao(('numero', tipo[2]), getattr(token, 'origem', None))
-            if self.olhar() == '(':
+                if isinstance(tipo, tuple) and tipo[0] == 'lista':
+                    return NoExpressao(('numero', tipo[2]), getattr(token, 'origem', None))
+                if isinstance(tipo, tuple) and tipo[0] == 'texto':
+                    return NoExpressao(('tamanho_texto', nome), getattr(token, 'origem', None))
+                raise ErroCompilacao(f'Linha {self.linha}: tamanho() exige lista ou texto.')
+            if token == 'capacidade' and self.olhar() == '(': 
+                self.consumir('(')
+                nome = self.consumir()
+                self.consumir(')')
+                tipo = getattr(self, 'tipos', {}).get(nome)
+                if not isinstance(tipo, tuple) or tipo[0] != 'texto':
+                    raise ErroCompilacao(f'Linha {self.linha}: capacidade() exige buffer de texto.')
+                return NoExpressao(('numero', tipo[1]), getattr(token, 'origem', None))
+            if self.olhar() == '(': 
                 if not self.importa:
                     raise ErroCompilacao(f"Linha {self.linha}: use 'inclua matematica' para chamar {token}.")
                 from bibliotecas.matematica import OPERACOES

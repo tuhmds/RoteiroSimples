@@ -34,8 +34,10 @@ def construir_importacoes(base_rva, nomes):
 def montar_pe(g, mensagens):
     base_codigo, base_importacoes, base_dados = 0x1000, 0x2000, 0x3000
     nomes = ['GetStdHandle', 'SetConsoleOutputCP', 'WriteFile', 'ExitProcess']
-    if any(label[0] == 'ler_inteiro' for label in g.rotulos.items()):
+    if any(label in g.rotulos for label in ('ler_inteiro', 'ler_buffer_texto')):
         nomes.extend(['ReadFile', 'GetLastError'])
+    if 'ler_buffer_texto' in g.rotulos:
+        nomes.append('SetConsoleCP')
     importacoes, enderecos, inicio_iat, tamanho_iat = construir_importacoes(base_importacoes, nomes)
     dados = bytearray()
     for i, msg in mensagens.items():

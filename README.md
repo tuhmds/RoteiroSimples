@@ -1,8 +1,34 @@
-# RoteiroSimples (RS) — versão experimental 0.17
+# RoteiroSimples (RS) — versão experimental 0.18
 
 Linguagem experimental em português brasileiro, com compilador em Python 3.10+ que **gera diretamente instruções de máquina x86-64**, em executáveis ELF64 (Linux) e PE32+ (Windows). Os programas gerados não dependem do Python para executar. **Não usar em produção.**
 
-## Novo na RS 0.17 — listas de inteiros com memória verificada
+## Novo na RS 0.18 — buffers UTF-8 com comprimento e capacidade
+
+`texto[N]` reserva **N bytes** de dados na pilha e um comprimento de 64 bits. Sem ponteiros brutos, sem terminador NUL obrigatório e sem truncamento silencioso:
+
+```text
+inicio {
+    seja nome: texto[48]
+    seja outro: texto[32]
+    copie(nome, "Olá, ")
+    copie(outro, "mundo 🌎")
+    junte(nome, outro)
+    escreva(nome)
+    escreva(tamanho(nome))
+    escreva(capacidade(nome))
+    limpe(outro)
+    leia(outro)
+    escreva(outro)
+}
+```
+
+`copie` e `junte` aceitam literais ou outro buffer. `limpe` zera o comprimento lógico; `leia` lê uma linha do teclado e **verifica UTF-8 e capacidade**. `tamanho` retorna **bytes ocupados**, e `capacidade` retorna bytes reservados: `á` ocupa dois bytes, `🌎` ocupa quatro. Excesso de capacidade ou UTF-8 inválido provoca erro e saída `1`. Buffers não podem ser usados diretamente em contas ou como ponteiros.
+
+A memória continua na pilha, com orçamento total conservador de 256 slots de 8 bytes (inclui listas, buffers e suas informações de comprimento); capacidades individuais vão de 1 a 2040 bytes, respeitando esse orçamento. Programas com buffers ou listas usam o backend seguro de pilha em qualquer nível `-O 0..6`; CFG/SSA ainda não considera efeitos da memória estruturada. A entrada de texto ainda faz leitura **byte a byte** e pode ser lenta.
+
+**Ainda não há** empréstimos/referências, ponteiros, heap, slices, strings dinâmicas ou garantia de que uma escrita parcial de sistema seja refeita. As regras de propriedade, empréstimo compartilhado e mutável, aliasing e tempo de vida são apenas uma especificação futura. Consulte [buffers e plano de referências](docs/MEMORIA_TEXTO_RS_0_18.md).
+
+## Incluído na RS 0.17 — listas de inteiros com memória verificada
 
 As listas de tamanho fixo ocupam uma região contígua da **pilha** do programa, com
 8 bytes por elemento. Todo elemento é inicializado em zero. Os índices começam
@@ -35,7 +61,7 @@ Saída esperada: `Soma da lista:` e `150`. Também é possível usar
   `-O 0` a `-O 6`. **As otimizações SSA de registradores não são aplicadas aos
   programas que contêm listas**, até haver uma modelagem explícita dos efeitos
   de memória na IR e SSA. Programas sem listas preservam o backend SSA.
-- Ainda **não existem** heap, ponteiros, referências, buffers de texto ou listas
+- Na RS 0.17 ainda não existiam heap, ponteiros, referências, buffers de texto ou listas
   dinâmicas. Essas funcionalidades precisarão de regras explícitas de propriedade,
   tempo de vida, aliasing e limites antes de serem implementadas.
 

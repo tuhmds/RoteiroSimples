@@ -16,8 +16,12 @@ def tipo_expressao(expr, tipos, linha):
     if categoria == 'var':
         tipo = tipos[expr[1]]
         if isinstance(tipo, tuple):
-            raise ErroCompilacao(f'Linha {linha}: a lista {expr[1]!r} precisa de um índice.')
+            raise ErroCompilacao(f'Linha {linha}: {tipo[0]} {expr[1]!r} não é um valor numérico.')
         return tipo
+    if categoria == 'tamanho_texto':
+        if not isinstance(tipos.get(expr[1]), tuple) or tipos[expr[1]][0] != 'texto':
+            raise ErroCompilacao(f'Linha {linha}: tamanho() exige texto válido.')
+        return 'inteiro'
     if categoria == 'indice':
         nome, indice, tamanho = expr[1:]
         if tipos.get(nome) != ('lista', 'inteiro', tamanho):

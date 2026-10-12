@@ -25,7 +25,7 @@ def analisar_programa(fonte):
     contexto = ContextoSemantico(importa)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho'}
+    reservadas = {'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'capacidade', 'copie', 'junte', 'limpe'}
 
     def indice_lista(partes, linha):
         if len(partes) < 4 or partes[1] != '[' or partes[-1] != ']':
@@ -36,6 +36,29 @@ def analisar_programa(fonte):
             raise ErroCompilacao(f'Linha {linha}: {nome!r} não é uma lista declarada.')
         indice, _ = expressao_tipada(partes[2:-1], linha, 'inteiro')
         return nome, indice, tipo[2]
+
+    def texto_destino(partes, linha):
+        if len(partes) != 1:
+            raise ErroCompilacao(f'Linha {linha}: informe um único nome de buffer.')
+        nome = partes[0]
+        tipo = tipos.get(nome)
+        if not isinstance(tipo, tuple) or tipo[0] != 'texto':
+            raise ErroCompilacao(f'Linha {linha}: {nome!r} precisa ser um buffer de texto declarado.')
+        return nome, tipo[1]
+
+    def texto_origem(partes, linha):
+        if len(partes) != 1:
+            raise ErroCompilacao(f'Linha {linha}: origem deve ser um texto literal ou outro buffer.')
+        valor = partes[0]
+        if valor.startswith('"'):
+            try:
+                conteudo = json.loads(valor)
+                bruto = conteudo.encode('utf-8')
+            except (ValueError, UnicodeError) as exc:
+                raise ErroCompilacao(f'Linha {linha}: literal de texto inválido.') from exc
+            return ('literal', conteudo, len(bruto))
+        nome, cap = texto_destino(partes, linha)
+        return ('buffer', nome, cap)
 
     def bloco(i, profundidade=0, em_laco=False):
         instrucoes = []
@@ -109,6 +132,8 @@ def analisar_programa(fonte):
                 if '[' in destino:
                     nome, indice, tamanho = indice_lista(destino, n)
                     adicionar(('leia_indice', nome, indice, tamanho), n, t)
+                elif len(destino) == 1 and isinstance(tipos.get(destino[0]), tuple) and tipos[destino[0]][0] == 'texto':
+                    adicionar(('leia_texto', destino[0]), n, t)
                 elif len(destino) == 1 and re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', destino[0]):
                     nome = destino[0]
                     if nome not in variaveis:
@@ -117,10 +142,12 @@ def analisar_programa(fonte):
                         raise ErroCompilacao(f'Linha {n}: leia aceita somente variável do tipo inteiro nesta versão.')
                     adicionar(('leia_int', nome), n, t)
                 else:
-                    raise ErroCompilacao(f'Linha {n}: use leia(variavel) ou leia(lista[indice]).')
+                    raise ErroCompilacao(f'Linha {n}: use leia(inteiro), leia(lista[indice]) ou leia(buffer).')
             elif t[:2] == ['escreva', '('] and t[-1] == ')':
                 expr = t[2:-1]
-                if len(expr) == 1 and expr[0].startswith('"'):
+                if len(expr) == 1 and isinstance(tipos.get(expr[0]), tuple) and tipos[expr[0]][0] == 'texto':
+                    adicionar(('imprima_texto', expr[0]), n, t)
+                elif len(expr) == 1 and expr[0].startswith('"'):
                     try:
                         valor = json.loads(expr[0])
                     except (ValueError, UnicodeError) as exc:
@@ -129,6 +156,18 @@ def analisar_programa(fonte):
                 else:
                     arvore, _ = expressao_tipada(expr, n)
                     adicionar(('imprima_num', arvore), n, t)
+            elif t[0] in ('copie', 'junte') and len(t) >= 6 and t[1] == '(' and t[-1] == ')':
+                if t.count(',') != 1:
+                    raise ErroCompilacao(f'Linha {n}: use {t[0]}(destino, origem).')
+                virgula = t.index(',')
+                nome, capacidade = texto_destino(t[2:virgula], n)
+                origem = texto_origem(t[virgula+1:-1], n)
+                if t[0] == 'copie' and origem[0] == 'literal' and origem[2] > capacidade:
+                    raise ErroCompilacao(f'Linha {n}: texto exige {origem[2]} bytes; capacidade de {nome} é {capacidade}.')
+                adicionar(('modifique_texto', t[0], nome, origem), n, t)
+            elif t[0] == 'limpe' and len(t) >= 4 and t[:2] == ['limpe', '('] and t[-1] == ')':
+                nome, _ = texto_destino(t[2:-1], n)
+                adicionar(('limpe_texto', nome), n, t)
             elif t[0] == 'seja':
                 if profundidade:
                     raise ErroCompilacao(f'Linha {n}: declare variáveis antes dos blocos de decisão ou repetição nesta versão.')
@@ -137,6 +176,17 @@ def analisar_programa(fonte):
                     raise ErroCompilacao(f'Linha {n}: nome de variável inválido.')
                 if nome in variaveis or nome in reservadas:
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' duplicada ou reservada.")
+                if len(t) == 7 and t[2:4] == [':', 'texto'] and t[4] == '[' and t[6] == ']':
+                    literal = t[5]
+                    if not literal.isascii() or not literal.isdecimal():
+                        raise ErroCompilacao(f'Linha {n}: capacidade do texto precisa ser um inteiro constante.')
+                    capacidade = int(literal)
+                    if not 1 <= capacidade <= 2040:
+                        raise ErroCompilacao(f'Linha {n}: capacidade deve estar entre 1 e 2040 bytes.')
+                    registrar(nome, ('texto', capacidade), n)
+                    adicionar(('crie_texto', nome, capacidade), n, t)
+                    i += 1
+                    continue
                 if len(t) == 7 and t[2:4] == [':', 'lista'] and t[4] == '[' and t[6] == ']':
                     tamanho_literal = t[5]
                     if not tamanho_literal.isascii() or not tamanho_literal.isdecimal():
