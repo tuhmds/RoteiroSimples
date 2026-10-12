@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.40C
+# RoteiroSimples (RS) — versão experimental 0.40D
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,23 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.40D — Modelo comum de efeitos e propriedade
+
+As análises de IR e da árvore sintática completa compartilham agora
+um mesmo contrato de efeitos: leituras, escritas, E/S, possibilidade
+de falha, arquivos, fluxo de controle e transições de propriedade.
+
+```text
+python compilar.py exemplos/aplicacoes/publicar_banco_rs039.rts --alvo linux -O 8 --mostrar-efeitos-do-programa
+```
+
+A opção `--salvar-efeitos-do-programa` também exporta JSON com
+diagnósticos dos comandos modernos, mesmo quando a IR não os representa.
+Chamadas e instruções desconhecidas são tratadas como potenciais
+barreiras. **Nenhuma transformação nova foi habilitada no otimizador.**
+
+[Contrato e limitações RS 0.40D](docs/CONTRATO_EFEITOS_RS_0_40D.md).
 
 ## RS 0.40C — Contrato verificável da representação intermediária
 
