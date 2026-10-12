@@ -121,10 +121,31 @@ def deslocamento_variavel(variaveis, nome, windows):
     return -(16 + indice*8) if windows else -(8 + indice*8)
 
 
+def _checar_indice(g, expr_indice, tamanho, variaveis, windows):
+    # Sempre valida o índice ANTES do deslocamento, inclusive para negativos.
+    expressao(g, expr_indice, variaveis, windows)
+    g.bytes(b'\x48\x85\xC0')  # test rax,rax
+    g.salto('erro_indice_lista', 'js')
+    g.bytes(b'\x48\x3D' + struct.pack('<I', tamanho))  # cmp rax, tamanho
+    g.salto('erro_indice_lista', 'jge')
+    g.bytes(b'\x48\xF7\xD8')  # neg rax, para endereços abaixo de RBP
+
+
+def _total_slots(programa):
+    return max((indice + (tipo[2] if isinstance(tipo, tuple) and tipo[0] == 'lista' else 1)
+                for nome, indice in programa.variaveis.items()
+                for tipo in (getattr(programa, 'tipos', {}).get(nome, 'inteiro'),)), default=0)
+
+
 def expressao(g, expr, variaveis, windows, registradores=None):
     tipo = expr[0]
     if tipo in ('numero', 'logico'):
         carregar_numero(g, expr[1])
+    elif tipo == 'indice':
+        nome, indice, tamanho = expr[1:]
+        _checar_indice(g, indice, tamanho, variaveis, windows)
+        offset = deslocamento_variavel(variaveis, nome, windows)
+        g.bytes(b'\x48\x8B\x84\xC5' + struct.pack('<i', offset))  # mov rax,[rbp+rax*8+disp]
     elif tipo == 'var':
         if registradores and expr[1] in registradores:
             from .ssa_x86_64 import _emite_mov
@@ -375,9 +396,10 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     g = Gerador()
     variaveis = programa.variaveis
     mensagens = {}
-    tem_leitura = any(op[0] == 'leia_int' for op in percorrer_instrucoes(programa.instrucoes))
+    tem_leitura = any(op[0] in ('leia_int', 'leia_indice') for op in percorrer_instrucoes(programa.instrucoes))
+    slots = _total_slots(programa)
     if windows:
-        n = len(variaveis)
+        n = slots
         frame = ((8 * n + 0x38 + 15) // 16) * 16 + 8
         g.bytes(b'\x55\x48\x89\xE5\x53')  # push rbp; mov rbp,rsp; push rbx
         g.bytes(b'\x48\x81\xEC' + struct.pack('<I', frame))
@@ -391,7 +413,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             g.relativo(b'\xFF\x15', 'GetStdHandle')
             g.bytes(b'\x49\x89\xC4')  # R12 = stdin handle
     else:
-        frame = alinhar(len(variaveis) * 8, 16)
+        frame = alinhar(slots * 8, 16)
         g.bytes(b'\x55\x48\x89\xE5')
         if frame:
             g.bytes(b'\x48\x81\xEC' + struct.pack('<I', frame))
@@ -402,6 +424,30 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 n = len(mensagens)
                 mensagens[n] = op[1]
                 escreve_literal(g, n, op[1], windows)
+            elif op[0] == 'crie_lista':
+                nome, tamanho = op[1:]
+                inicio = deslocamento_variavel(variaveis, nome, windows)
+                g.bytes(b'\x31\xC0')  # xor eax,eax
+                for k in range(tamanho):
+                    g.bytes(b'\x48\x89\x85' + struct.pack('<i', inicio-8*k))
+            elif op[0] == 'atribua_indice':
+                _, nome, indice, valor, tamanho = op
+                # Avalia e verifica índice antes de avaliar valor. Preserva erro de índice.
+                _checar_indice(g, indice, tamanho, variaveis, windows)
+                g.bytes(b'\x50')  # push indice negativo
+                expressao(g, valor, variaveis, windows)
+                g.bytes(b'\x59')  # pop rcx = indice negativo
+                offset = deslocamento_variavel(variaveis, nome, windows)
+                g.bytes(b'\x48\x89\x84\xCD' + struct.pack('<i', offset))
+            elif op[0] == 'leia_indice':
+                _, nome, indice, tamanho = op
+                # Rejeita índices inválidos ANTES de solicitar entrada.
+                _checar_indice(g, indice, tamanho, variaveis, windows)
+                g.bytes(b'\x50\x48\x83\xEC\x08')  # push índice; mantém stack alinhada
+                g.chamada('ler_inteiro')
+                g.bytes(b'\x48\x83\xC4\x08\x59')  # restaura índice negativo em RCX
+                offset = deslocamento_variavel(variaveis, nome, windows)
+                g.bytes(b'\x48\x89\x84\xCD' + struct.pack('<i', offset))  # store RAX
             elif op[0] == 'atribua':
                 expressao(g, op[2], variaveis, windows)
                 offset = deslocamento_variavel(variaveis, op[1], windows)
@@ -507,6 +553,17 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             g.relativo(b'\xFF\x15', 'ExitProcess')
         else:
             escreve_literal(g, indice, msg, False, 'erro')
+            g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+    if any(isinstance(t, tuple) and t[0] == 'lista' for t in getattr(programa, 'tipos', {}).values()):
+        indice = len(mensagens)
+        msg = 'Erro: índice fora dos limites da lista.\n'
+        mensagens[indice] = msg
+        g.marcar('erro_indice_lista')
+        escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
+        if windows:
+            g.bytes(b'\xB9\x01\x00\x00\x00')
+            g.relativo(b'\xFF\x15', 'ExitProcess')
+        else:
             g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
     if tem_leitura:
         for indice, msg, rotulo in [

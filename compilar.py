@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.16: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.17: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import re
@@ -11,7 +11,7 @@ from backend import compilar
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.16')
+    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.17')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--alvo', choices=['windows', 'linux'], default='windows')
     parser.add_argument('-o', '--saida', type=Path, help='arquivo executável de saída')
@@ -36,6 +36,11 @@ def main(argv=None):
             from compilador.ast import formatar_ast
             print(formatar_ast(programa))
         nivel = int(op.otimizacao)
+        tem_listas = any(isinstance(t, tuple) and t[0] == 'lista' for t in programa.tipos.values())
+        if tem_listas and (op.mostrar_cfg or op.salvar_cfg or op.mostrar_fluxo
+                or op.salvar_fluxo or op.mostrar_ssa or op.salvar_ssa
+                or op.mostrar_copias_phi or op.mostrar_alocacao):
+            raise ErroCompilacao('A análise CFG/SSA com listas ainda não está disponível nesta versão.')
         if op.mostrar_ir:
             from compilador.ir import construir_ir, formatar_ir
             print(formatar_ir(construir_ir(programa, otimizar=nivel > 0, nivel=nivel)))

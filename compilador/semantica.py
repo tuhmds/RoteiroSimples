@@ -12,12 +12,14 @@ class ContextoSemantico:
         self.importa_matematica = importa_matematica
         self.variaveis = {}
         self.tipos = {}
+        self.total_slots = 0
 
     def expressao_tipada(self, partes, linha, exigir=None):
         coluna = partes[0].origem.coluna if partes and hasattr(partes[0], 'origem') else 1
         try:
-            arvore = Expressao(partes, linha, self.variaveis,
-                               self.importa_matematica).analisar()
+            analisador = Expressao(partes, linha, self.variaveis, self.importa_matematica)
+            analisador.tipos = self.tipos
+            arvore = analisador.analisar()
             tipo = tipo_expressao(arvore, self.tipos, linha)
             if exigir is not None and tipo != exigir:
                 raise ErroCompilacao(
@@ -31,8 +33,10 @@ class ContextoSemantico:
         return arvore, tipo
 
     def registrar(self, nome, tipo, linha):
-        if len(self.variaveis) >= MAX_VARIAVEIS:
+        tamanho = tipo[2] if isinstance(tipo, tuple) and tipo[0] == 'lista' else 1
+        if self.total_slots + tamanho > MAX_VARIAVEIS:
             raise ErroCompilacao(
-                f'Linha {linha}: limite temporário de {MAX_VARIAVEIS} variáveis locais excedido.')
-        self.variaveis[nome] = len(self.variaveis)
+                f'Linha {linha}: limite temporário de {MAX_VARIAVEIS} posições de memória excedido.')
+        self.variaveis[nome] = self.total_slots
         self.tipos[nome] = tipo
+        self.total_slots += tamanho

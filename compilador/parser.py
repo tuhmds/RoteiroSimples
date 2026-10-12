@@ -25,7 +25,17 @@ def analisar_programa(fonte):
     contexto = ContextoSemantico(importa)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso'}
+    reservadas = {'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho'}
+
+    def indice_lista(partes, linha):
+        if len(partes) < 4 or partes[1] != '[' or partes[-1] != ']':
+            raise ErroCompilacao(f'Linha {linha}: use lista[indice].')
+        nome = partes[0]
+        tipo = tipos.get(nome)
+        if not isinstance(tipo, tuple) or tipo[0] != 'lista':
+            raise ErroCompilacao(f'Linha {linha}: {nome!r} não é uma lista declarada.')
+        indice, _ = expressao_tipada(partes[2:-1], linha, 'inteiro')
+        return nome, indice, tipo[2]
 
     def bloco(i, profundidade=0, em_laco=False):
         instrucoes = []
@@ -95,13 +105,19 @@ def analisar_programa(fonte):
                 i += 1
                 continue
             if t[:2] == ['leia', '('] and t[-1] == ')':
-                if len(t) != 4 or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', t[2]):
-                    raise ErroCompilacao(f'Linha {n}: use leia(nome_de_variavel).')
-                if t[2] not in variaveis:
-                    raise ErroCompilacao(f"Linha {n}: declare a variável '{t[2]}' com seja antes de leia.")
-                if tipos[t[2]] != 'inteiro':
-                    raise ErroCompilacao(f'Linha {n}: leia aceita somente variável do tipo inteiro nesta versão.')
-                adicionar(('leia_int', t[2]), n, t)
+                destino = t[2:-1]
+                if '[' in destino:
+                    nome, indice, tamanho = indice_lista(destino, n)
+                    adicionar(('leia_indice', nome, indice, tamanho), n, t)
+                elif len(destino) == 1 and re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', destino[0]):
+                    nome = destino[0]
+                    if nome not in variaveis:
+                        raise ErroCompilacao(f"Linha {n}: declare a variável '{nome}' com seja antes de leia.")
+                    if tipos[nome] != 'inteiro':
+                        raise ErroCompilacao(f'Linha {n}: leia aceita somente variável do tipo inteiro nesta versão.')
+                    adicionar(('leia_int', nome), n, t)
+                else:
+                    raise ErroCompilacao(f'Linha {n}: use leia(variavel) ou leia(lista[indice]).')
             elif t[:2] == ['escreva', '('] and t[-1] == ')':
                 expr = t[2:-1]
                 if len(expr) == 1 and expr[0].startswith('"'):
@@ -121,6 +137,17 @@ def analisar_programa(fonte):
                     raise ErroCompilacao(f'Linha {n}: nome de variável inválido.')
                 if nome in variaveis or nome in reservadas:
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' duplicada ou reservada.")
+                if len(t) == 7 and t[2:4] == [':', 'lista'] and t[4] == '[' and t[6] == ']':
+                    tamanho_literal = t[5]
+                    if not tamanho_literal.isascii() or not tamanho_literal.isdecimal():
+                        raise ErroCompilacao(f'Linha {n}: tamanho da lista deve ser um inteiro constante.')
+                    tamanho = int(tamanho_literal)
+                    if not 1 <= tamanho <= 256:
+                        raise ErroCompilacao(f'Linha {n}: tamanho da lista deve estar entre 1 e 256.')
+                    registrar(nome, ('lista', 'inteiro', tamanho), n)
+                    adicionar(('crie_lista', nome, tamanho), n, t)
+                    i += 1
+                    continue
                 if len(t) >= 6 and t[2] == ':' and t[4] == '=':
                     declarado = t[3]
                     if declarado not in ('inteiro', 'logico'):
@@ -132,6 +159,11 @@ def analisar_programa(fonte):
                     raise ErroCompilacao(f"Linha {n}: use 'seja nome = valor' ou 'seja nome: inteiro = valor'.")
                 registrar(nome, inferido, n)
                 adicionar(('atribua', nome, arvore), n, t)
+            elif len(t) >= 5 and '[' in t and ']' in t and '=' in t and t.index('[') < t.index(']') < t.index('='):
+                igual = t.index('=')
+                nome, indice, tamanho = indice_lista(t[:igual], n)
+                valor, _ = expressao_tipada(t[igual+1:], n, 'inteiro')
+                adicionar(('atribua_indice', nome, indice, valor, tamanho), n, t)
             elif len(t) >= 3 and t[1] == '=':
                 nome = t[0]
                 if nome not in variaveis:

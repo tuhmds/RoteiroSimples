@@ -1,8 +1,54 @@
-# RoteiroSimples (RS) — versão experimental 0.16
+# RoteiroSimples (RS) — versão experimental 0.17
 
 Linguagem experimental em português brasileiro, com compilador em Python 3.10+ que **gera diretamente instruções de máquina x86-64**, em executáveis ELF64 (Linux) e PE32+ (Windows). Os programas gerados não dependem do Python para executar. **Não usar em produção.**
 
-## Novo na RS 0.16 — coalescência e saltos curtos (`-O 6`)
+## Novo na RS 0.17 — listas de inteiros com memória verificada
+
+As listas de tamanho fixo ocupam uma região contígua da **pilha** do programa, com
+8 bytes por elemento. Todo elemento é inicializado em zero. Os índices começam
+em `0` e são verificados **antes de cada leitura ou escrita**, inclusive se o
+índice for calculado em tempo de execução. Acesso inválido encerra o executável
+com código 1 e mensagem de erro; nunca permite escrever fora da lista.
+
+```text
+inicio {
+    seja numeros: lista[5]
+    seja soma = 0
+    para i de 0 ate tamanho(numeros) - 1 {
+        numeros[i] = (i + 1) * 10
+        soma = soma + numeros[i]
+    }
+    escreva("Soma da lista:")
+    escreva(soma)
+}
+```
+
+Saída esperada: `Soma da lista:` e `150`. Também é possível usar
+`leia(numeros[1])` para inserir um inteiro pelo teclado.
+
+- São aceitas apenas listas de **`inteiro`**, com comprimento constante de 1 a 256.
+- O limite provisório soma todos os elementos e variáveis locais: **256 posições
+  de 8 bytes**, ou até 2 KiB de dados locais (fora das rotinas auxiliares).
+- `tamanho(numeros)` retorna o comprimento definido na declaração (sem acessar memória).
+- Listas inteiras não podem ser atribuídas, copiadas ou passadas como valores.
+- A implementação inicial utiliza o backend de pilha com checagem em todos os níveis
+  `-O 0` a `-O 6`. **As otimizações SSA de registradores não são aplicadas aos
+  programas que contêm listas**, até haver uma modelagem explícita dos efeitos
+  de memória na IR e SSA. Programas sem listas preservam o backend SSA.
+- Ainda **não existem** heap, ponteiros, referências, buffers de texto ou listas
+  dinâmicas. Essas funcionalidades precisarão de regras explícitas de propriedade,
+  tempo de vida, aliasing e limites antes de serem implementadas.
+
+**Exemplo:** `exemplos/listas.rts`. No Windows:
+
+```powershell
+py -3 compilar.py exemplos\listas.rts --alvo windows -O 6 -o roteiro_windows.exe
+.\roteiro_windows.exe
+```
+
+Consulte [memória e listas na RS 0.17](docs/MEMORIA_LISTAS_RS_0_17.md).
+
+## Incluído desde a RS 0.16 — coalescência e saltos curtos (`-O 6`)
 
 O nível **`-O 6`** conserva a SSA nativa e o layout do `-O 5`, acrescentando três otimizações:
 

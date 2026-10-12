@@ -10,7 +10,8 @@ def compilar(programa, alvo, otimizar=True, nivel=1):
         raise ValueError('Alvo desconhecido: use windows ou linux.')
     ir = construir_ir(programa, otimizar=otimizar, nivel=min(nivel, 3))
     legado = programa_para_backend(ir)
-    if nivel >= 4 and otimizar:
+    tem_listas = any(isinstance(t, tuple) and t[0] == 'lista' for t in programa.tipos.values())
+    if nivel >= 4 and otimizar and not tem_listas:
         from .ssa_x86_64 import construir_backend_ssa, emissor_ssa
         ssa, aloc = construir_backend_ssa(ir, coalescer=(nivel >= 6))
         # Uma vaga extra na pilha serve de temporario para copias circulares.
@@ -20,6 +21,6 @@ def compilar(programa, alvo, otimizar=True, nivel=1):
                                            otimizar_copias=(nivel >= 6), saltos_curtos=(nivel >= 6)))
     else:
         gerador, mensagens = montar_codigo(legado, alvo == 'windows')
-    if nivel >= 6 and otimizar:
+    if nivel >= 6 and otimizar and not tem_listas:
         gerador.compactar_saltos_ssa()
     return montar_pe(gerador, mensagens) if alvo == 'windows' else montar_elf(gerador, mensagens)

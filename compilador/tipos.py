@@ -1,11 +1,11 @@
 """Tipos simples e checagem estática de expressões."""
 from .erros import ErroCompilacao
 
-MAX_VARIAVEIS = 256  # máximo provisório para evitar frames grandes sem sondagem de pilha
+MAX_VARIAVEIS = 256  # sem sondagem de pilha/stack probing na versão atual
 
 
 def tipo_expressao(expr, tipos, linha):
-    """Analisa o tipo estaticamente; nunca executa expressões RS no compilador."""
+    """Verificação semântica estática; nenhum valor RS é executado em Python."""
     categoria = expr[0]
     if categoria == 'numero':
         if expr[1] > (1 << 63) - 1:
@@ -14,8 +14,19 @@ def tipo_expressao(expr, tipos, linha):
     if categoria == 'logico':
         return 'logico'
     if categoria == 'var':
-        return tipos[expr[1]]
+        tipo = tipos[expr[1]]
+        if isinstance(tipo, tuple):
+            raise ErroCompilacao(f'Linha {linha}: a lista {expr[1]!r} precisa de um índice.')
+        return tipo
+    if categoria == 'indice':
+        nome, indice, tamanho = expr[1:]
+        if tipos.get(nome) != ('lista', 'inteiro', tamanho):
+            raise ErroCompilacao(f'Linha {linha}: acesso a lista inválida.')
+        if tipo_expressao(indice, tipos, linha) != 'inteiro':
+            raise ErroCompilacao(f'Linha {linha}: índice da lista deve ser inteiro.')
+        return 'inteiro'
     if categoria == 'neg':
+        # -9223372036854775808 cabe em inteiro de 64 bits, mas +9223372036854775808 não.
         if expr[1] == ('numero', 1 << 63):
             return 'inteiro'
         filho = tipo_expressao(expr[1], tipos, linha)
@@ -23,9 +34,9 @@ def tipo_expressao(expr, tipos, linha):
             raise ErroCompilacao(f'Linha {linha}: sinal negativo exige inteiro; recebeu {filho}.')
         return 'inteiro'
     if categoria in ('bin', 'comparacao'):
-        _, op, esquerda, direita = expr
-        a = tipo_expressao(esquerda, tipos, linha)
-        b = tipo_expressao(direita, tipos, linha)
+        _, op, esquerdo, direito = expr
+        a = tipo_expressao(esquerdo, tipos, linha)
+        b = tipo_expressao(direito, tipos, linha)
         if categoria == 'bin':
             if a != 'inteiro' or b != 'inteiro':
                 raise ErroCompilacao(f'Linha {linha}: operação {op} exige dois inteiros; recebeu {a} e {b}.')

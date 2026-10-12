@@ -69,6 +69,14 @@ class Expressao:
                 raise ErroCompilacao(f'Linha {self.linha}: número inteiro fora do limite de 64 bits.')
             return NoExpressao(('numero', numero), getattr(token, 'origem', None))
         if re.fullmatch(r'[^\W\d]\w*', token, re.UNICODE):
+            if token == 'tamanho' and self.olhar() == '(':
+                self.consumir('(')
+                nome = self.consumir()
+                self.consumir(')')
+                tipo = getattr(self, 'tipos', {}).get(nome)
+                if not isinstance(tipo, tuple) or tipo[0] != 'lista':
+                    raise ErroCompilacao(f'Linha {self.linha}: tamanho() exige uma lista.')
+                return NoExpressao(('numero', tipo[2]), getattr(token, 'origem', None))
             if self.olhar() == '(':
                 if not self.importa:
                     raise ErroCompilacao(f"Linha {self.linha}: use 'inclua matematica' para chamar {token}.")
@@ -83,5 +91,13 @@ class Expressao:
                 return NoExpressao(('bin', OPERACOES[token], a, b), getattr(token, 'origem', None))
             if token not in self.variaveis:
                 raise ErroCompilacao(f"Linha {self.linha}: variável '{token}' não foi declarada.")
+            if self.olhar() == '[':
+                self.consumir('[')
+                indice = self.comparacao()
+                self.consumir(']')
+                tipo = getattr(self, 'tipos', {}).get(token)
+                if not isinstance(tipo, tuple) or tipo[0] != 'lista':
+                    raise ErroCompilacao(f'Linha {self.linha}: {token} não é uma lista.')
+                return NoExpressao(('indice', token, indice, tipo[2]), getattr(token, 'origem', None))
             return NoExpressao(('var', token), getattr(token, 'origem', None))
         raise ErroCompilacao(f"Linha {self.linha}: expressão inválida perto de {token!r}.")

@@ -15,6 +15,9 @@ def converter_expressao(expr, tipos, otimizar=True, literal_minimo=False):
         return ExpressaoIR('logico', 'logico', expr[1], origem=origem)
     if tag == 'var':
         return ExpressaoIR(tipos[expr[1]], 'var', expr[1], origem=origem)
+    if tag == 'indice':
+        return ExpressaoIR('inteiro', 'indice', (expr[1], expr[3]),
+                           filhos=(converter_expressao(expr[2], tipos, otimizar),), origem=origem)
     if tag == 'neg':
         filho = converter_expressao(expr[1], tipos, otimizar,
                                    literal_minimo=expr[1] == ('numero', 1 << 63))
@@ -36,6 +39,11 @@ def converter_instrucao(instr, tipos, otimizar):
     if tag == 'texto': return InstrucaoIR(tag, (instr[1],), origem)
     if tag in ('atribua',): return InstrucaoIR(tag, (instr[1], expr(instr[2])), origem)
     if tag == 'leia_int': return InstrucaoIR(tag, (instr[1],), origem)
+    if tag == 'crie_lista': return InstrucaoIR(tag, (instr[1], instr[2]), origem)
+    if tag == 'atribua_indice':
+        return InstrucaoIR(tag, (instr[1], expr(instr[2]), expr(instr[3]), instr[4]), origem)
+    if tag == 'leia_indice':
+        return InstrucaoIR(tag, (instr[1], expr(instr[2]), instr[3]), origem)
     if tag == 'imprima_num': return InstrucaoIR(tag, (expr(instr[1]),), origem)
     if tag == 'se': return InstrucaoIR(tag, (expr(instr[1]), bloco(instr[2]), bloco(instr[3])), origem)
     if tag == 'enquanto': return InstrucaoIR(tag, (expr(instr[1]), bloco(instr[2])), origem)
@@ -51,7 +59,7 @@ def construir_ir(programa, otimizar=True, nivel=1):
                           for i in programa.instrucoes),
                     dict(programa.tipos), dict(programa.variaveis),
                     programa.importa_matematica)
-    if otimizar and nivel >= 2:
+    if otimizar and nivel >= 2 and not any(isinstance(t, tuple) and t[0] == 'lista' for t in programa.tipos.values()):
         from .propagacao import propagar_constantes_locais
         ir = propagar_constantes_locais(ir)
         if nivel >= 3:
@@ -63,6 +71,8 @@ def construir_ir(programa, otimizar=True, nivel=1):
 def expressao_para_ast(node):
     if node.operacao in ('numero', 'logico', 'var'):
         return (node.operacao, node.valor)
+    if node.operacao == 'indice':
+        return ('indice', node.valor[0], expressao_para_ast(node.filhos[0]), node.valor[1])
     if node.operacao == 'neg': return ('neg', expressao_para_ast(node.filhos[0]))
     return (node.operacao, node.valor, *(expressao_para_ast(x) for x in node.filhos))
 
@@ -72,6 +82,9 @@ def instrucao_para_ast(node):
     bloco = lambda xs: [instrucao_para_ast(x) for x in xs]
     if t == 'texto': return (t, a[0])
     if t == 'leia_int': return (t, a[0])
+    if t == 'crie_lista': return (t, a[0], a[1])
+    if t == 'atribua_indice': return (t, a[0], expressao_para_ast(a[1]), expressao_para_ast(a[2]), a[3])
+    if t == 'leia_indice': return (t, a[0], expressao_para_ast(a[1]), a[2])
     if t == 'atribua': return (t, a[0], expressao_para_ast(a[1]))
     if t == 'imprima_num': return (t, expressao_para_ast(a[0]))
     if t == 'se': return (t, expressao_para_ast(a[0]), bloco(a[1]), bloco(a[2]))

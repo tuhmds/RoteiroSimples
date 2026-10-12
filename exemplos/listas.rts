@@ -1,0 +1,12 @@
+inicio {
+    seja notas: lista[5]
+    seja soma = 0
+    para i de 0 ate 4 {
+        notas[i] = (i + 1) * 10
+        soma = soma + notas[i]
+    }
+    escreva("RS 0.17 - listas seguras")
+    escreva(notas[0])
+    escreva(notas[4])
+    escreva(soma)
+}
