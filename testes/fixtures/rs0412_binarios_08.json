@@ -1,0 +1,56 @@
+{
+  "caracteres.rts": {
+    "linux/O0": "a4cd1c515381189a71ccf7e4bc979112664b91b27d37c1d8f0b91a8a56785c37",
+    "linux/O1": "a4cd1c515381189a71ccf7e4bc979112664b91b27d37c1d8f0b91a8a56785c37",
+    "windows/O0": "b7c03594fe40d557ad33e2a23291a7a3ef320783abb4b6fc49cd47e5d754213e",
+    "windows/O1": "b7c03594fe40d557ad33e2a23291a7a3ef320783abb4b6fc49cd47e5d754213e"
+  },
+  "decisoes.rts": {
+    "linux/O0": "4df38580d65421cc7c43cc2b74b082510ffdcfff5a925a600f32c6b831ccc81e",
+    "linux/O1": "b3fda2f07dfb52ea48c3660a4ebfb8031b2a45cd775ddbc32ea2de3efb70cbca",
+    "windows/O0": "182ff015531f35a87451e83bb2fea0f30badf1a3885e6e1f5f665e06b7e13824",
+    "windows/O1": "e10fdd909a5500a9e80e0ac3b10703c9b70350a45189aa48a515cf75a9b80151"
+  },
+  "entrada.rts": {
+    "linux/O0": "c094fb832a9e175c0acd51ef5992c98bdf0331a6282626444e0d9fdb7acdbc93",
+    "linux/O1": "c094fb832a9e175c0acd51ef5992c98bdf0331a6282626444e0d9fdb7acdbc93",
+    "windows/O0": "d40f194a75d6fa73397b68737070bc2b35cdc873da22f3fcbe224a7c80083eeb",
+    "windows/O1": "d40f194a75d6fa73397b68737070bc2b35cdc873da22f3fcbe224a7c80083eeb"
+  },
+  "matematica.rts": {
+    "linux/O0": "b820a77bb7aa4dca60bd3749e116d233fe62fa87159b40c41cc2d099a8778ee7",
+    "linux/O1": "3216ef455581744034a3f0202a3f1b1bdffa6d70429dd87bd885c0e6b8b8d957",
+    "windows/O0": "0016a4b5aa8fa6ee875415c5e5e938bb9cba0d4d4624ec6fbdbd4e6305157bf2",
+    "windows/O1": "7443803a46af7be8121f6f94901385be9428ebca5113b28fb56d4f51d60c2dd6"
+  },
+  "ola.rts": {
+    "linux/O0": "be46a70de19b68a4f2173154017f02620f90ad555c00e12800356ce45a24c0c7",
+    "linux/O1": "be46a70de19b68a4f2173154017f02620f90ad555c00e12800356ce45a24c0c7",
+    "windows/O0": "31b1b0db2a551aafac7278793ca82895d4e58d20b3ef599f0d15f4c055b2b91d",
+    "windows/O1": "31b1b0db2a551aafac7278793ca82895d4e58d20b3ef599f0d15f4c055b2b91d"
+  },
+  "otimizacao.rts": {
+    "linux/O0": "38ddc3181c05563f06c73e85854abe003c5852da1fe8a8077e5f8ed9279c262b",
+    "linux/O1": "5329576d834e04aa5881b69b13cf079969aa1d161ffa0a4629e1ef1d876a4535",
+    "windows/O0": "bd0818794eed5cf64348d565f410313784aba2f7f3c6a2a80ad0d4f03de9a90c",
+    "windows/O1": "1daf1d2d32251dab6a4096f9878399e48759b5c3d6c5479603e6111722c66624"
+  },
+  "para.rts": {
+    "linux/O0": "ce36c28a81c71004b6ebc43bd5474d62c1d27c92db0ff20ceee05a204076f294",
+    "linux/O1": "ce36c28a81c71004b6ebc43bd5474d62c1d27c92db0ff20ceee05a204076f294",
+    "windows/O0": "49bf8771f1809f8d1a107b46be288155a6ad3e2a6d84e5f8df4b4751a380c7c2",
+    "windows/O1": "49bf8771f1809f8d1a107b46be288155a6ad3e2a6d84e5f8df4b4751a380c7c2"
+  },
+  "repeticao.rts": {
+    "linux/O0": "3776e92eab47a5a4d56bcf9a118092196c8a8c3c704c1fbbed047aabb83762b2",
+    "linux/O1": "3776e92eab47a5a4d56bcf9a118092196c8a8c3c704c1fbbed047aabb83762b2",
+    "windows/O0": "a1ac9abc3adae70785cc9a9d6b5e3540b686f195342b0b6b0b17431fc698032f",
+    "windows/O1": "a1ac9abc3adae70785cc9a9d6b5e3540b686f195342b0b6b0b17431fc698032f"
+  },
+  "tipos.rts": {
+    "linux/O0": "b700bf43392cb607a6c953a2041e1ff2f217061c63ce42ff7194a2019bdf2077",
+    "linux/O1": "b700bf43392cb607a6c953a2041e1ff2f217061c63ce42ff7194a2019bdf2077",
+    "windows/O0": "0d177d4c3f0746141526f23a35e01776362db875af67694ccd252fcbe2e75b7e",
+    "windows/O1": "0d177d4c3f0746141526f23a35e01776362db875af67694ccd252fcbe2e75b7e"
+  }
+}
