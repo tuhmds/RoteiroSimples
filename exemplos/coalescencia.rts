@@ -1,0 +1,13 @@
+inicio {
+    seja total = 0
+    para numero de 1 ate 6 {
+        se numero % 2 == 0 {
+            total = total + numero
+        } senao {
+            total = total + 1
+        }
+    }
+    escreva("RS 0.16 - coalescencia e saltos curtos")
+    escreva("Resultado:")
+    escreva(total)
+}

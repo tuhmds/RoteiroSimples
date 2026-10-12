@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.15: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.16: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import re
@@ -11,11 +11,11 @@ from backend import compilar
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.14')
+    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.16')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--alvo', choices=['windows', 'linux'], default='windows')
     parser.add_argument('-o', '--saida', type=Path, help='arquivo executável de saída')
-    parser.add_argument('-O', '--otimizacao', choices=['0', '1', '2', '3', '4', '5'], default='1', help='otimização (0 = sem, 1 = constantes, 2 = propagação local, 3 = SSA, 4 = SSA nativa, 5 = layout e saltos)' )
+    parser.add_argument('-O', '--otimizacao', choices=['0', '1', '2', '3', '4', '5', '6'], default='1', help='otimização (0 = sem, 1 = constantes, 2 = propagação local, 3 = SSA, 4 = SSA nativa, 5 = layout, 6 = coalescencia e saltos curtos)' )
     parser.add_argument('--mostrar-ir', action='store_true', help='mostra a IR tipada antes de gerar código')
     parser.add_argument('--mostrar-ast', action='store_true', help='mostra a AST com linha e coluna')
     parser.add_argument('--mostrar-fluxo', action='store_true', help='mostra análise de dados por bloco')
@@ -74,11 +74,11 @@ def main(argv=None):
                 op.salvar_cfg.write_text(grafo.para_dot(), encoding='utf-8')
                 print(f'CFG salvo em: {op.salvar_cfg}')
         if op.mostrar_alocacao:
-            if nivel not in (4, 5):
-                raise ErroCompilacao('Use -O 4 ou -O 5 com --mostrar-alocacao.')
+            if nivel not in (4, 5, 6):
+                raise ErroCompilacao('Use -O 4, -O 5 ou -O 6 com --mostrar-alocacao.')
             from compilador.ir import construir_ir
             from backend.ssa_x86_64 import construir_backend_ssa
-            _, aloc = construir_backend_ssa(construir_ir(programa, nivel=3))
+            _, aloc = construir_backend_ssa(construir_ir(programa, nivel=3), coalescer=(nivel >= 6))
             print(aloc.relatorio())
         binario = compilar(programa, op.alvo, otimizar=nivel > 0, nivel=nivel)
         saida.write_bytes(binario)

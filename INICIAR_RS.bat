@@ -5,10 +5,10 @@ cd /d "%~dp0"
 :MENU
 cls
 echo ==============================================
-echo         RoteiroSimples RS 0.15
+echo         RoteiroSimples RS 0.16
 echo ==============================================
 echo.
-echo  [1] Compilar e executar exemplo com SSA -O 5 e registradores
+echo  [1] Compilar e executar exemplo com SSA -O 6 e registradores
 echo  [2] Editar o exemplo no Bloco de Notas
 echo  [3] Rodar testes automatizados
  echo  [4] Executar o ultimo .exe gerado
@@ -17,7 +17,7 @@ echo  [3] Rodar testes automatizados
  echo  [7] Mostrar SSA e gerar ssa.json
  echo  [8] Mostrar plano de copias phi por aresta
  echo  [9] Ver alocacao de registradores e pilha
- echo  [A] Benchmark de velocidade -O 3, -O 4 e -O 5
+ echo  [A] Benchmark de velocidade -O 3, -O 4, -O 5 e -O 6
 echo  [0] Sair
  echo.
 choice /c 1234567890A /n /m "Escolha uma opcao: "
@@ -36,7 +36,7 @@ if errorlevel 1 goto COMPILAR
 call "%~dp0COMPILAR_WINDOWS.bat"
 goto MENU
 :EDITAR
-notepad "%~dp0exemplos\layout.rts"
+notepad "%~dp0exemplos\coalescencia.rts"
 goto MENU
 :TESTES
 py -3 -m unittest discover -s testes -v
@@ -54,14 +54,14 @@ if not exist "%~dp0roteiro_windows.exe" (
 pause
 goto MENU
 :GRAFO
-py -3 compilar.py exemplos\layout.rts --alvo windows --mostrar-ast --mostrar-cfg --salvar-cfg fluxo.dot -o roteiro_windows.exe
+py -3 compilar.py exemplos\coalescencia.rts --alvo windows --mostrar-ast --mostrar-cfg --salvar-cfg fluxo.dot -o roteiro_windows.exe
 if errorlevel 1 echo Falha ao gerar a AST e o CFG.
 echo.
 echo O diagrama foi salvo em fluxo.dot.
 pause
 goto MENU
 :DADOS
-py -3 compilar.py exemplos\layout.rts --alvo windows -O 2 --mostrar-fluxo --salvar-fluxo analise.json -o roteiro_windows.exe
+py -3 compilar.py exemplos\coalescencia.rts --alvo windows -O 2 --mostrar-fluxo --salvar-fluxo analise.json -o roteiro_windows.exe
 if errorlevel 1 echo Falha na analise de fluxo.
 pause
 goto MENU
@@ -72,12 +72,12 @@ echo.
 pause
 goto MENU
 :COPIAS
-py -3 compilar.py exemplos\layout.rts --alvo windows -O 5 --mostrar-copias-phi -o roteiro_windows.exe
+py -3 compilar.py exemplos\coalescencia.rts --alvo windows -O 6 --mostrar-copias-phi -o roteiro_windows.exe
 if errorlevel 1 echo Falha ao mostrar copias de phi.
 pause
 goto MENU
 :ALOCACAO
-py -3 compilar.py exemplos\layout.rts --alvo windows -O 5 --mostrar-alocacao -o roteiro_windows.exe
+py -3 compilar.py exemplos\coalescencia.rts --alvo windows -O 6 --mostrar-alocacao -o roteiro_windows.exe
 if errorlevel 1 echo Falha na alocacao de registradores.
 pause
 goto MENU

@@ -8,6 +8,13 @@ class Gerador(Emissor):
         super().__init__()
         self.rotulos = {}
         self.proxima_condicao = 0
+        self._saltos_curtos_ssa = False
+        self._candidatos_curto = []
+        self.saltos_compactados = 0
+
+    def ativar_saltos_curtos_ssa(self):
+        """Ativa coleta de branches locais SSA; nao altera os demais niveis."""
+        self._saltos_curtos_ssa = True
 
     def marcar(self, nome):
         if nome in self.rotulos:
@@ -16,7 +23,76 @@ class Gerador(Emissor):
 
     def salto(self, nome, tipo='jmp'):
         prefixo = {'jmp': b'\xE9', 'jz': b'\x0F\x84', 'jnz': b'\x0F\x85', 'jns': b'\x0F\x89', 'jg': b'\x0F\x8F', 'jl': b'\x0F\x8C', 'jo': b'\x0F\x80', 'je': b'\x0F\x84', 'jne': b'\x0F\x85', 'jb': b'\x0F\x82', 'ja': b'\x0F\x87', 'js': b'\x0F\x88', 'jle': b'\x0F\x8E', 'jge': b'\x0F\x8D'}[tipo]
+        inicio = len(self.codigo)
         self.relativo(prefixo, nome)
+        if self._saltos_curtos_ssa and nome.startswith('ssa_'):
+            curtos = {'jmp': 0xEB, 'jz': 0x74, 'je': 0x74, 'jnz': 0x75,
+                      'jne': 0x75, 'jns': 0x79, 'jg': 0x7F, 'jl': 0x7C,
+                      'jo': 0x70, 'jb': 0x72, 'ja': 0x77, 'js': 0x78,
+                      'jle': 0x7E, 'jge': 0x7D}
+            self._candidatos_curto.append((inicio, len(prefixo) + 4, nome, curtos[tipo]))
+
+    def compactar_saltos_ssa(self):
+        """Relaxa rel32->rel8 em ponto fixo, corrigindo TODOS os offsets.
+
+        Nao encurta chamadas, referencias RIP a dados, nem saltos das
+        rotinas auxiliares. Essas referencias tambem sao remapeadas.
+        """
+        import bisect
+        candidatos = sorted(self._candidatos_curto)
+        if not candidatos:
+            return 0
+        antigos = bytes(self.codigo)
+        selecionados = set()
+        # Cada troca reduz em 3 ou 4 bytes. Reducoes tornam outros saltos
+        # pelo menos tao proximos; portanto a relaxacao e monotona.
+        while True:
+            alterou = False
+            for inicio, tamanho, alvo, opcode in candidatos:
+                if inicio in selecionados:
+                    continue
+                if alvo not in self.rotulos:
+                    raise ValueError(f'Rotulo local de salto curto desconhecido: {alvo}')
+                hipotese = selecionados | {inicio}
+                # Recalcular explicitamente com a hipotese; usa posições
+                # ORIGINAIS e desconta apenas saltos que terminam antes.
+                def ajustado(posicao):
+                    return posicao - sum(tam - 2 for pos, tam, _, _ in candidatos
+                                         if pos in hipotese and pos + tam <= posicao)
+                deslocamento = ajustado(self.rotulos[alvo]) - (ajustado(inicio) + 2)
+                if -128 <= deslocamento <= 127:
+                    selecionados.add(inicio)
+                    alterou = True
+            if not alterou:
+                break
+        if not selecionados:
+            return 0
+        candidatos_ativos = [(pos, tam, alvo, opcode) for pos, tam, alvo, opcode in candidatos if pos in selecionados]
+        finais = [pos + tam for pos, tam, _, _ in candidatos_ativos]
+        acumulado = [0]
+        for _, tam, _, _ in candidatos_ativos:
+            acumulado.append(acumulado[-1] + tam - 2)
+        def mapear(posicao):
+            return posicao - acumulado[bisect.bisect_right(finais, posicao)]
+        saida = bytearray()
+        cursor = 0
+        pendentes_removidas = set()
+        for pos, tam, alvo, opcode in candidatos_ativos:
+            saida += antigos[cursor:pos]
+            distancia = mapear(self.rotulos[alvo]) - (mapear(pos) + 2)
+            if not -128 <= distancia <= 127:
+                raise ValueError('Salto curto fora da faixa apos compactacao.')
+            saida += bytes((opcode,)) + struct.pack('<b', distancia)
+            pendentes_removidas.add(pos + tam - 4)
+            cursor = pos + tam
+        saida += antigos[cursor:]
+        self.codigo = saida
+        self.rotulos = {nome: mapear(pos) for nome, pos in self.rotulos.items()}
+        self.pendencias = [(mapear(pos), nome) for pos, nome in self.pendencias
+                           if pos not in pendentes_removidas]
+        self.saltos_compactados = len(selecionados)
+        self._candidatos_curto.clear()
+        return self.saltos_compactados
 
     def chamada(self, nome):
         self.relativo(b'\xE8', nome)

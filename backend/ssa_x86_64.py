@@ -1,4 +1,4 @@
-"""RS 0.15: backend SSA real, com layout de blocos opcional (-O 5).
+"""RS 0.16: backend SSA, layout, copia direta e compactacao de saltos (-O 6).
 
 As localizacoes sao r13/r14/r15 e slots rbp-relativos; uma copia
 paralela pode formar ciclos apos alocacao, portanto usamos um slot
@@ -43,7 +43,7 @@ def _gravar(g, local, windows):
         g.bytes(b'\x48\x89\x85' + struct.pack('<i', offset))
 
 
-def copias_paralelas(g, copias, locais, temporario, windows):
+def copias_paralelas(g, copias, locais, temporario, windows, diretas=False):
     """Baixa simultaneidade dos phi, quebrando ciclos por slot reservado.
 
     copias: [(destinoSSA, fonteSSA)]. Retorna numero de instrucoes logicas.
@@ -62,8 +62,11 @@ def copias_paralelas(g, copias, locais, temporario, windows):
         pronto = next((dest for dest in pendentes if dest not in fontes), None)
         if pronto is not None:
             fonte = pendentes.pop(pronto)
-            _carregar(g, fonte, windows)
-            _gravar(g, pronto, windows)
+            if diretas and fonte.classe == 'reg' and pronto.classe == 'reg':
+                _emite_mov(g, pronto.indice, fonte.indice)
+            else:
+                _carregar(g, fonte, windows)
+                _gravar(g, pronto, windows)
             qtd += 1
         else:
             # Em um ciclo, preservar o valor original de um destino.
@@ -76,7 +79,7 @@ def copias_paralelas(g, copias, locais, temporario, windows):
     return qtd
 
 
-def construir_backend_ssa(ir):
+def construir_backend_ssa(ir, coalescer=False):
     cfg = construir_cfg(ir)
     # O para sai também quando o incremento aritmetico ultrapassa 64 bits.
     # Essa aresta e necessaria para calcular phis corretos na saida do laco.
@@ -88,7 +91,7 @@ def construir_backend_ssa(ir):
             b.saidas = (*b.saidas, ArestaCFG(saida_laco, 'overflow'))
     cfg.validar()
     ssa = construir_ssa(cfg)
-    aloc = alocar_registradores(ssa)
+    aloc = alocar_registradores(ssa, coalescer=coalescer)
     return ssa, aloc
 
 
@@ -127,7 +130,7 @@ def planejar_layout(ssa):
     return ordem
 
 
-def emissor_ssa(ir, ssa, aloc, otimizar_layout=False):
+def emissor_ssa(ir, ssa, aloc, otimizar_layout=False, otimizar_copias=False, saltos_curtos=False):
     """Retorna callback executavel para montar_codigo, com arquivo nativo real."""
     locais = aloc.locais
     pilha = {v: loc.indice for v, loc in locais.items() if loc.classe == 'pilha'}
@@ -140,6 +143,8 @@ def emissor_ssa(ir, ssa, aloc, otimizar_layout=False):
                 for i, bid in enumerate(ordem)}
 
     def emissor(g, mensagens, windows):
+        if saltos_curtos:
+            g.ativar_saltos_curtos_ssa()
         from .x86_64 import expressao  # aceita registradores em modo SSA
 
         def avaliar(exp):
@@ -157,7 +162,7 @@ def emissor_ssa(ir, ssa, aloc, otimizar_layout=False):
             return any(locais[a] != locais[b] for a, b in copias_da_aresta(de, para))
 
         def aresta(de, para, cair=False):
-            copias_paralelas(g, copias_da_aresta(de, para), locais, temporario, windows)
+            copias_paralelas(g, copias_da_aresta(de, para), locais, temporario, windows, diretas=otimizar_copias)
             if not (otimizar_layout and cair and proximos[de] == para):
                 g.salto(rotulo(para))
 

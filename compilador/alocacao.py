@@ -1,4 +1,4 @@
-"""RS 0.14: liveness SSA e coloracao conservadora de registradores AMD64.
+"""RS 0.16: liveness SSA, coalescencia conservadora e coloracao AMD64.
 
 R13, R14 e R15 sobrevivem a syscalls e as rotinas de leitura/escrita
 atuais. Outros registradores sao reservados ao ABI e aos temporarios.
@@ -26,13 +26,13 @@ class Alocacao:
     def relatorio(self):
         regs = sum(l.classe == 'reg' for l in self.locais.values())
         spills = len(self.locais) - regs
-        return (f'RS 0.14: {regs} versoes em registradores, {spills} em pilha, '
+        return (f'RS 0.16: {regs} versoes em registradores, {spills} em pilha, '
                 f'{self.vagas_pilha} slots de pilha.\n' +
                 '\n'.join(f'{v} -> {l.indice if l.classe == "reg" else "pilha[" + str(l.indice) + "]"}'
                           for v, l in sorted(self.locais.items())))
 
 
-def alocar_registradores(ssa):
+def alocar_registradores(ssa, coalescer=False):
     ssa.validar()
     alc = {b for b, block in ssa.blocos.items() if block.alcancavel}
     nomes = set()
@@ -112,6 +112,18 @@ def alocar_registradores(ssa):
             vivos.discard(phi.destino)
         conectar(vivos)
 
+    # Afinidades de movimento ao longo das arestas phi. Nao mesclar valores
+    # que interferem: coalescencia aqui e uma preferencia de coloracao.
+    afinidades = {v: Counter() for v in nomes}
+    if coalescer:
+        for bid in alc:
+            for phi in ssa.blocos[bid].phis.values():
+                for fonte in phi.entradas.values():
+                    if fonte in grafo and phi.destino in grafo and fonte != phi.destino:
+                        if fonte not in grafo[phi.destino]:
+                            afinidades[phi.destino][fonte] += 1
+                            afinidades[fonte][phi.destino] += 1
+
     locais = {}
     # Maior numero de leituras, entao maior grau de interferencia.
     ordem = sorted(nomes, key=lambda v: (-contagem[v], -len(grafo[v]), v))
@@ -119,12 +131,27 @@ def alocar_registradores(ssa):
         ocupados = {locais[x].indice for x in grafo[v]
                     if x in locais and locais[x].classe == 'reg'}
         disponiveis = [r for r in REGS if r not in ocupados]
+        # Aproveitar a localizacao da versao phi conectada ja colorida,
+        # sem escolher um registrador ocupado por uma interferencia.
+        preferidos = []
+        if coalescer:
+            for candidato, _ in afinidades[v].most_common():
+                antigo = locais.get(candidato)
+                if antigo is not None and antigo.classe == 'reg' and antigo.indice in disponiveis:
+                    if antigo.indice not in preferidos:
+                        preferidos.append(antigo.indice)
         if disponiveis and contagem[v]:
-            locais[v] = Local('reg', disponiveis[0])
+            locais[v] = Local('reg', (preferidos + disponiveis)[0])
         else:
             ocupados_pilha = {locais[x].indice for x in grafo[v]
                               if x in locais and locais[x].classe == 'pilha'}
-            vaga = next(i for i in range(len(nomes) + 1) if i not in ocupados_pilha)
+            preferidas = []
+            if coalescer:
+                for candidato, _ in afinidades[v].most_common():
+                    antigo = locais.get(candidato)
+                    if antigo is not None and antigo.classe == 'pilha' and antigo.indice not in ocupados_pilha:
+                        preferidas.append(antigo.indice)
+            vaga = preferidas[0] if preferidas else next(i for i in range(len(nomes) + 1) if i not in ocupados_pilha)
             locais[v] = Local('pilha', vaga)
     qtd_slots = 1 + max((loc.indice for loc in locais.values()
                           if loc.classe == 'pilha'), default=-1)

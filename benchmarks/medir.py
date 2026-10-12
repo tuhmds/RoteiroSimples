@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Benchmark real e reproduzível: compara resultados, tempo e tamanho (-O3/4/5).
+"""Benchmark real e reproduzível: compara resultados, tempo e tamanho (-O3/4/5/6).
 
 Não infere ganhos por tamanho de arquivos. Compila antes de medir e
 executa o mesmo programa repetidamente; mede a mediana das execuções.
@@ -25,7 +25,7 @@ def medir(fonte, alvo, repeticoes=7):
     programa = analisar_programa(fonte)
     registros = []
     with tempfile.TemporaryDirectory(prefix='rs_benchmark_') as pasta:
-        for nivel in (3, 4, 5):
+        for nivel in (3, 4, 5, 6):
             executavel = Path(pasta) / ('teste_%s.exe' % nivel if alvo == 'windows'
                                          else 'teste_%s' % nivel)
             binario = compilar(programa, alvo, nivel=nivel)
@@ -53,13 +53,13 @@ def medir(fonte, alvo, repeticoes=7):
                               'tempos_ms': [round(t, 3) for t in tempos],
                               'resultado': esperado})
     if any(r['resultado'] != registros[0]['resultado'] for r in registros[1:]):
-        raise AssertionError('Saídas ou códigos de retorno distintos entre O3/O4/O5')
+        raise AssertionError('Saídas ou códigos de retorno distintos entre O3/O4/O5/O6/O6')
     return {'alvo': alvo, 'sistema': platform.platform(), 'cpu': platform.processor(),
             'repeticoes': repeticoes, 'resultados': registros}
 
 
 def main():
-    p = argparse.ArgumentParser(description='Comparação nativa RS 0.15, O3/O4/O5')
+    p = argparse.ArgumentParser(description='Comparação nativa RS 0.16, O3/O4/O5/O6')
     p.add_argument('--fonte', type=Path, default=RAIZ / 'benchmarks' / 'lacos.rts')
     p.add_argument('--repeticoes', type=int, default=7)
     p.add_argument('--json', type=Path, help='salvar relatório com tempos individuais')

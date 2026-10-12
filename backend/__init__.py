@@ -12,11 +12,14 @@ def compilar(programa, alvo, otimizar=True, nivel=1):
     legado = programa_para_backend(ir)
     if nivel >= 4 and otimizar:
         from .ssa_x86_64 import construir_backend_ssa, emissor_ssa
-        ssa, aloc = construir_backend_ssa(ir)
+        ssa, aloc = construir_backend_ssa(ir, coalescer=(nivel >= 6))
         # Uma vaga extra na pilha serve de temporario para copias circulares.
         legado.variaveis = {f'slot{i}': i for i in range(aloc.vagas_pilha + 1)}
         gerador, mensagens = montar_codigo(
-            legado, alvo == 'windows', emissor_ssa(ir, ssa, aloc, otimizar_layout=(nivel >= 5)))
+            legado, alvo == 'windows', emissor_ssa(ir, ssa, aloc, otimizar_layout=(nivel >= 5),
+                                           otimizar_copias=(nivel >= 6), saltos_curtos=(nivel >= 6)))
     else:
         gerador, mensagens = montar_codigo(legado, alvo == 'windows')
+    if nivel >= 6 and otimizar:
+        gerador.compactar_saltos_ssa()
     return montar_pe(gerador, mensagens) if alvo == 'windows' else montar_elf(gerador, mensagens)

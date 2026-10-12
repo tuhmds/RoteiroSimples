@@ -1,8 +1,25 @@
-# RoteiroSimples (RS) — versão experimental 0.15
+# RoteiroSimples (RS) — versão experimental 0.16
 
 Linguagem experimental em português brasileiro, com compilador em Python 3.10+ que **gera diretamente instruções de máquina x86-64**, em executáveis ELF64 (Linux) e PE32+ (Windows). Os programas gerados não dependem do Python para executar. **Não usar em produção.**
 
-## Novo na RS 0.15 — layout de blocos e benchmark nativo
+## Novo na RS 0.16 — coalescência e saltos curtos (`-O 6`)
+
+O nível **`-O 6`** conserva a SSA nativa e o layout do `-O 5`, acrescentando três otimizações:
+
+- **Coalescência conservadora:** versões SSA ligadas por nós `phi` preferem uma mesma localização física se **não houver interferência**. A vivacidade continua determinando se o compartilhamento é permitido; não removemos verificações de overflow.
+- **Cópias diretas:** quando ainda é necessária uma cópia entre dois registradores, o backend emite `mov destino, origem` sem transferir duas vezes por `rax`. Cópias paralelas cíclicas ainda usam um slot temporário.
+- **Relaxação de saltos:** após emitir o executável, saltos SSA locais que cabem em `rel8` (deslocamento de -128 a 127 bytes) são encurtados de 5/6 para 2 bytes. O compilador recalcula todas as posições de rótulos e referências `rel32` de chamadas e dados, antes de montar PE32+ ou ELF64. Saltos que não cabem permanecem longos.
+
+Os níveis **`-O 0` a `-O 5` continuam sem mudanças**. Esta otimização é experimental; preservamos um conjunto de testes comparando saída, código de retorno, erros aritméticos, laços e leitura pelo teclado entre `-O 5` e `-O 6` em Windows e Linux.
+
+```powershell
+py -3 compilar.py exemplos\registradores.rts --alvo windows -O 6 --mostrar-alocacao -o roteiro_windows.exe
+.\roteiro_windows.exe
+```
+
+Para medir desempenho e tamanho, execute `py -3 benchmarks\medir.py --repeticoes 9 --json resultados.json` no Windows, ou o equivalente com `python3` no Linux. O resultado depende de máquina, carga e cache e **não garante aceleração em todos os programas**. Veja [documentação do backend](docs/OTIMIZACAO_RS_0_16.md).
+
+## Incluído desde a RS 0.15 — layout de blocos e benchmark nativo
 
 A opção `-O 5` usa a mesma SSA e alocação de registradores da RS 0.14, mas **reordena blocos básicos**, permite queda natural entre blocos adjacentes e reduz saltos incondicionais. Quando um bloco tem ramificações, a emissão preserva cópias `phi` em cada aresta; desvios que precisam de cópias usam trampolins próprios. Todos os níveis `-O 0..4` continuam disponíveis.
 
