@@ -59,7 +59,7 @@ class ContextoSemantico:
             return 3
         if isinstance(tipo, tuple) and tipo[0] == 'lista':
             return tipo[2]
-        if isinstance(tipo, tuple) and tipo[0] == 'texto':
+        if isinstance(tipo, tuple) and tipo[0] in ('texto', 'bytes'):
             return 1 + (tipo[1] + 7) // 8
         return 1
 
@@ -134,6 +134,10 @@ class ContextoSemantico:
                                getattr(arvore, 'origem', None))
         if tag == 'neg':
             return NoExpressao(('neg', self._preparar_argumentos_compostos(arvore[1])),
+                               getattr(arvore, 'origem', None))
+        if tag == 'indice_bytes':
+            return NoExpressao(('indice_bytes', arvore[1],
+                                self._preparar_argumentos_compostos(arvore[2])),
                                getattr(arvore, 'origem', None))
         if tag == 'indice':
             return NoExpressao(('indice', arvore[1],

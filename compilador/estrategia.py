@@ -46,6 +46,10 @@ def decidir_estrategia(programa, nivel=1, otimizar=True):
     if any(isinstance(t, tuple) and t[0] == 'lista_dinamica'
            for t in tipos.values()):
         motivos.append('listas dinâmicas')
+    if any(isinstance(t, tuple) and t[0] == 'bytes' for t in tipos.values()): 
+        motivos.append('buffers binários tipados')
+    if any(i[0] in ('encerre',) for i in instrucoes):
+        motivos.append('saída do processo')
     if any(i[0] in ('grave_arquivo', 'carregue_arquivo',
                     'grave_trecho', 'carregue_trecho') for i in instrucoes):
         motivos.append('arquivos nativos')

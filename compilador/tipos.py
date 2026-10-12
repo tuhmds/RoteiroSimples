@@ -60,6 +60,17 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
         if tipo_expressao(indice, tipos, linha, funcoes) != 'inteiro':
             raise ErroCompilacao(f'Linha {linha}: índice deve ser inteiro.')
         return tipos[nome][1]
+    if categoria == 'tamanho_bytes':
+        if not isinstance(tipos.get(expr[1]), tuple) or tipos[expr[1]][0] != 'bytes':
+            raise ErroCompilacao(f'Linha {linha}: tamanho() exige bytes[N].')
+        return 'inteiro'
+    if categoria == 'indice_bytes':
+        nome, indice = expr[1:]
+        if not isinstance(tipos.get(nome), tuple) or tipos[nome][0] != 'bytes':
+            raise ErroCompilacao(f'Linha {linha}: indice exige bytes[N].')
+        if tipo_expressao(indice, tipos, linha, funcoes) != 'inteiro':
+            raise ErroCompilacao(f'Linha {linha}: indice de bytes deve ser inteiro.')
+        return 'inteiro'
     if categoria == 'tamanho_texto':
         if not isinstance(tipos.get(expr[1]), tuple) or tipos[expr[1]][0] != 'texto':
             raise ErroCompilacao(f'Linha {linha}: tamanho() exige texto válido.')

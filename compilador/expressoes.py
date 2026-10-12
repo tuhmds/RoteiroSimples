@@ -90,6 +90,8 @@ class Expressao:
                     return NoExpressao(('numero', tipo[2]), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'texto':
                     return NoExpressao(('tamanho_texto', nome), getattr(token, 'origem', None))
+                if isinstance(tipo, tuple) and tipo[0] == 'bytes':
+                    return NoExpressao(('tamanho_bytes', nome), getattr(token, 'origem', None))
                 raise ErroCompilacao(f'Linha {self.linha}: tamanho() exige lista ou texto.')
             if token == 'capacidade' and self.olhar() == '(': 
                 self.consumir('(')
@@ -100,8 +102,8 @@ class Expressao:
                     return NoExpressao(('capacidade_lista_dinamica', nome), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'lista_emprestada':
                     return NoExpressao(('capacidade_lista_emprestada', nome), getattr(token, 'origem', None))
-                if not isinstance(tipo, tuple) or tipo[0] != 'texto':
-                    raise ErroCompilacao(f'Linha {self.linha}: capacidade() exige buffer de texto ou lista dinamica.')
+                if not isinstance(tipo, tuple) or tipo[0] not in ('texto', 'bytes'):
+                    raise ErroCompilacao(f'Linha {self.linha}: capacidade() exige texto, bytes ou lista dinamica.')
                 return NoExpressao(('numero', tipo[1]), getattr(token, 'origem', None))
             if self.olhar() == '(' and token in getattr(self, 'funcoes', {}):
                 self.consumir('(')
@@ -137,8 +139,10 @@ class Expressao:
                     return NoExpressao(('indice_lista_dinamica', token, indice), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'lista_emprestada':
                     return NoExpressao(('indice_lista_emprestada', token, indice), getattr(token, 'origem', None))
+                if isinstance(tipo, tuple) and tipo[0] == 'bytes':
+                    return NoExpressao(('indice_bytes', token, indice), getattr(token, 'origem', None))
                 if not isinstance(tipo, tuple) or tipo[0] != 'lista':
-                    raise ErroCompilacao(f'Linha {self.linha}: {token} não é uma lista.')
+                    raise ErroCompilacao(f'Linha {self.linha}: {token} não é uma lista ou bytes[N].')
                 return NoExpressao(('indice', token, indice, tipo[2]), getattr(token, 'origem', None))
             return NoExpressao(('var', token), getattr(token, 'origem', None))
         raise ErroCompilacao(f"Linha {self.linha}: expressão inválida perto de {token!r}.")

@@ -42,7 +42,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if len(cab) != 3 or cab[2] != '{' or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', cab[1]):
                 raise ErroCompilacao(f'Linha {n}: use tipo Nome {{.')
             nome_tipo = str(cab[1])
-            if nome_tipo in registros or nome_tipo in ('inteiro', 'logico', 'texto', 'lista', 'emprestimo', 'empreste', 'seja', 'se', 'senao', 'inicio', 'funcao', 'retorne', 'para', 'enquanto', 'tipo', 'leia', 'escreva') or nome_tipo.startswith('__rs_'):
+            if nome_tipo in registros or nome_tipo in ('inteiro', 'logico', 'texto', 'bytes', 'lista', 'emprestimo', 'empreste', 'seja', 'se', 'senao', 'inicio', 'funcao', 'retorne', 'para', 'enquanto', 'tipo', 'leia', 'escreva') or nome_tipo.startswith('__rs_'):
                 raise ErroCompilacao(f'Linha {n}: nome de tipo duplicado ou reservado.')
             campos = []
             while linhas and linhas[0][1] != ['}']:
@@ -55,14 +55,14 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     tipo_campo = str(parte_tipo[0])
                     if tipo_campo not in ('inteiro', 'logico') and tipo_campo not in registros:
                         raise ErroCompilacao(f'Linha {n_campo}: tipo de campo desconhecido: {tipo_campo}.')
-                elif (len(parte_tipo) == 4 and parte_tipo[0] in ('lista', 'texto')
+                elif (len(parte_tipo) == 4 and parte_tipo[0] in ('lista', 'texto', 'bytes')
                       and parte_tipo[1] == '[' and parte_tipo[-1] == ']'
                       and parte_tipo[2].isascii() and parte_tipo[2].isdecimal()):
                     capacidade = int(parte_tipo[2])
                     if not 1 <= capacidade < 0x0FFF0000:
                         raise ErroCompilacao(f'Linha {n_campo}: tamanho de campo fora do intervalo do gerador.')
                     tipo_campo = (('lista', 'inteiro', capacidade) if parte_tipo[0] == 'lista'
-                                  else ('texto', capacidade))
+                                  else (parte_tipo[0], capacidade))
                 else:
                     raise ErroCompilacao(f'Linha {n_campo}: tipo de campo inválido.')
                 if t[0] in (c for c, _ in campos):
@@ -89,11 +89,11 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             valor = str(partes[2])
             if categoria == 'lista' and (valor in ('inteiro', 'logico') or valor in registros):
                 return ('lista_dinamica', valor)
-            if categoria in ('lista', 'texto') and valor.isascii() and valor.isdecimal():
+            if categoria in ('lista', 'texto', 'bytes') and valor.isascii() and valor.isdecimal():
                 tamanho = int(valor)
                 if not 1 <= tamanho < 0x0FFF0000:
                     raise ErroCompilacao(f'Linha {linha}: capacidade fora dos limites de endereçamento.')
-                return ('lista', 'inteiro', tamanho) if categoria == 'lista' else ('texto', tamanho)
+                return ('lista', 'inteiro', tamanho) if categoria == 'lista' else (categoria, tamanho)
         raise ErroCompilacao(f'Linha {linha}: tipo inválido; use inteiro, logico, registro, lista[N] ou texto[N].')
 
     def eh_composto(tipo):
@@ -154,7 +154,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     contexto = _contexto or ContextoSemantico(importa, assinaturas, registros)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'capacidade', 'copie', 'junte', 'limpe', 'funcao', 'retorne', 'tipo'}
+    reservadas = {'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'encerre', 'funcao', 'retorne', 'tipo'}
 
     def indice_lista(partes, linha):
         if '[' not in partes or partes[-1] != ']':
@@ -164,10 +164,10 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
         tipo = tipos.get(nome)
         if isinstance(tipo, tuple) and tipo[0] == 'lista_emprestada':
             raise ErroCompilacao(f'Linha {linha}: emprestimo[lista] permite somente leitura; nao pode ser alterado.')
-        if not isinstance(tipo, tuple) or tipo[0] not in ('lista', 'lista_dinamica'):
+        if not isinstance(tipo, tuple) or tipo[0] not in ('lista', 'lista_dinamica', 'bytes'):
             raise ErroCompilacao(f'Linha {linha}: caminho não aponta para uma lista.')
         indice, _ = expressao_tipada(partes[posicao+1:-1], linha, 'inteiro')
-        return nome, indice, tipo[2] if tipo[0] == 'lista' else None
+        return nome, indice, (tipo[2] if tipo[0] == 'lista' else 'bytes' if tipo[0] == 'bytes' else None)
 
     def texto_destino(partes, linha):
         nome = contexto.resolver_caminho(partes, linha)
@@ -323,6 +323,20 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     if tipo_impresso not in ('inteiro', 'logico'):
                         raise ErroCompilacao(f'Linha {n}: escreva exige número, lógico ou buffer de texto.')
                     adicionar(('imprima_num', arvore), n, t)
+            elif t[0] == 'encerre' and t[1:2] == ['('] and t[-1:] == [')']:
+                if len(t) < 4:
+                    raise ErroCompilacao(f'Linha {n}: use encerre(codigo_inteiro).')
+                codigo, _ = expressao_tipada(t[2:-1], n, 'inteiro')
+                adicionar(('encerre', codigo), n, t)
+            elif t[0] == 'adicione_byte' and t[1:2] == ['('] and t[-1:] == [')']:
+                if t.count(',') != 1:
+                    raise ErroCompilacao(f'Linha {n}: use adicione_byte(destino, valor).')
+                virgula = t.index(',')
+                nome = contexto.resolver_caminho(t[2:virgula], n)
+                if not isinstance(tipos.get(nome), tuple) or tipos[nome][0] != 'bytes':
+                    raise ErroCompilacao(f'Linha {n}: adicione_byte exige buffer bytes[N].')
+                valor, _ = expressao_tipada(t[virgula+1:-1], n, 'inteiro')
+                adicionar(('adicione_byte', nome, valor), n, t)
             elif t[0] in ('grave_trecho', 'carregue_trecho') and t[1:2] == ['('] and t[-1:] == [')']:
                 # Separa vírgulas exteriores: argumentos numéricos podem
                 # conter chamadas com múltiplos parâmetros.
@@ -361,7 +375,10 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                         or any(parte in ('', '.', '..') for parte in caminho.split('/'))):
                     raise ErroCompilacao(
                         f'Linha {n}: arquivo deve ter caminho relativo ASCII, sem . ou .. como pasta.')
-                nome, _ = texto_destino(partes[1], n)
+                nome = contexto.resolver_caminho(partes[1], n)
+                tipo_buffer = tipos.get(nome)
+                if not isinstance(tipo_buffer, tuple) or tipo_buffer[0] not in ('texto', 'bytes'):
+                    raise ErroCompilacao(f'Linha {n}: operacao posicional exige texto[N] ou bytes[N].')
                 deslocamento, _ = expressao_tipada(partes[2], n, 'inteiro')
                 parte_estado = partes[3] if gravar else partes[4]
                 if len(parte_estado) != 1:
@@ -399,8 +416,11 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f'Linha {n}: texto exige {origem[2]} bytes; capacidade de {nome} é {capacidade}.')
                 adicionar(('modifique_texto', t[0], nome, origem), n, t)
             elif t[0] == 'limpe' and len(t) >= 4 and t[:2] == ['limpe', '('] and t[-1] == ')':
-                nome, _ = texto_destino(t[2:-1], n)
-                adicionar(('limpe_texto', nome), n, t)
+                nome = contexto.resolver_caminho(t[2:-1], n)
+                tipo_buffer = tipos.get(nome)
+                if not isinstance(tipo_buffer, tuple) or tipo_buffer[0] not in ('texto', 'bytes'):
+                    raise ErroCompilacao(f'Linha {n}: limpe exige texto[N] ou bytes[N].')
+                adicionar(('limpe_bytes' if tipo_buffer[0] == 'bytes' else 'limpe_texto', nome), n, t)
             elif t[0] == 'mova' and t[1:2] == ['('] and t[-1:] == [')']:
                 partes = t[2:-1]
                 if len(partes) != 3 or partes[1] != ',':
@@ -470,6 +490,25 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                         adicionar(('copie_composto', interno, arvore), n, t)
                     else:
                         raise ErroCompilacao(f'Linha {n}: declaração de registro inválida.')
+                    i += 1
+                    continue
+                if len(t) >= 7 and t[2:4] == [':', 'bytes'] and t[4] == '[' and t[6] == ']':
+                    literal = t[5]
+                    if not literal.isascii() or not literal.isdecimal():
+                        raise ErroCompilacao(f'Linha {n}: capacidade de bytes deve ser um inteiro constante.')
+                    capacidade = int(literal)
+                    if not 1 <= capacidade < 0x0FFF0000:
+                        raise ErroCompilacao(f'Linha {n}: capacidade de bytes fora do enderecamento nativo.')
+                    interno = registrar(str(nome), ('bytes', capacidade), n)
+                    if len(t) == 7:
+                        adicionar(('crie_bytes', interno, capacidade), n, t)
+                    elif len(t) >= 9 and t[7] == '=':
+                        arvore, _ = expressao_tipada(t[8:], n, ('bytes', capacidade))
+                        if arvore[0] not in ('var', 'chamada'):
+                            raise ErroCompilacao(f'Linha {n}: copia de bytes exige variavel ou funcao.')
+                        adicionar(('copie_composto', interno, arvore), n, t)
+                    else:
+                        raise ErroCompilacao(f'Linha {n}: declaracao de bytes invalida.')
                     i += 1
                     continue
                 if len(t) >= 7 and t[2:4] == [':', 'texto'] and t[4] == '[' and t[6] == ']':
@@ -550,7 +589,9 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 nome, indice, tamanho = indice_lista(t[:igual], n)
                 esperado = tipos[nome][1] if tamanho is None else 'inteiro'
                 valor, _ = expressao_tipada(t[igual+1:], n, esperado)
-                if tamanho is None:
+                if tamanho == 'bytes':
+                    adicionar(('atribua_byte', nome, indice, valor), n, t)
+                elif tamanho is None:
                     if esperado in registros and valor[0] != 'var':
                         raise ErroCompilacao(f'Linha {n}: atribuicao de registro em lista exige variavel.')
                     adicionar(('atribua_indice_dinamico', nome, indice, valor), n, t)
@@ -642,6 +683,12 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                              (instrucao[1],))
                 for expressao in expressoes:
                     nomes |= chamadas_expressao(expressao)
+            if tag in ('encerre', 'adicione_byte', 'atribua_byte'):
+                argumentos = ((instrucao[1],) if tag == 'encerre' else
+                              (instrucao[2],) if tag == 'adicione_byte' else
+                              (instrucao[2], instrucao[3]))
+                for argumento in argumentos:
+                    nomes |= chamadas_expressao(argumento)
             if tag in ('grave_trecho', 'carregue_trecho'):
                 expressoes = ((instrucao[3],) if tag == 'grave_trecho'
                              else (instrucao[3], instrucao[4]))
