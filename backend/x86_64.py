@@ -1,7 +1,7 @@
 """Emissão nativa de instruções AMD64, leitura/escrita e saltos."""
 import struct
 from compilador.erros import ErroCompilacao
-from . import listas_dinamicas
+from . import listas_dinamicas, arquivos
 from .base import Emissor, alinhar
 
 class Gerador(Emissor):
@@ -770,6 +770,10 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     variaveis = programa.variaveis
     mensagens = {}
     tem_leitura = any(op[0] in ('leia_int', 'leia_indice', 'leia_indice_dinamico', 'leia_texto') for op in percorrer_instrucoes(programa.instrucoes))
+    tem_arquivos = (any(op[0] in ('grave_arquivo', 'carregue_arquivo')
+                        for op in percorrer_instrucoes(programa.instrucoes))
+                    or any(op[0] in ('grave_arquivo', 'carregue_arquivo')
+                        for f in g.funcoes.values() for op in percorrer_instrucoes(f.programa.instrucoes)))
     tipos = getattr(programa, 'tipos', {})
     tem_dinamicas = any(listas_dinamicas.eh_lista_dinamica(t)
                         for t in tipos.values()) or any(
@@ -846,6 +850,9 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 msg_indice = len(mensagens)
                 mensagens[msg_indice] = '\n'
                 escreve_literal(g, msg_indice, '\n', windows)
+            elif op[0] in ('grave_arquivo', 'carregue_arquivo'):
+                arquivos.emitir_comando(g, op, variaveis, tipos, windows, mensagens,
+                                        _endereco_buffer, deslocamento_variavel)
             elif op[0] == 'leia_texto':
                 nome = op[1]
                 dados, comprimento, capacidade = _endereco_buffer(variaveis, nome, tipos, windows)
@@ -1135,6 +1142,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     tipos = getattr(programa, 'tipos', {})
     if tem_dinamicas:
         listas_dinamicas.emitir_rotinas(g, windows)
+    if tem_arquivos:
+        arquivos.emitir_rotinas(g, windows)
     imprime_inteiro(g, windows)
     if tem_leitura:
         emitir_cache_entrada(g, windows, slots)
@@ -1232,6 +1241,24 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             if windows:
                 g.bytes(b'\x48\x83\xE4\xF0')
             escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
+            if windows:
+                g.bytes(b'\xB9\x01\x00\x00\x00')
+                g.relativo(b'\xFF\x15', 'ExitProcess')
+            else:
+                g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+    if tem_arquivos:
+        for nome, mensagem in (
+                ('erro_arquivo_abrir', 'Erro: nao foi possivel abrir o arquivo.\n'),
+                ('erro_arquivo_leitura', 'Erro: falha na leitura do arquivo.\n'),
+                ('erro_arquivo_gravacao', 'Erro: falha na gravacao do arquivo.\n'),
+                ('erro_arquivo_capacidade', 'Erro: arquivo excede a capacidade do texto.\n'),
+                ('erro_arquivo_fechar', 'Erro: nao foi possivel fechar o arquivo.\n')):
+            indice = len(mensagens)
+            mensagens[indice] = mensagem
+            g.marcar(nome)
+            if windows:
+                g.bytes(b'\x48\x83\xE4\xF0')
+            escreve_literal(g, indice, mensagem, windows, 'saida' if windows else 'erro')
             if windows:
                 g.bytes(b'\xB9\x01\x00\x00\x00')
                 g.relativo(b'\xFF\x15', 'ExitProcess')

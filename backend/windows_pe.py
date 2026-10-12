@@ -41,6 +41,10 @@ def montar_pe(g, mensagens):
         nomes.append('SetConsoleCP')
     if 'rs_lista_alocar' in g.rotulos:
         nomes.extend(['VirtualAlloc', 'VirtualFree'])
+    if 'rs_arquivo_gravar' in g.rotulos:
+        nomes.extend(['CreateFileA', 'CloseHandle'])
+        if 'ReadFile' not in nomes:
+            nomes.append('ReadFile')
     importacoes, enderecos, inicio_iat, tamanho_iat = construir_importacoes(base_importacoes, nomes)
     base_dados = alinhar(base_importacoes + len(importacoes), 0x1000)
     dados = bytearray()

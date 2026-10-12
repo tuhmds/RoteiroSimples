@@ -154,7 +154,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     contexto = _contexto or ContextoSemantico(importa, assinaturas, registros)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'capacidade', 'copie', 'junte', 'limpe', 'funcao', 'retorne', 'tipo'}
+    reservadas = {'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'capacidade', 'copie', 'junte', 'limpe', 'funcao', 'retorne', 'tipo'}
 
     def indice_lista(partes, linha):
         if '[' not in partes or partes[-1] != ']':
@@ -323,6 +323,21 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     if tipo_impresso not in ('inteiro', 'logico'):
                         raise ErroCompilacao(f'Linha {n}: escreva exige número, lógico ou buffer de texto.')
                     adicionar(('imprima_num', arvore), n, t)
+            elif t[0] in ('grave_arquivo', 'carregue_arquivo') and t[1:2] == ['('] and t[-1:] == [')']:
+                if len(t) != 6 or t[3] != ',' or not t[2].startswith('"'):
+                    raise ErroCompilacao(f'Linha {n}: use {t[0]}("arquivo.txt", variavel_texto).')
+                try:
+                    caminho = json.loads(str(t[2]))
+                except (ValueError, UnicodeError) as exc:
+                    raise ErroCompilacao(f'Linha {n}: nome de arquivo invalido.') from exc
+                if (not isinstance(caminho, str) or not 1 <= len(caminho) <= 240
+                        or not re.fullmatch(r'[A-Za-z0-9_./-]+', caminho, re.ASCII)
+                        or caminho.startswith('/') or caminho.endswith('/')
+                        or any(parte in ('', '.', '..') for parte in caminho.split('/'))):
+                    raise ErroCompilacao(
+                        f'Linha {n}: arquivo deve ter caminho relativo ASCII, sem . ou .. como pasta.')
+                nome, _ = texto_destino([t[4]], n)
+                adicionar((str(t[0]), caminho, nome), n, t)
             elif t[0] in ('copie', 'junte') and len(t) >= 6 and t[1] == '(' and t[-1] == ')':
                 if t.count(',') != 1:
                     raise ErroCompilacao(f'Linha {n}: use {t[0]}(destino, origem).')

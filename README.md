@@ -10,6 +10,35 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
 
+## RS 0.34 — persistência nativa de arquivos (experimental)
+
+Dois comandos permitem salvar e carregar os bytes de um buffer \`texto[N]\`
+sem depender de Python na execução:
+
+\`\`\`text
+inicio {
+    seja registro: texto[100]
+    copie(registro, "entrega 101, concluida")
+    grave_arquivo("entregas.txt", registro)
+
+    limpe(registro)
+    carregue_arquivo("entregas.txt", registro)
+    escreva(registro)
+}
+\`\`\`
+
+\`grave_arquivo\` cria ou substitui o arquivo, gravando exatamente o comprimento
+atual do texto, sem acrescentar quebra de linha. \`carregue_arquivo\` lê todo o
+arquivo, substituindo os bytes e o comprimento do buffer; se o arquivo for
+maior do que a capacidade, encerra o programa com erro, sem cortar dados
+silenciosamente. Falhas de abertura, leitura, gravação e fechamento também
+geram erro. Nomes de arquivo são literais relativos, ASCII e sem segmentos
+\`..\`, por enquanto; os diretórios intermediários precisam existir.
+
+Esses recursos operam sobre conteúdo em bytes (não serializam registros).
+Veja [o guia da RS 0.34](docs/ARQUIVOS_RS_0_34.md) e
+[o exemplo de persistência](exemplos/persistencia_texto.rts).
+
 ## RS 0.33 — transferência de propriedade e duração por escopo
 
 A RS agora implementa `mova(destino, origem)` para `lista[]`. A operação

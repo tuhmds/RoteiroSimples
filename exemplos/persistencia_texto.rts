@@ -1,0 +1,10 @@
+// RS 0.34: os dados continuam disponíveis depois que o programa termina.
+inicio {
+    seja texto_salvo: texto[120]
+    copie(texto_salvo, "Entrega 101: concluida")
+    grave_arquivo("entrega_101.txt", texto_salvo)
+
+    limpe(texto_salvo)
+    carregue_arquivo("entrega_101.txt", texto_salvo)
+    escreva(texto_salvo)
+}

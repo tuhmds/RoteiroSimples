@@ -1,6 +1,6 @@
 """Backend x86-64: a IR ainda e convertida para a AST legada (RS 0.9)."""
 from compilador.ir import construir_ir, programa_para_backend
-from .x86_64 import montar_codigo
+from .x86_64 import montar_codigo, percorrer_instrucoes
 from .windows_pe import montar_pe
 from .linux_elf import montar_elf
 
@@ -23,7 +23,9 @@ def compilar(programa, alvo, otimizar=True, nivel=1):
                 return True
         return False
 
-    if (getattr(programa, 'funcoes', None) or getattr(programa, 'registros', None)
+    if (any(op[0] in ('grave_arquivo', 'carregue_arquivo')
+            for op in percorrer_instrucoes(programa.instrucoes))
+            or getattr(programa, 'funcoes', None) or getattr(programa, 'registros', None)
             or getattr(programa, 'escopos_locais', False) or contem_copia_composta(programa.instrucoes)
             or any(isinstance(t, tuple) and t[0] == 'lista_dinamica' for t in programa.tipos.values())):
         gerador, mensagens = montar_codigo(programa, alvo == 'windows')
