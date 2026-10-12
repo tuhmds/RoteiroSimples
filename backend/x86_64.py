@@ -1,7 +1,7 @@
 """Emissão nativa de instruções AMD64, leitura/escrita e saltos."""
 import struct
 from compilador.erros import ErroCompilacao
-from . import listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros
+from . import listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros, arquivos_abertos
 from .base import Emissor, alinhar
 
 class Gerador(Emissor):
@@ -793,6 +793,9 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                     for t in tipos.values()) or any(
         isinstance(t, tuple) and t[0] == 'bytes'
         for f in g.funcoes.values() for t in f.programa.tipos.values())
+    tem_recursos = (any(t == 'arquivo' for t in tipos.values()) or
+                    any(t == 'arquivo' for f in g.funcoes.values()
+                        for t in f.programa.tipos.values()))
     tem_encerre = any(op[0] == 'encerre' for op in percorrer_instrucoes(programa.instrucoes)) or any(
         op[0] == 'encerre' for f in g.funcoes.values()
         for op in percorrer_instrucoes(f.programa.instrucoes))
@@ -825,6 +828,11 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
 
     if tem_dinamicas:
         listas_dinamicas.inicializar_inativas(g, variaveis, tipos, windows)
+    if tem_recursos:
+        for nome, tipo in tipos.items():
+            if tipo == 'arquivo':
+                offset = deslocamento_variavel(variaveis, nome, windows)
+                g.bytes(b'\x48\xC7\x85' + struct.pack('<i',offset) + b'\xFF\xFF\xFF\xFF')
 
     if tem_leitura:
         offset_cursor, offset_quantidade, _ = _offsets_cache_entrada(slots, windows)
@@ -878,6 +886,12 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             elif op[0] in ('grave_trecho', 'carregue_trecho'):
                 arquivos_posicionais.emitir_comando(g, op, variaveis, tipos, windows,
                     mensagens, _endereco_buffer, deslocamento_variavel, expressao)
+            elif op[0] == 'crie_recurso':
+                offset = deslocamento_variavel(variaveis, op[1], windows)
+                g.bytes(b'\x48\xC7\x85' + struct.pack('<i',offset) + b'\xFF\xFF\xFF\xFF')
+            elif op[0] in ('abra_recurso','feche_recurso','sincronize_recurso','grave_em','carregue_de'):
+                arquivos_abertos.emitir_comando(g, op, variaveis, tipos, windows,
+                    mensagens, _endereco_buffer, expressao)
             elif op[0] == 'leia_texto':
                 nome = op[1]
                 dados, comprimento, capacidade = _endereco_buffer(variaveis, nome, tipos, windows)
@@ -893,7 +907,10 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                                        listas_dinamicas.largura_elemento(g, tipos[op[1]]))
             elif op[0] == 'libere_escopo_listas':
                 for nome in op[1]:
-                    listas_dinamicas.liberar(g, variaveis, nome, windows,
+                    if tipos[nome] == 'arquivo':
+                        arquivos_abertos.emitir_auto_fechar(g, variaveis, nome, windows)
+                    else:
+                        listas_dinamicas.liberar(g, variaveis, nome, windows,
                                               largura=listas_dinamicas.largura_elemento(g, tipos[nome]))
             elif op[0] == 'adicione_lista_dinamica':
                 listas_dinamicas.acrescentar(g, variaveis, op[1], op[2], windows, expressao,
@@ -1106,6 +1123,10 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         emissor_alternativo(g, mensagens, windows)
     if tem_dinamicas:
         listas_dinamicas.liberar_todas(g, variaveis, tipos, windows)
+    if tem_recursos:
+        for nome, tipo in reversed(tuple(tipos.items())):
+            if tipo == 'arquivo':
+                arquivos_abertos.emitir_auto_fechar(g, variaveis, nome, windows)
 
     if windows:
         g.bytes(b'\x31\xC9')
@@ -1144,6 +1165,11 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         reservar_pilha(g, n_frame)
         if tem_dinamicas:
             listas_dinamicas.inicializar_inativas(g, variaveis, tipos, windows)
+        if tem_recursos:
+            for recurso_nome, tipo in tipos.items():
+                if tipo == 'arquivo':
+                    offset = deslocamento_variavel(variaveis, recurso_nome, windows)
+                    g.bytes(b'\x48\xC7\x85' + struct.pack('<i',offset) + b'\xFF\xFF\xFF\xFF')
         g.bytes(b'\x48\x89\x85' + struct.pack('<i', deslocamento_variavel(variaveis, '__rs_uso_pilha', windows)))
         total_palavras = sum(_palavras_tipo(t, g.registros) for _, t in funcao.parametros)
         base_argumentos = 32 if _composto(funcao.retorno, g.registros) else 24
@@ -1169,6 +1195,13 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         if tem_dinamicas:
             listas_dinamicas.liberar_todas(g, variaveis, tipos, windows,
                                            preservar_retorno=True)
+        if tem_recursos and any(t == 'arquivo' for t in tipos.values()):
+            retorno_guardado = deslocamento_variavel(variaveis, '__rs_uso_pilha', windows)
+            g.bytes(b'\x48\x89\x85' + struct.pack('<i',retorno_guardado))
+            for recurso_nome, tipo in reversed(tuple(tipos.items())):
+                if tipo == 'arquivo':
+                    arquivos_abertos.emitir_auto_fechar(g, variaveis, recurso_nome, windows)
+            g.bytes(b'\x48\x8B\x85' + struct.pack('<i',retorno_guardado))
         if windows:
             g.bytes(b'\x48\x8D\x65\xF8\x5B\x5D\xC3')  # restaura RBX e retorna
         else:
@@ -1182,6 +1215,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         listas_dinamicas.emitir_rotinas(g, windows)
     if tem_arquivos:
         arquivos.emitir_rotinas(g, windows)
+    if tem_recursos:
+        arquivos_abertos.emitir_rotinas(g, windows)
     if tem_arquivos_posicionais:
         arquivos_posicionais.emitir_rotinas(g, windows)
     imprime_inteiro(g, windows)
@@ -1307,6 +1342,19 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         mensagem = 'Erro: codigo de saida deve estar entre 0 e 255.\n'
         mensagens[indice] = mensagem
         g.marcar('erro_codigo_saida')
+        if windows:
+            g.bytes(b'\x48\x83\xE4\xF0')
+        escreve_literal(g, indice, mensagem, windows, 'saida' if windows else 'erro')
+        if windows:
+            g.bytes(b'\xB9\x01\x00\x00\x00')
+            g.relativo(b'\xFF\x15', 'ExitProcess')
+        else:
+            g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+    if tem_recursos:
+        indice = len(mensagens)
+        mensagem = 'Erro: nao foi possivel fechar automaticamente um arquivo.\n'
+        mensagens[indice] = mensagem
+        g.marcar('erro_fechamento_implicito')
         if windows:
             g.bytes(b'\x48\x83\xE4\xF0')
         escreve_literal(g, indice, mensagem, windows, 'saida' if windows else 'erro')
