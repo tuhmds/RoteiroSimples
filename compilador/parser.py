@@ -81,9 +81,14 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 return nome
         if len(partes) == 4 and partes == ['emprestimo', '[', 'lista', ']']:
             return ('lista_emprestada', 'inteiro')
+        if (len(partes) == 7 and partes[:4] == ['emprestimo', '[', 'lista', '[']
+                and partes[-2:] == [']', ']'] and partes[4] in ('inteiro', 'logico')):
+            return ('lista_emprestada', str(partes[4]))
         if len(partes) == 4 and partes[1] == '[' and partes[3] == ']':
             categoria = str(partes[0])
             valor = str(partes[2])
+            if categoria == 'lista' and valor in ('inteiro', 'logico'):
+                return ('lista_dinamica', valor)
             if categoria in ('lista', 'texto') and valor.isascii() and valor.isdecimal():
                 tamanho = int(valor)
                 if not 1 <= tamanho < 0x0FFF0000:
@@ -108,7 +113,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if cabecalho[fim_par+1:fim_par+3] != ['-', '>'] or cabecalho[-1] != '{':
                 raise ErroCompilacao(f'Linha {n}: use funcao nome(parametros) -> tipo {{.')
             retorno = ler_tipo(cabecalho[fim_par+3:-1], n)
-            if retorno == ('lista_emprestada', 'inteiro'):
+            if isinstance(retorno, tuple) and retorno[0] == 'lista_emprestada':
                 raise ErroCompilacao(f'Linha {n}: emprestimo[lista] so pode aparecer em parametros; nao pode ser retornado.')
             partes = cabecalho[3:fim_par]
             parametros = []
@@ -152,7 +157,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
         posicao = partes.index('[')
         nome = contexto.resolver_caminho(partes[:posicao], linha)
         tipo = tipos.get(nome)
-        if tipo == ('lista_emprestada', 'inteiro'):
+        if isinstance(tipo, tuple) and tipo[0] == 'lista_emprestada':
             raise ErroCompilacao(f'Linha {linha}: emprestimo[lista] permite somente leitura; nao pode ser alterado.')
         if not isinstance(tipo, tuple) or tipo[0] not in ('lista', 'lista_dinamica'):
             raise ErroCompilacao(f'Linha {linha}: caminho não aponta para uma lista.')
@@ -279,6 +284,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 destino = t[2:-1]
                 if '[' in destino:
                     nome, indice, tamanho = indice_lista(destino, n)
+                    if tamanho is None and tipos[nome][1] != 'inteiro':
+                        raise ErroCompilacao(f'Linha {n}: leia de lista dinamica so aceita elementos inteiros.')
                     if tamanho is None:
                         adicionar(('leia_indice_dinamico', nome, indice), n, t)
                     else:
@@ -331,8 +338,9 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 origem = contexto.resolver(str(partes[2]))
                 if destino == origem:
                     raise ErroCompilacao(f'Linha {n}: mova exige origem e destino diferentes.')
-                if (tipos.get(destino) != ('lista_dinamica', 'inteiro') or
-                        tipos.get(origem) != ('lista_dinamica', 'inteiro')):
+                if (not isinstance(tipos.get(destino), tuple) or
+                        tipos[destino][0] != 'lista_dinamica' or
+                        tipos.get(destino) != tipos.get(origem)):
                     raise ErroCompilacao(f'Linha {n}: mova exige duas listas[] proprietarias.')
                 adicionar(('mova_lista_dinamica', destino, origem), n, t)
             elif t[0] in ('adicione', 'remova_ultimo', 'limpe_lista', 'libere') and t[1:2] == ['('] and t[-1:] == [')']:
@@ -346,16 +354,16 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     if len(nome_parte) != 1:
                         raise ErroCompilacao(f'Linha {n}: adicione exige nome de lista proprietaria.')
                     nome = contexto.resolver(str(nome_parte[0]))
-                    if tipos.get(nome) != ('lista_dinamica', 'inteiro'):
-                        raise ErroCompilacao(f'Linha {n}: adicione exige lista[] proprietaria.')
-                    valor, _ = expressao_tipada(conteudo[virgula+1:], n, 'inteiro')
+                    if not isinstance(tipos.get(nome), tuple) or tipos[nome][0] != 'lista_dinamica':
+                        raise ErroCompilacao(f'Linha {n}: adicione exige lista dinamica proprietaria.')
+                    valor, _ = expressao_tipada(conteudo[virgula+1:], n, tipos[nome][1])
                     adicionar(('adicione_lista_dinamica', nome, valor), n, t)
                 else:
                     if len(conteudo) != 1:
                         raise ErroCompilacao(f'Linha {n}: {operacao} exige nome de lista proprietaria.')
                     nome = contexto.resolver(str(conteudo[0]))
-                    if tipos.get(nome) != ('lista_dinamica', 'inteiro'):
-                        raise ErroCompilacao(f'Linha {n}: {operacao} exige lista[] proprietaria.')
+                    if not isinstance(tipos.get(nome), tuple) or tipos[nome][0] != 'lista_dinamica':
+                        raise ErroCompilacao(f'Linha {n}: {operacao} exige lista dinamica proprietaria.')
                     mapa = {'libere': 'libere_lista_dinamica',
                             'limpe_lista': 'limpe_lista_dinamica',
                             'remova_ultimo': 'remova_ultimo_lista_dinamica'}
@@ -368,8 +376,11 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' duplicada ou reservada.")
                 if len(t) >= 4 and t[2:4] == [':', 'emprestimo']:
                     raise ErroCompilacao(f'Linha {n}: emprestimo[lista] so e permitido como parametro de funcao.')
-                if len(t) == 6 and t[2:] == [':', 'lista', '[', ']']:
-                    interno = registrar(str(nome), ('lista_dinamica', 'inteiro'), n)
+                if (t[2:5] == [':', 'lista', '['] and t[-1:] == [']']
+                        and ((len(t) == 6 and t[5] == ']') or
+                             (len(t) == 7 and t[5] in ('inteiro', 'logico')))):
+                    elemento = 'inteiro' if len(t) == 6 else str(t[5])
+                    interno = registrar(str(nome), ('lista_dinamica', elemento), n)
                     donos_locais.append(interno)
                     adicionar(('crie_lista_dinamica', interno), n, t)
                     i += 1
@@ -435,9 +446,9 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     arvore, inferido = expressao_tipada(t[3:], n)
                 else:
                     raise ErroCompilacao(f"Linha {n}: use 'seja nome = valor' ou 'seja nome: inteiro = valor'.")
-                if inferido == ('lista_dinamica', 'inteiro'):
+                if isinstance(inferido, tuple) and inferido[0] == 'lista_dinamica':
                     raise ErroCompilacao(f'Linha {n}: lista[] tem dono unico; copiar ou inferir propriedade nao e permitido.')
-                if inferido == ('lista_emprestada', 'inteiro'):
+                if isinstance(inferido, tuple) and inferido[0] == 'lista_emprestada':
                     raise ErroCompilacao(f'Linha {n}: emprestimo[lista] nao pode ser armazenado em variavel local.')
                 tipo_armazenado = ('registro', inferido, registros[inferido]) if isinstance(inferido, str) and inferido in registros else inferido
                 interno = registrar(str(nome), tipo_armazenado, n)
@@ -464,7 +475,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             elif len(t) >= 5 and '[' in t and ']' in t and '=' in t and t.index('[') < t.index(']') < t.index('='):
                 igual = t.index('=')
                 nome, indice, tamanho = indice_lista(t[:igual], n)
-                valor, _ = expressao_tipada(t[igual+1:], n, 'inteiro')
+                esperado = tipos[nome][1] if tamanho is None else 'inteiro'
+                valor, _ = expressao_tipada(t[igual+1:], n, esperado)
                 if tamanho is None:
                     adicionar(('atribua_indice_dinamico', nome, indice, valor), n, t)
                 else:
@@ -473,9 +485,9 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 nome = contexto.resolver(str(t[0]))
                 if nome not in variaveis:
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' não foi declarada.")
-                if tipos[nome] == ('lista_dinamica', 'inteiro'):
+                if isinstance(tipos[nome], tuple) and tipos[nome][0] == 'lista_dinamica':
                     raise ErroCompilacao(f'Linha {n}: lista[] possui dono unico e nao admite atribuicao.')
-                if tipos[nome] == ('lista_emprestada', 'inteiro'):
+                if isinstance(tipos[nome], tuple) and tipos[nome][0] == 'lista_emprestada':
                     raise ErroCompilacao(f'Linha {n}: parametro emprestimo[lista] nao pode ser reatribuido.')
                 esperado = tipos[nome][1] if isinstance(tipos[nome], tuple) and tipos[nome][0] == 'registro' else tipos[nome]
                 arvore, _ = expressao_tipada(t[2:], n, esperado)

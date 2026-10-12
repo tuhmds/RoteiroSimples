@@ -34,31 +34,32 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
         # decide se podem ser usados (não participam da aritmética).
         return tipo
     if categoria == 'empreste_lista_dinamica':
-        if tipos.get(expr[1]) != ('lista_dinamica', 'inteiro'):
-            raise ErroCompilacao(f'Linha {linha}: empreste() exige lista[] com propriedade.')
-        return ('lista_emprestada', 'inteiro')
+        tipo = tipos.get(expr[1])
+        if not isinstance(tipo, tuple) or tipo[0] != 'lista_dinamica':
+            raise ErroCompilacao(f'Linha {linha}: empreste() exige lista dinamica proprietaria.')
+        return ('lista_emprestada', tipo[1])
     if categoria in ('quantidade_lista_emprestada', 'capacidade_lista_emprestada'):
-        if tipos.get(expr[1]) != ('lista_emprestada', 'inteiro'):
+        if not isinstance(tipos.get(expr[1]), tuple) or tipos[expr[1]][0] != 'lista_emprestada':
             raise ErroCompilacao(f'Linha {linha}: consulta exige emprestimo[lista].')
         return 'inteiro'
     if categoria == 'indice_lista_emprestada':
         nome, indice = expr[1:]
-        if tipos.get(nome) != ('lista_emprestada', 'inteiro'):
+        if not isinstance(tipos.get(nome), tuple) or tipos[nome][0] != 'lista_emprestada':
             raise ErroCompilacao(f'Linha {linha}: indice exige emprestimo[lista].')
         if tipo_expressao(indice, tipos, linha, funcoes) != 'inteiro':
             raise ErroCompilacao(f'Linha {linha}: indice da lista emprestada deve ser inteiro.')
-        return 'inteiro'
+        return tipos[nome][1]
     if categoria in ('quantidade_lista_dinamica', 'capacidade_lista_dinamica'):
-        if tipos.get(expr[1]) != ('lista_dinamica', 'inteiro'):
+        if not isinstance(tipos.get(expr[1]), tuple) or tipos[expr[1]][0] != 'lista_dinamica':
             raise ErroCompilacao(f'Linha {linha}: operação exige uma lista dinamica valida.')
         return 'inteiro'
     if categoria == 'indice_lista_dinamica':
         nome, indice = expr[1:]
-        if tipos.get(nome) != ('lista_dinamica', 'inteiro'):
+        if not isinstance(tipos.get(nome), tuple) or tipos[nome][0] != 'lista_dinamica':
             raise ErroCompilacao(f'Linha {linha}: índice exige lista dinamica.')
         if tipo_expressao(indice, tipos, linha, funcoes) != 'inteiro':
             raise ErroCompilacao(f'Linha {linha}: índice deve ser inteiro.')
-        return 'inteiro'
+        return tipos[nome][1]
     if categoria == 'tamanho_texto':
         if not isinstance(tipos.get(expr[1]), tuple) or tipos[expr[1]][0] != 'texto':
             raise ErroCompilacao(f'Linha {linha}: tamanho() exige texto válido.')
@@ -86,7 +87,8 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
             if a != 'inteiro' or b != 'inteiro':
                 raise ErroCompilacao(f'Linha {linha}: operação {op} exige dois inteiros; recebeu {a} e {b}.')
             return 'inteiro'
-        if a == ('lista_emprestada', 'inteiro') or b == ('lista_emprestada', 'inteiro'):
+        if ((isinstance(a, tuple) and a[0] == 'lista_emprestada') or
+                (isinstance(b, tuple) and b[0] == 'lista_emprestada')):
             raise ErroCompilacao(f'Linha {linha}: emprestimos nao podem ser comparados diretamente.')
         if op in ('==', '!='):
             if a != b:

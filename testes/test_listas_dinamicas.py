@@ -514,5 +514,90 @@ class TestesListasDinamicas(unittest.TestCase):
         with self.assertRaisesRegex(ErroCompilacao, 'nao pode ser armazenado'):
             analisar_programa(fonte)
 
+
+    def test_rs033_lista_logica_tipagem_e_emprestimo(self):
+        fonte = """funcao contar(entradas: emprestimo[lista[logico]]) -> inteiro {
+            seja total = 0
+            para i de 0 ate tamanho(entradas) - 1 {
+                se entradas[i] {
+                    total = total + 1
+                }
+            }
+            retorne total
+        }
+        inicio {
+            seja portas: lista[logico]
+            adicione(portas, verdadeiro)
+            adicione(portas, falso)
+            adicione(portas, 4 > 2)
+            escreva(contar(empreste(portas)))
+            escreva(tamanho(portas))
+            portas[1] = verdadeiro
+            escreva(contar(empreste(portas)))
+            escreva(portas[0])
+        }"""
+        r=executar(fonte)
+        self.assertEqual((r.returncode,r.stdout),(0,'2\n3\n3\n1\n'),r.stderr)
+
+    def test_rs033_lista_inteira_tipagem_explicita(self):
+        fonte = """funcao inicio_da_lista(dados: emprestimo[lista[inteiro]]) -> inteiro {
+            retorne dados[0]
+        }
+        inicio {
+            seja numeros: lista[inteiro]
+            adicione(numeros, 77)
+            escreva(inicio_da_lista(empreste(numeros)))
+        }"""
+        r=executar(fonte)
+        self.assertEqual((r.returncode,r.stdout),(0,'77\n'),r.stderr)
+
+    def test_rs033_listas_diferentes_nao_podem_trocar_propriedade(self):
+        exemplos=[
+            """inicio {
+                seja numeros: lista[inteiro]
+                seja estados: lista[logico]
+                mova(estados, numeros)
+            }""",
+            """inicio {
+                seja estados: lista[logico]
+                adicione(estados, 123)
+            }""",
+            """inicio {
+                seja numeros: lista[inteiro]
+                adicione(numeros, verdadeiro)
+            }""",
+            """inicio {
+                seja estados: lista[logico]
+                estados[0] = 42
+            }""",
+            """funcao f(valores: emprestimo[lista[inteiro]]) -> inteiro {
+                retorne tamanho(valores)
+            }
+            inicio {
+                seja estados: lista[logico]
+                escreva(f(empreste(estados)))
+            }""",
+            """inicio {
+                seja estados: lista[logico]
+                leia(estados[0])
+            }""",
+        ]
+        for codigo in exemplos:
+            with self.subTest(codigo=codigo):
+                with self.assertRaises(ErroCompilacao):
+                    analisar_programa(codigo)
+
+    def test_rs033_lista_logica_transferencia(self):
+        fonte = """inicio {
+            seja origem: lista[logico]
+            seja destino: lista[logico]
+            adicione(origem, verdadeiro)
+            adicione(destino, falso)
+            mova(destino, origem)
+            escreva(destino[0])
+        }"""
+        r=executar(fonte)
+        self.assertEqual((r.returncode,r.stdout),(0,'1\n'),r.stderr)
+
 if __name__ == '__main__':
     unittest.main()

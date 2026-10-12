@@ -10,6 +10,10 @@ import struct
 TIPO_LISTA_DINAMICA = ('lista_dinamica', 'inteiro')
 
 
+def eh_lista_dinamica(tipo):
+    return isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] == 'lista_dinamica'
+
+
 def deslocamento(variaveis, nome, windows):
     return -(16 + variaveis[nome]*8) if windows else -(8 + variaveis[nome]*8)
 
@@ -24,7 +28,7 @@ def criar(g, variaveis, nome, windows):
 def inicializar_inativas(g, variaveis, tipos, windows):
     """Marca descritores não alcançados como inativos na entrada."""
     for nome, tipo in tipos.items():
-        if tipo != TIPO_LISTA_DINAMICA:
+        if not eh_lista_dinamica(tipo):
             continue
         base = deslocamento(variaveis, nome, windows)
         g.bytes(b'\x31\xC0')
@@ -140,7 +144,7 @@ def liberar(g, variaveis, nome, windows, explicito=False):
 
 
 def liberar_todas(g, variaveis, tipos, windows, preservar_retorno=False):
-    proprietarias = [nome for nome, tipo in tipos.items() if tipo == TIPO_LISTA_DINAMICA]
+    proprietarias = [nome for nome, tipo in tipos.items() if eh_lista_dinamica(tipo)]
     if not proprietarias:
         return
     if preservar_retorno:

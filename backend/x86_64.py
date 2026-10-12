@@ -142,7 +142,7 @@ def _total_slots(programa):
 
 def _palavras_tipo(tipo, registros):
     """Quantidade de palavras de oito bytes em um valor completo."""
-    if tipo == listas_dinamicas.TIPO_LISTA_DINAMICA:
+    if listas_dinamicas.eh_lista_dinamica(tipo):
         return 3
     if isinstance(tipo, str) and tipo in registros:
         return sum(_palavras_tipo(t, registros) for _, t in registros[tipo])
@@ -771,9 +771,9 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     mensagens = {}
     tem_leitura = any(op[0] in ('leia_int', 'leia_indice', 'leia_indice_dinamico', 'leia_texto') for op in percorrer_instrucoes(programa.instrucoes))
     tipos = getattr(programa, 'tipos', {})
-    tem_dinamicas = any(t == listas_dinamicas.TIPO_LISTA_DINAMICA
+    tem_dinamicas = any(listas_dinamicas.eh_lista_dinamica(t)
                         for t in tipos.values()) or any(
-        t == listas_dinamicas.TIPO_LISTA_DINAMICA
+        listas_dinamicas.eh_lista_dinamica(t)
         for f in g.funcoes.values() for t in f.programa.tipos.values())
     tem_listas = tem_dinamicas or any(isinstance(t, tuple) and t[0] == 'lista' for t in tipos.values())
     tem_textos = any(isinstance(t, tuple) and t[0] == 'texto' for t in tipos.values())

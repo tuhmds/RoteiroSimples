@@ -73,7 +73,8 @@ class Expressao:
                 self.consumir('(')
                 nome = self.consumir()
                 self.consumir(')')
-                if getattr(self, 'tipos', {}).get(nome) != ('lista_dinamica', 'inteiro'):
+                if (not isinstance(getattr(self, 'tipos', {}).get(nome), tuple) or
+                        self.tipos[nome][0] != 'lista_dinamica'):
                     raise ErroCompilacao(f'Linha {self.linha}: empreste() exige lista[] com propriedade.')
                 return NoExpressao(('empreste_lista_dinamica', nome), getattr(token, 'origem', None))
             if token == 'tamanho' and self.olhar() == '(':
@@ -83,7 +84,7 @@ class Expressao:
                 tipo = getattr(self, 'tipos', {}).get(nome)
                 if isinstance(tipo, tuple) and tipo[0] == 'lista_dinamica':
                     return NoExpressao(('quantidade_lista_dinamica', nome), getattr(token, 'origem', None))
-                if tipo == ('lista_emprestada', 'inteiro'):
+                if isinstance(tipo, tuple) and tipo[0] == 'lista_emprestada':
                     return NoExpressao(('quantidade_lista_emprestada', nome), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'lista':
                     return NoExpressao(('numero', tipo[2]), getattr(token, 'origem', None))
@@ -97,7 +98,7 @@ class Expressao:
                 tipo = getattr(self, 'tipos', {}).get(nome)
                 if isinstance(tipo, tuple) and tipo[0] == 'lista_dinamica':
                     return NoExpressao(('capacidade_lista_dinamica', nome), getattr(token, 'origem', None))
-                if tipo == ('lista_emprestada', 'inteiro'):
+                if isinstance(tipo, tuple) and tipo[0] == 'lista_emprestada':
                     return NoExpressao(('capacidade_lista_emprestada', nome), getattr(token, 'origem', None))
                 if not isinstance(tipo, tuple) or tipo[0] != 'texto':
                     raise ErroCompilacao(f'Linha {self.linha}: capacidade() exige buffer de texto ou lista dinamica.')
@@ -134,7 +135,7 @@ class Expressao:
                 tipo = getattr(self, 'tipos', {}).get(token)
                 if isinstance(tipo, tuple) and tipo[0] == 'lista_dinamica':
                     return NoExpressao(('indice_lista_dinamica', token, indice), getattr(token, 'origem', None))
-                if tipo == ('lista_emprestada', 'inteiro'):
+                if isinstance(tipo, tuple) and tipo[0] == 'lista_emprestada':
                     return NoExpressao(('indice_lista_emprestada', token, indice), getattr(token, 'origem', None))
                 if not isinstance(tipo, tuple) or tipo[0] != 'lista':
                     raise ErroCompilacao(f'Linha {self.linha}: {token} não é uma lista.')

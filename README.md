@@ -67,8 +67,12 @@ inicio {
 emprestadas do contexto da chamada; a validade da lista original também é
 verificada em tempo de execução.
 
-Listas dinâmicas de elementos genéricos continuam pendentes, e a RS
-permanece experimental. Leia
+Listas dinâmicas agora aceitam `lista[inteiro]` e `lista[logico]`
+(além do legado `lista[]` como inteiro). O empréstimo preserva o tipo:
+`emprestimo[lista[logico]]`, por exemplo. Transferências entre listas
+de tipos diferentes são erros de compilação. Registros e elementos
+compostos ainda exigem implementação própria e permanecem pendentes.
+A RS permanece experimental. Leia
 [`docs/PROPRIEDADE_E_ESCOPOS_RS_0_33.md`](docs/PROPRIEDADE_E_ESCOPOS_RS_0_33.md).
 
 ## Histórico: RS 0.32 — listas dinâmicas e propriedade exclusiva
