@@ -52,6 +52,23 @@ def verificar_viva(g, variaveis, nome, windows):
     g.salto('erro_lista_liberada', 'js')
 
 
+def emprestar(g, variaveis, nome, windows):
+    """Em RAX, endereço temporário do descritor do proprietário vivo."""
+    verificar_viva(g, variaveis, nome, windows)
+    base = deslocamento(variaveis, nome, windows)
+    g.bytes(b'\x48\x8D\x85' + struct.pack('<i', base))
+
+
+def quantidade_emprestada(g, variaveis, nome, windows, capacidade=False):
+    base = deslocamento(variaveis, nome, windows)
+    g.bytes(b'\x48\x8B\x95' + struct.pack('<i', base))   # descritor em RDX
+    g.bytes(b'\x48\x8B\x42\xF8')                           # quantidade em RAX
+    g.bytes(b'\x48\x85\xC0')
+    g.salto('erro_lista_liberada', 'js')
+    if capacidade:
+        g.bytes(b'\x48\x8B\x42\xF0')                       # capacidade em RAX
+
+
 def quantidade(g, variaveis, nome, windows, capacidade=False):
     verificar_viva(g, variaveis, nome, windows)
     if capacidade:
@@ -59,23 +76,26 @@ def quantidade(g, variaveis, nome, windows, capacidade=False):
         g.bytes(b'\x48\x8B\x85' + struct.pack('<i', base-16))
 
 
-def indice(g, variaveis, nome, expressao_indice, windows, emitir_expressao):
+def indice(g, variaveis, nome, expressao_indice, windows, emitir_expressao, emprestada=False):
     """Retorna índice validado em RAX, sem ler ponteiros potencialmente nulos."""
     emitir_expressao(g, expressao_indice, variaveis, windows)
     g.bytes(b'\x48\x85\xC0')
     g.salto('erro_indice_lista', 'js')
     base = deslocamento(variaveis, nome, windows)
-    g.bytes(b'\x48\x8B\x8D' + struct.pack('<i', base-8))
+    if emprestada:
+        g.bytes(b'\x48\x8B\x95' + struct.pack('<i', base))  # rdx=descritor emprestado
+    else:
+        g.bytes(b'\x48\x8D\x95' + struct.pack('<i', base))  # rdx=descritor proprietario
+    g.bytes(b'\x48\x8B\x4A\xF8') # rcx=quantidade
     g.bytes(b'\x48\x85\xC9')
     g.salto('erro_lista_liberada', 'js')
     g.bytes(b'\x48\x39\xC8')  # cmp rax,rcx
     g.salto('erro_indice_lista', 'jge')
 
 
-def ler_indice(g, variaveis, nome, expressao_indice, windows, emitir_expressao):
-    indice(g, variaveis, nome, expressao_indice, windows, emitir_expressao)
-    base = deslocamento(variaveis, nome, windows)
-    g.bytes(b'\x48\x8B\x95' + struct.pack('<i', base))
+def ler_indice(g, variaveis, nome, expressao_indice, windows, emitir_expressao, emprestada=False):
+    indice(g, variaveis, nome, expressao_indice, windows, emitir_expressao, emprestada)
+    g.bytes(b'\x48\x8B\x12')   # rdx=[rdx]=ponteiro para os elementos
     g.bytes(b'\x48\x8B\x04\xC2')  # mov rax,[rdx+rax*8]
 
 

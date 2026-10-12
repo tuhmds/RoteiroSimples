@@ -28,3 +28,25 @@ Falhas fatais não fazem o desenrolamento das estruturas antes de encerrar
 o processo. As páginas são recuperadas pelo sistema operacional.
 Este recurso ainda não foi auditado para produção. Consulte os testes
 e o exemplo `exemplos/propriedade_escopos.rts`.
+
+## Empréstimo de leitura — primeiro incremento
+
+Uma assinatura como `funcao total(itens: emprestimo[lista]) -> inteiro`
+recebe uma referência temporária ao descritor de `lista[]` sem copiar seus
+elementos. O chamador deve escrever `total(empreste(dados))`; passar `dados`
+diretamente é um erro de tipo. O empréstimo pode ser retransmitido entre
+funções síncronas, que só podem ler elementos, comprimento e capacidade.
+
+O tipo `emprestimo[lista]` só pode aparecer em parâmetros. Não é permitido
+retorná-lo, inicializar variáveis locais com ele, reatribuir parâmetros
+emprestados, editar índices, solicitar entrada, modificar ou liberar a
+lista recebida. O empréstimo não oferece ponteiros visíveis ao programa RS,
+não é armazenável em campos nem pode sobreviver ao retorno da função.
+O compilador verifica o tipo e as restrições; o código nativo verifica
+em execução a validade da lista antes de conceder a referência e antes
+dos acessos. A origem proprietária permanece livre para continuar sendo
+utilizada pelo chamador após a função retornar.
+
+Este mecanismo cobre empréstimos imutáveis em chamadas síncronas. Não é
+um sistema geral de empréstimos mutáveis, empréstimos armazenados ou
+referências de longo prazo, nem uma auditoria completa de segurança.

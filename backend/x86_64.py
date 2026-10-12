@@ -261,6 +261,14 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
                 g.bytes(b'\x48\x83\xC4' + struct.pack('<B', limpar))
             else:
                 g.bytes(b'\x48\x81\xC4' + struct.pack('<I', limpar))
+    elif tipo == 'empreste_lista_dinamica':
+        listas_dinamicas.emprestar(g, variaveis, expr[1], windows)
+    elif tipo == 'quantidade_lista_emprestada':
+        listas_dinamicas.quantidade_emprestada(g, variaveis, expr[1], windows)
+    elif tipo == 'capacidade_lista_emprestada':
+        listas_dinamicas.quantidade_emprestada(g, variaveis, expr[1], windows, capacidade=True)
+    elif tipo == 'indice_lista_emprestada':
+        listas_dinamicas.ler_indice(g, variaveis, expr[1], expr[2], windows, expressao, emprestada=True)
     elif tipo == 'quantidade_lista_dinamica':
         listas_dinamicas.quantidade(g, variaveis, expr[1], windows)
     elif tipo == 'capacidade_lista_dinamica':

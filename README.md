@@ -36,9 +36,40 @@ inicio {
 }
 ```
 
-**Saída esperada:** `40`. Empréstimos entre funções e listas dinâmicas de
-elementos genéricos continuam pendentes; RS permanece experimental.
-Leia `docs/PROPRIEDADE_E_ESCOPOS_RS_0_33.md`.
+**Saída esperada:** `40`.
+
+### Empréstimo explícito e temporário, somente para leitura
+
+Funções podem receber `emprestimo[lista]` usando `empreste(lista)`, sem
+copiar os elementos nem adquirir a propriedade. Na função, são permitidas
+consultas por índice, `tamanho` e `capacidade`. O empréstimo pode ser
+repassado a outra função, mas nunca retornado, guardado em outra variável,
+reatribuído ou utilizado para alterar/liberar a lista.
+
+```text
+funcao total(valores: emprestimo[lista]) -> inteiro {
+    seja soma = 0
+    para i de 0 ate tamanho(valores) - 1 {
+        soma = soma + valores[i]
+    }
+    retorne soma
+}
+inicio {
+    seja vendas: lista[]
+    adicione(vendas, 12)
+    adicione(vendas, 18)
+    escreva(total(empreste(vendas)))
+    escreva(vendas[0])
+}
+```
+
+**Saída esperada:** `30` e `12`. O compilador impede a saída de referências
+emprestadas do contexto da chamada; a validade da lista original também é
+verificada em tempo de execução.
+
+Listas dinâmicas de elementos genéricos continuam pendentes, e a RS
+permanece experimental. Leia
+[`docs/PROPRIEDADE_E_ESCOPOS_RS_0_33.md`](docs/PROPRIEDADE_E_ESCOPOS_RS_0_33.md).
 
 ## Histórico: RS 0.32 — listas dinâmicas e propriedade exclusiva
 
@@ -452,7 +483,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**RS 0.33 (validação em andamento):** `mova` e liberação por escopo implementados. Empréstimos seguros, elementos genéricos em listas dinâmicas, textos dinâmicos e dados compostos ficam para incrementos seguintes.
+**RS 0.33 (validação em andamento):** `mova`, liberação por escopo e empréstimos explícitos de leitura implementados. Listas dinâmicas de outros tipos, textos dinâmicos e estruturas compostas permanecem em planejamento.
 
 O projeto ainda é experimental, não pronto para produção. Não estamos acrescentando níveis de otimização.
 

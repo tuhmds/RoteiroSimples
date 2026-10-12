@@ -1,0 +1,17 @@
+// RS 0.33: leitura de lista sem copiar nem transferir os dados.
+funcao somar(valores: emprestimo[lista]) -> inteiro {
+    seja total = 0
+    para i de 0 ate tamanho(valores) - 1 {
+        total = total + valores[i]
+    }
+    retorne total
+}
+
+inicio {
+    seja despesas: lista[]
+    adicione(despesas, 15)
+    adicione(despesas, 25)
+    adicione(despesas, 10)
+    escreva(somar(empreste(despesas)))
+    escreva(tamanho(despesas))
+}

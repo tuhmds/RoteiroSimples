@@ -286,5 +286,174 @@ class TestesListasDinamicas(unittest.TestCase):
         r = executar(fonte)
         self.assertEqual((r.returncode, r.stdout), (0, '41\n'), r.stderr)
 
+
+    def test_rs033_emprestimo_leitura_e_ausencia_de_copia(self):
+        fonte = """funcao total(valores: emprestimo[lista]) -> inteiro {
+            seja soma = 0
+            para i de 0 ate tamanho(valores) - 1 {
+                soma = soma + valores[i]
+            }
+            retorne soma
+        }
+        inicio {
+            seja vendas: lista[]
+            adicione(vendas, 8)
+            adicione(vendas, 13)
+            adicione(vendas, 21)
+            escreva(total(empreste(vendas)))
+            escreva(vendas[2])
+            escreva(tamanho(vendas))
+        }"""
+        r = executar(fonte)
+        self.assertEqual((r.returncode, r.stdout), (0, '42\n21\n3\n'), r.stderr)
+
+    def test_rs033_emprestimo_aninhado_e_indice_variavel(self):
+        fonte = """funcao ultimo(dados: emprestimo[lista]) -> inteiro {
+            retorne dados[tamanho(dados) - 1]
+        }
+        funcao descrever(dados: emprestimo[lista]) -> inteiro {
+            retorne ultimo(dados) + capacidade(dados)
+        }
+        inicio {
+            seja numeros: lista[]
+            adicione(numeros, 5)
+            adicione(numeros, 7)
+            escreva(descrever(empreste(numeros)))
+            escreva(numeros[0])
+        }"""
+        r = executar(fonte)
+        self.assertEqual((r.returncode, r.stdout), (0, '11\n5\n'), r.stderr)
+
+    def test_rs033_emprestimo_de_lista_local_em_laco(self):
+        fonte = """funcao dobrar(dados: emprestimo[lista]) -> inteiro {
+            retorne dados[0] * 2
+        }
+        inicio {
+            para i de 1 ate 3 {
+                seja temporaria: lista[]
+                adicione(temporaria, i)
+                escreva(dobrar(empreste(temporaria)))
+            }
+        }"""
+        r = executar(fonte)
+        self.assertEqual((r.returncode, r.stdout), (0, '2\n4\n6\n'), r.stderr)
+
+    def test_rs033_emprestimo_de_origem_movida_rejeitado_na_execucao(self):
+        fonte = """funcao primeiro(dados: emprestimo[lista]) -> inteiro {
+            retorne dados[0]
+        }
+        inicio {
+            seja fonte: lista[]
+            seja destino: lista[]
+            adicione(fonte, 19)
+            mova(destino, fonte)
+            escreva(primeiro(empreste(fonte)))
+        }"""
+        r = executar(fonte)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('liber', (r.stderr + r.stdout).lower())
+
+    def test_rs033_indice_invalido_de_emprestimo(self):
+        fonte = """funcao consultar(dados: emprestimo[lista]) -> inteiro {
+            retorne dados[2]
+        }
+        inicio {
+            seja numeros: lista[]
+            adicione(numeros, 5)
+            escreva(consultar(empreste(numeros)))
+        }"""
+        r = executar(fonte)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('indice', (r.stderr + r.stdout).lower().replace('í','i'))
+
+    def test_rs033_emprestimos_rejeitados_na_compilacao(self):
+        casos = [
+            # Proibir passagem de lista proprietária sem empréstimo explícito.
+            """funcao contar(dados: emprestimo[lista]) -> inteiro {
+                retorne tamanho(dados)
+            }
+            inicio {
+                seja numeros: lista[]
+                escreva(contar(numeros))
+            }""",
+            # Não pode transformar empréstimo em proprietário.
+            """funcao f(dados: emprestimo[lista]) -> inteiro {
+                adicione(dados, 10)
+                retorne 0
+            }
+            inicio { escreva(1) }""",
+            """funcao f(dados: emprestimo[lista]) -> inteiro {
+                remova_ultimo(dados)
+                retorne 0
+            }
+            inicio { escreva(1) }""",
+            """funcao f(dados: emprestimo[lista]) -> inteiro {
+                libere(dados)
+                retorne 0
+            }
+            inicio { escreva(1) }""",
+            """funcao f(dados: emprestimo[lista]) -> inteiro {
+                mova(dados, dados)
+                retorne 0
+            }
+            inicio { escreva(1) }""",
+            """funcao f(dados: emprestimo[lista]) -> inteiro {
+                leia(dados[0])
+                retorne 0
+            }
+            inicio { escreva(1) }""",
+            """funcao f(dados: emprestimo[lista]) -> inteiro {
+                dados[0] = 8
+                retorne 0
+            }
+            inicio { escreva(1) }""",
+            """funcao f(dados: emprestimo[lista]) -> inteiro {
+                seja ref = dados
+                retorne 0
+            }
+            inicio { escreva(1) }""",
+            """funcao f(dados: emprestimo[lista]) -> inteiro {
+                dados = dados
+                retorne 0
+            }
+            inicio { escreva(1) }""",
+            """funcao f(dados: emprestimo[lista]) -> emprestimo[lista] {
+                retorne dados
+            }
+            inicio { escreva(1) }""",
+            """inicio {
+                seja numeros: lista[]
+                seja alias = empreste(numeros)
+            }""",
+            """inicio {
+                seja numeros: lista[]
+                escreva(empreste(numeros))
+            }""",
+            """inicio {
+                seja numeros: lista[]
+                escreva(empreste(numeros) == empreste(numeros))
+            }""",
+            """inicio {
+                seja fixa: lista[1]
+                escreva(empreste(fixa))
+            }""",
+        ]
+        for fonte in casos:
+            with self.subTest(fonte=fonte):
+                with self.assertRaises(ErroCompilacao):
+                    analisar_programa(fonte)
+
+    def test_rs033_emprestimo_multiplos_argumentos(self):
+        fonte = """funcao somar(a: inteiro, dados: emprestimo[lista], b: inteiro) -> inteiro {
+            retorne a + dados[0] + b
+        }
+        inicio {
+            seja valores: lista[]
+            adicione(valores, 9)
+            escreva(somar(5, empreste(valores), 7))
+        }"""
+        r = executar(fonte)
+        self.assertEqual((r.returncode, r.stdout), (0, '21\n'), r.stderr)
+
 if __name__ == '__main__':
     unittest.main()

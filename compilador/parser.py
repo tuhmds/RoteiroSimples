@@ -42,7 +42,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if len(cab) != 3 or cab[2] != '{' or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', cab[1]):
                 raise ErroCompilacao(f'Linha {n}: use tipo Nome {{.')
             nome_tipo = str(cab[1])
-            if nome_tipo in registros or nome_tipo in ('inteiro', 'logico', 'texto', 'lista', 'seja', 'se', 'senao', 'inicio', 'funcao', 'retorne', 'para', 'enquanto', 'tipo', 'leia', 'escreva') or nome_tipo.startswith('__rs_'):
+            if nome_tipo in registros or nome_tipo in ('inteiro', 'logico', 'texto', 'lista', 'emprestimo', 'empreste', 'seja', 'se', 'senao', 'inicio', 'funcao', 'retorne', 'para', 'enquanto', 'tipo', 'leia', 'escreva') or nome_tipo.startswith('__rs_'):
                 raise ErroCompilacao(f'Linha {n}: nome de tipo duplicado ou reservado.')
             campos = []
             while linhas and linhas[0][1] != ['}']:
@@ -79,6 +79,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             nome = str(partes[0])
             if nome in ('inteiro', 'logico') or nome in registros:
                 return nome
+        if len(partes) == 4 and partes == ['emprestimo', '[', 'lista', ']']:
+            return ('lista_emprestada', 'inteiro')
         if len(partes) == 4 and partes[1] == '[' and partes[3] == ']':
             categoria = str(partes[0])
             valor = str(partes[2])
@@ -100,12 +102,14 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if len(cabecalho) < 8 or cabecalho[2] != '(' or ')' not in cabecalho:
                 raise ErroCompilacao(f'Linha {n}: cabeçalho de função inválido.')
             nome = str(cabecalho[1])
-            if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', nome) or nome in ('inicio', 'seja', 'funcao', 'retorne'):
+            if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', nome) or nome in ('inicio', 'seja', 'funcao', 'retorne', 'empreste', 'emprestimo'):
                 raise ErroCompilacao(f'Linha {n}: nome de função inválido.')
             fim_par = cabecalho.index(')', 3)
             if cabecalho[fim_par+1:fim_par+3] != ['-', '>'] or cabecalho[-1] != '{':
                 raise ErroCompilacao(f'Linha {n}: use funcao nome(parametros) -> tipo {{.')
             retorno = ler_tipo(cabecalho[fim_par+3:-1], n)
+            if retorno == ('lista_emprestada', 'inteiro'):
+                raise ErroCompilacao(f'Linha {n}: emprestimo[lista] so pode aparecer em parametros; nao pode ser retornado.')
             partes = cabecalho[3:fim_par]
             parametros = []
             if partes:
@@ -140,7 +144,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     contexto = _contexto or ContextoSemantico(importa, assinaturas, registros)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'capacidade', 'copie', 'junte', 'limpe', 'funcao', 'retorne', 'tipo'}
+    reservadas = {'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'capacidade', 'copie', 'junte', 'limpe', 'funcao', 'retorne', 'tipo'}
 
     def indice_lista(partes, linha):
         if '[' not in partes or partes[-1] != ']':
@@ -148,6 +152,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
         posicao = partes.index('[')
         nome = contexto.resolver_caminho(partes[:posicao], linha)
         tipo = tipos.get(nome)
+        if tipo == ('lista_emprestada', 'inteiro'):
+            raise ErroCompilacao(f'Linha {linha}: emprestimo[lista] permite somente leitura; nao pode ser alterado.')
         if not isinstance(tipo, tuple) or tipo[0] not in ('lista', 'lista_dinamica'):
             raise ErroCompilacao(f'Linha {linha}: caminho não aponta para uma lista.')
         indice, _ = expressao_tipada(partes[posicao+1:-1], linha, 'inteiro')
@@ -360,6 +366,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f'Linha {n}: nome de variável inválido.')
                 if contexto.declarado_neste_escopo(str(nome)) or nome in reservadas:
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' duplicada ou reservada.")
+                if len(t) >= 4 and t[2:4] == [':', 'emprestimo']:
+                    raise ErroCompilacao(f'Linha {n}: emprestimo[lista] so e permitido como parametro de funcao.')
                 if len(t) == 6 and t[2:] == [':', 'lista', '[', ']']:
                     interno = registrar(str(nome), ('lista_dinamica', 'inteiro'), n)
                     donos_locais.append(interno)
@@ -429,6 +437,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f"Linha {n}: use 'seja nome = valor' ou 'seja nome: inteiro = valor'.")
                 if inferido == ('lista_dinamica', 'inteiro'):
                     raise ErroCompilacao(f'Linha {n}: lista[] tem dono unico; copiar ou inferir propriedade nao e permitido.')
+                if inferido == ('lista_emprestada', 'inteiro'):
+                    raise ErroCompilacao(f'Linha {n}: emprestimo[lista] nao pode ser armazenado em variavel local.')
                 tipo_armazenado = ('registro', inferido, registros[inferido]) if isinstance(inferido, str) and inferido in registros else inferido
                 interno = registrar(str(nome), tipo_armazenado, n)
                 if eh_composto(inferido):
@@ -465,6 +475,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' não foi declarada.")
                 if tipos[nome] == ('lista_dinamica', 'inteiro'):
                     raise ErroCompilacao(f'Linha {n}: lista[] possui dono unico e nao admite atribuicao.')
+                if tipos[nome] == ('lista_emprestada', 'inteiro'):
+                    raise ErroCompilacao(f'Linha {n}: parametro emprestimo[lista] nao pode ser reatribuido.')
                 esperado = tipos[nome][1] if isinstance(tipos[nome], tuple) and tipos[nome][0] == 'registro' else tipos[nome]
                 arvore, _ = expressao_tipada(t[2:], n, esperado)
                 if eh_composto(tipos[nome]):

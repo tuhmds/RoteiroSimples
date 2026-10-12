@@ -33,6 +33,21 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
         # Listas e textos são valores compostos; o contexto da operação
         # decide se podem ser usados (não participam da aritmética).
         return tipo
+    if categoria == 'empreste_lista_dinamica':
+        if tipos.get(expr[1]) != ('lista_dinamica', 'inteiro'):
+            raise ErroCompilacao(f'Linha {linha}: empreste() exige lista[] com propriedade.')
+        return ('lista_emprestada', 'inteiro')
+    if categoria in ('quantidade_lista_emprestada', 'capacidade_lista_emprestada'):
+        if tipos.get(expr[1]) != ('lista_emprestada', 'inteiro'):
+            raise ErroCompilacao(f'Linha {linha}: consulta exige emprestimo[lista].')
+        return 'inteiro'
+    if categoria == 'indice_lista_emprestada':
+        nome, indice = expr[1:]
+        if tipos.get(nome) != ('lista_emprestada', 'inteiro'):
+            raise ErroCompilacao(f'Linha {linha}: indice exige emprestimo[lista].')
+        if tipo_expressao(indice, tipos, linha, funcoes) != 'inteiro':
+            raise ErroCompilacao(f'Linha {linha}: indice da lista emprestada deve ser inteiro.')
+        return 'inteiro'
     if categoria in ('quantidade_lista_dinamica', 'capacidade_lista_dinamica'):
         if tipos.get(expr[1]) != ('lista_dinamica', 'inteiro'):
             raise ErroCompilacao(f'Linha {linha}: operação exige uma lista dinamica valida.')
@@ -71,6 +86,8 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
             if a != 'inteiro' or b != 'inteiro':
                 raise ErroCompilacao(f'Linha {linha}: operação {op} exige dois inteiros; recebeu {a} e {b}.')
             return 'inteiro'
+        if a == ('lista_emprestada', 'inteiro') or b == ('lista_emprestada', 'inteiro'):
+            raise ErroCompilacao(f'Linha {linha}: emprestimos nao podem ser comparados diretamente.')
         if op in ('==', '!='):
             if a != b:
                 raise ErroCompilacao(f'Linha {linha}: comparação {op} exige tipos iguais; recebeu {a} e {b}.')
