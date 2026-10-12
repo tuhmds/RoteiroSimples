@@ -1,0 +1,18 @@
+inicio {
+    seja nome: texto[64]
+    seja primeiro: inteiro = 0
+    seja valores: lista[2]
+
+    escreva("RS 0.19 - entrada nativa bufferizada")
+    escreva("Digite seu nome:")
+    leia(nome)
+    escreva("Digite um numero inteiro:")
+    leia(primeiro)
+    escreva("Digite outro numero inteiro:")
+    leia(valores[0])
+
+    escreva("Ola!")
+    escreva(nome)
+    escreva("Soma dos numeros:")
+    escreva(primeiro + valores[0])
+}

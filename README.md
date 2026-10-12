@@ -1,8 +1,28 @@
-# RoteiroSimples (RS) — versão experimental 0.18
+# RoteiroSimples (RS) — versão experimental 0.19
 
 Linguagem experimental em português brasileiro, com compilador em Python 3.10+ que **gera diretamente instruções de máquina x86-64**, em executáveis ELF64 (Linux) e PE32+ (Windows). Os programas gerados não dependem do Python para executar. **Não usar em produção.**
 
-## Novo na RS 0.18 — buffers UTF-8 com comprimento e capacidade
+## Novo na RS 0.19 — leitura bufferizada e efeitos de memória
+
+- **I/O nativa em blocos:** `leia` agora usa um cache único de **1.024 bytes**
+  para inteiros, elementos de listas e textos UTF-8. Leituras consecutivas
+  reaproveitam corretamente os bytes já recebidos por pipe ou console.
+- **Proteções preservadas:** índices, capacidade dos buffers, UTF-8 e
+  limites numéricos continuam verificados. A pilha mantém o orçamento
+  provisório conservador até implementarmos sondagem de páginas Windows.
+- **Efeitos da IR:** `compilador/efeitos.py` identifica leituras/escritas,
+  entrada e saída e possíveis falhas, inclusive dentro de laços e decisões.
+  Use `--mostrar-efeitos` e `--salvar-efeitos efeitos.json`.
+- **Não é ainda Memory SSA:** não aplicamos movimentação/eliminações de
+  operações de memória. Listas e textos continuam com backend de pilha em
+  qualquer nível de otimização.
+- **Compatibilidade:** programas antigos que não usam `leia` preservam seus
+  executáveis; os que usam leitura ganham outra implementação nativa.
+
+[Detalhes técnicos e medição](docs/ENTRADA_E_EFEITOS_RS_0_19.md).
+Exemplo: `exemplos/entrada_bufferizada.rts`.
+
+## Incluído na RS 0.18 — buffers UTF-8 com comprimento e capacidade
 
 `texto[N]` reserva **N bytes** de dados na pilha e um comprimento de 64 bits. Sem ponteiros brutos, sem terminador NUL obrigatório e sem truncamento silencioso:
 
@@ -24,7 +44,7 @@ inicio {
 
 `copie` e `junte` aceitam literais ou outro buffer. `limpe` zera o comprimento lógico; `leia` lê uma linha do teclado e **verifica UTF-8 e capacidade**. `tamanho` retorna **bytes ocupados**, e `capacidade` retorna bytes reservados: `á` ocupa dois bytes, `🌎` ocupa quatro. Excesso de capacidade ou UTF-8 inválido provoca erro e saída `1`. Buffers não podem ser usados diretamente em contas ou como ponteiros.
 
-A memória continua na pilha, com orçamento total conservador de 256 slots de 8 bytes (inclui listas, buffers e suas informações de comprimento); capacidades individuais vão de 1 a 2040 bytes, respeitando esse orçamento. Programas com buffers ou listas usam o backend seguro de pilha em qualquer nível `-O 0..6`; CFG/SSA ainda não considera efeitos da memória estruturada. A entrada de texto ainda faz leitura **byte a byte** e pode ser lenta.
+A memória continua na pilha, com orçamento total conservador de 256 slots de 8 bytes (inclui listas, buffers e suas informações de comprimento); capacidades individuais vão de 1 a 2040 bytes, respeitando esse orçamento. Programas com buffers ou listas usam o backend seguro de pilha em qualquer nível `-O 0..6`; CFG/SSA ainda não considera efeitos da memória estruturada. Desde a RS 0.19, a entrada usa um cache compartilhado de 1.024 bytes.
 
 **Ainda não há** empréstimos/referências, ponteiros, heap, slices, strings dinâmicas ou garantia de que uma escrita parcial de sistema seja refeita. As regras de propriedade, empréstimo compartilhado e mutável, aliasing e tempo de vida são apenas uma especificação futura. Consulte [buffers e plano de referências](docs/MEMORIA_TEXTO_RS_0_18.md).
 

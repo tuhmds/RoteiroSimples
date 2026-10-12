@@ -5,10 +5,10 @@ cd /d "%~dp0"
 :MENU
 cls
 echo ==============================================
-echo         RoteiroSimples RS 0.18
+echo         RoteiroSimples RS 0.19
 echo ==============================================
 echo.
-echo  [1] Compilar e executar exemplo de texto UTF-8 (-O 6)
+echo  [1] Compilar e executar exemplo de entrada bufferizada (-O 6)
 echo  [2] Editar o exemplo no Bloco de Notas
 echo  [3] Rodar testes automatizados
  echo  [4] Executar o ultimo .exe gerado
@@ -18,9 +18,11 @@ echo  [3] Rodar testes automatizados
  echo  [8] Mostrar plano de copias phi por aresta
  echo  [9] Ver alocacao de registradores e pilha
  echo  [A] Benchmark de velocidade -O 3, -O 4, -O 5 e -O 6
+echo  [B] Mostrar efeitos de memoria e E/S
 echo  [0] Sair
  echo.
-choice /c 1234567890A /n /m "Escolha uma opcao: "
+choice /c 1234567890AB /n /m "Escolha uma opcao: "
+if errorlevel 12 goto EFEITOS
 if errorlevel 11 goto BENCHMARK
 if errorlevel 10 goto FIM
 if errorlevel 9 goto ALOCACAO
@@ -36,7 +38,7 @@ if errorlevel 1 goto COMPILAR
 call "%~dp0COMPILAR_WINDOWS.bat"
 goto MENU
 :EDITAR
-notepad "%~dp0exemplos\buffers.rts"
+notepad "%~dp0exemplos\entrada_bufferizada.rts"
 goto MENU
 :TESTES
 py -3 -m unittest discover -s testes -v
@@ -84,6 +86,11 @@ goto MENU
 :BENCHMARK
 py -3 benchmarks\medir.py --repeticoes 7 --json resultados.json
 if errorlevel 1 echo Nao foi possivel concluir o benchmark.
+pause
+goto MENU
+:EFEITOS
+py -3 compilar.py exemplos\entrada_bufferizada.rts --alvo windows -O 6 --mostrar-efeitos --salvar-efeitos efeitos.json -o roteiro_windows.exe
+if errorlevel 1 echo Falha ao mostrar efeitos da IR.
 pause
 goto MENU
 :FIM

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.18: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.19: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import re
@@ -11,12 +11,14 @@ from backend import compilar
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.18')
+    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.19')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--alvo', choices=['windows', 'linux'], default='windows')
     parser.add_argument('-o', '--saida', type=Path, help='arquivo executável de saída')
     parser.add_argument('-O', '--otimizacao', choices=['0', '1', '2', '3', '4', '5', '6'], default='1', help='otimização (0 = sem, 1 = constantes, 2 = propagação local, 3 = SSA, 4 = SSA nativa, 5 = layout, 6 = coalescencia e saltos curtos)' )
     parser.add_argument('--mostrar-ir', action='store_true', help='mostra a IR tipada antes de gerar código')
+    parser.add_argument('--mostrar-efeitos', action='store_true', help='exibe leituras/escritas de memoria, E/S e falhas por instrucao')
+    parser.add_argument('--salvar-efeitos', type=Path, help='salva a analise de efeitos em JSON')
     parser.add_argument('--mostrar-ast', action='store_true', help='mostra a AST com linha e coluna')
     parser.add_argument('--mostrar-fluxo', action='store_true', help='mostra análise de dados por bloco')
     parser.add_argument('--salvar-fluxo', type=Path, help='salva análise em JSON')
@@ -41,6 +43,15 @@ def main(argv=None):
                 or op.salvar_fluxo or op.mostrar_ssa or op.salvar_ssa
                 or op.mostrar_copias_phi or op.mostrar_alocacao):
             raise ErroCompilacao('A análise CFG/SSA com listas ou textos ainda não está disponível nesta versão.')
+        if op.mostrar_efeitos or op.salvar_efeitos:
+            from compilador.ir import construir_ir
+            from compilador.efeitos import formatar_efeitos, efeitos_para_json
+            ir_efeitos = construir_ir(programa, otimizar=nivel > 0, nivel=nivel)
+            if op.mostrar_efeitos:
+                print(formatar_efeitos(ir_efeitos))
+            if op.salvar_efeitos:
+                op.salvar_efeitos.write_text(efeitos_para_json(ir_efeitos), encoding='utf-8')
+                print(f'Efeitos salvos em: {op.salvar_efeitos}')
         if op.mostrar_ir:
             from compilador.ir import construir_ir, formatar_ir
             print(formatar_ir(construir_ir(programa, otimizar=nivel > 0, nivel=nivel)))

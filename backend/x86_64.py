@@ -280,12 +280,88 @@ def percorrer_instrucoes(instrucoes):
             yield from percorrer_instrucoes(op[5])
 
 
+
+TAMANHO_CACHE_ENTRADA = 1024
+
+
+def _offsets_cache_entrada(slots, windows):
+    # All offsets are relative to the main frame pointer (RBP); never to a
+    # short-lived helper frame. In Windows [rbp-8] stores the saved RBX.
+    base = -(16 + slots * 8) if windows else -(8 + slots * 8)
+    return base, base - 8, base - 8 - TAMANHO_CACHE_ENTRADA
+
+
+def emitir_cache_entrada(g, windows, slots):
+    """Yield one buffered byte in R10b; RAX=1 byte, 0 EOF, -1 I/O error.
+
+    Persistent state belongs to the program's stack frame. Reads are shared
+    between leia(inteiro), leia(lista[indice]) and leia(texto), so bytes fetched
+    after a newline are retained for later calls. The helper preserves RSI.
+    """
+    cursor, quantidade, buffer = _offsets_cache_entrada(slots, windows)
+    g.marcar('entrada_proximo_byte')
+    g.bytes(b'\x56')  # push rsi: preserve pointer to caller's UTF-8 buffer
+    g.bytes(b'\x48\x8B\x85' + struct.pack('<i', cursor))
+    g.bytes(b'\x48\x3B\x85' + struct.pack('<i', quantidade))
+    g.salto('entrada_tem_byte', 'jb')
+    if windows:
+        # Entering helper: rsp%16=8; push rsi -> aligned, 0x30 keeps it.
+        # shadow space [rsp+0..0x1f], overlapped NULL at +0x20,
+        # bytes-read DWORD at +0x28.
+        g.bytes(b'\x48\x83\xEC\x30')
+        g.bytes(b'\x4C\x89\xE1')  # rcx = R12 = handle stdin
+        g.bytes(b'\x48\x8D\x95' + struct.pack('<i', buffer))  # rdx = buffer
+        g.bytes(b'\x41\xB8' + struct.pack('<I', TAMANHO_CACHE_ENTRADA))
+        g.bytes(b'\x4C\x8D\x4C\x24\x28')  # r9= &nread
+        g.bytes(b'\x48\xC7\x44\x24\x20\x00\x00\x00\x00')
+        g.relativo(b'\xFF\x15', 'ReadFile')
+        g.bytes(b'\x85\xC0')
+        g.salto('entrada_windows_ok', 'jnz')
+        g.relativo(b'\xFF\x15', 'GetLastError')
+        g.bytes(b'\x83\xF8\x6D')  # ERROR_BROKEN_PIPE (109)
+        g.salto('entrada_windows_eof', 'je')
+        g.bytes(b'\x83\xF8\x26')  # ERROR_HANDLE_EOF (38)
+        g.salto('entrada_windows_eof', 'je')
+        g.bytes(b'\x48\x83\xC4\x30')
+        g.salto('entrada_falha')
+        g.marcar('entrada_windows_eof')
+        g.bytes(b'\x48\x83\xC4\x30')
+        g.salto('entrada_eof')
+        g.marcar('entrada_windows_ok')
+        g.bytes(b'\x8B\x44\x24\x28') # eax=nread
+        g.bytes(b'\x48\x83\xC4\x30')
+    else:
+        g.bytes(b'\x31\xC0\x31\xFF')  # read fd0
+        g.bytes(b'\x48\x8D\xB5' + struct.pack('<i', buffer))
+        g.bytes(b'\xBA' + struct.pack('<I', TAMANHO_CACHE_ENTRADA))
+        g.bytes(b'\x0F\x05')
+        g.bytes(b'\x48\x85\xC0')
+        g.salto('entrada_falha', 'js')
+    g.bytes(b'\x48\x85\xC0')
+    g.salto('entrada_eof', 'jz')
+    g.bytes(b'\x48\x89\x85' + struct.pack('<i', quantidade))
+    g.bytes(b'\x48\xC7\x85' + struct.pack('<i', cursor) + b'\x00\x00\x00\x00')
+    g.marcar('entrada_tem_byte')
+    g.bytes(b'\x48\x8B\x85' + struct.pack('<i', cursor))
+    g.bytes(b'\x44\x0F\xB6\x94\x05' + struct.pack('<i', buffer))  # movzx r10d,[rbp+rax+buffer]
+    g.bytes(b'\x48\xFF\xC0')  # inc rax
+    g.bytes(b'\x48\x89\x85' + struct.pack('<i', cursor))
+    g.bytes(b'\xB8\x01\x00\x00\x00')
+    g.salto('entrada_retorno')
+    g.marcar('entrada_eof')
+    g.bytes(b'\x31\xC0')
+    g.salto('entrada_retorno')
+    g.marcar('entrada_falha')
+    g.bytes(b'\x48\xC7\xC0\xFF\xFF\xFF\xFF')
+    g.marcar('entrada_retorno')
+    g.bytes(b'\x5E\xC3')  # pop rsi; ret
+
 def ler_inteiro(g, windows):
     """Leitura de um inteiro ASCII com sinal em stdin, sem alocacao dinamica.
 
     Aceita espacos antes/depois, sinal opcional, CRLF ou LF e EOF depois
     de digitos. Falhas de IO, entrada vazia, letra e overflow terminam em 1.
-    A rotina le um byte por vez: correta, mas ainda nao otimizada.
+    Usa cache compartilhado de stdin em blocos de 1024 bytes.
     """
     g.marcar('ler_inteiro')
     # Windows: registradores r13-r15 sao callee-saved; Linux tambem.
@@ -294,34 +370,10 @@ def ler_inteiro(g, windows):
     g.bytes(b'\x45\x31\xED\x45\x31\xF6\x45\x31\xFF')  # xor r13d, r14d, r15d
     # r13 = magnitude, r14d = estado (0 inicio,1 sinal,2 digitos,3 sufixo), r15d = negativo
     g.marcar('leia_proximo_byte')
-    if windows:
-        g.bytes(b'\x4C\x89\xE1')  # mov rcx,r12 (stdin)
-        g.bytes(b'\x48\x8D\x54\x24\x30')  # lea rdx,[rsp+0x30] buffer
-        g.bytes(b'\x41\xB8\x01\x00\x00\x00')  # mov r8d,1
-        g.bytes(b'\x4C\x8D\x4C\x24\x38')  # lea r9,[rsp+0x38] qtd
-        g.bytes(b'\xC7\x44\x24\x20\x00\x00\x00\x00')  # overlapped NULL
-        g.relativo(b'\xFF\x15', 'ReadFile')
-        g.bytes(b'\x85\xC0')
-        g.salto('leia_lida', 'jnz')
-        # Pipes fechados retornam FALSE + ERROR_BROKEN_PIPE (109), que e EOF.
-        g.relativo(b'\xFF\x15', 'GetLastError')
-        g.bytes(b'\x83\xF8\x6D')  # cmp eax,109
-        g.salto('leia_fim_entrada', 'jz')
-        g.bytes(b'\x83\xF8\x26')  # cmp eax,38 (ERROR_HANDLE_EOF)
-        g.salto('leia_fim_entrada', 'jz')
-        g.salto('erro_entrada_invalida')
-        g.marcar('leia_lida')
-        g.bytes(b'\x8B\x44\x24\x38\x85\xC0')  # bytes lidos
-        g.salto('leia_fim_entrada', 'jz')
-        g.bytes(b'\x44\x8A\x54\x24\x30')  # r10b = byte
-    else:
-        g.bytes(b'\x31\xC0\x31\xFF')  # sys_read=0, fd=0
-        g.bytes(b'\x48\x89\xE6')  # rsi = rsp (1-byte buffer)
-        g.bytes(b'\xBA\x01\x00\x00\x00\x0F\x05')  # edx=1; syscall
-        g.bytes(b'\x48\x85\xC0')
-        g.salto('erro_entrada_invalida', 'js')
-        g.salto('leia_fim_entrada', 'jz')
-        g.bytes(b'\x44\x8A\x14\x24')  # r10b=[rsp]
+    g.chamada('entrada_proximo_byte')
+    g.bytes(b'\x85\xC0')  # test eax,eax: 1 byte, 0 EOF, -1 I/O error
+    g.salto('erro_entrada_invalida', 'js')
+    g.salto('leia_fim_entrada', 'jz')
 
     g.bytes(b'\x41\x80\xFA\x0A')  # LF = fim de linha
     g.salto('leia_fim_entrada', 'jz')
@@ -464,35 +516,11 @@ def ler_buffer_texto(g, windows):
     g.bytes(b'\x45\x31\xED\x45\x31\xF6\x45\x31\xFF')
     # r13=count, r14=continuation bytes remaining, r15=first continuation constraint
     g.marcar('texto_ler_byte')
-    if windows:
-        g.bytes(b'\x4C\x89\xE1')  # rcx=handle stdin
-        g.bytes(b'\x48\x8D\x54\x24\x30') # rdx=single byte ptr
-        g.bytes(b'\x41\xB8\x01\x00\x00\x00') # n=1
-        g.bytes(b'\x4C\x8D\x4C\x24\x38') # &nread
-        g.bytes(b'\xC7\x44\x24\x20\x00\x00\x00\x00')
-        g.relativo(b'\xFF\x15', 'ReadFile')
-        g.bytes(b'\x85\xC0')
-        g.salto('texto_leitura_ok', 'jnz')
-        g.relativo(b'\xFF\x15', 'GetLastError')
-        g.bytes(b'\x83\xF8\x6D') # 109 broken pipe
-        g.salto('texto_concluir', 'jz')
-        g.bytes(b'\x83\xF8\x26') # 38 EOF
-        g.salto('texto_concluir', 'jz')
-        g.salto('erro_texto_entrada')
-        g.marcar('texto_leitura_ok')
-        g.bytes(b'\x8B\x44\x24\x38\x85\xC0')
-        g.salto('texto_concluir', 'jz')
-        g.bytes(b'\x44\x8A\x54\x24\x30')
-    else:
-        g.bytes(b'\x31\xC0\x31\xFF') # read fd=0
-        g.bytes(b'\x48\x89\xE6') # ponteiro temporario da leitura (RSP)
-        g.bytes(b'\xBA\x01\x00\x00\x00\x0F\x05')
-        # A leitura usa [rsp]; o ponteiro de destino foi salvo em [rsp+8].
-        g.bytes(b'\x48\x8B\x74\x24\x08')
-        g.bytes(b'\x48\x85\xC0')
-        g.salto('erro_texto_entrada', 'js')
-        g.salto('texto_concluir', 'jz')
-        g.bytes(b'\x44\x8A\x14\x24')
+    g.chamada('entrada_proximo_byte')
+    g.bytes(b'\x85\xC0')
+    g.salto('erro_texto_entrada', 'js')
+    g.salto('texto_concluir', 'jz')
+
     g.bytes(b'\x41\x80\xFA\x0A') # byte == LF
     g.salto('texto_concluir', 'jz')
     g.bytes(b'\x45\x85\xF6') # r14>0?
@@ -582,9 +610,10 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     tem_textos = any(isinstance(t, tuple) and t[0] == 'texto' for t in tipos.values())
     tem_leitura_texto = any(op[0] == 'leia_texto' for op in percorrer_instrucoes(programa.instrucoes))
     slots = _total_slots(programa)
+    memoria_cache = (TAMANHO_CACHE_ENTRADA + 16) if tem_leitura else 0
     if windows:
         n = slots
-        frame = ((8 * n + 0x38 + 15) // 16) * 16 + 8
+        frame = ((8 * n + memoria_cache + 0x38 + 15) // 16) * 16 + 8
         g.bytes(b'\x55\x48\x89\xE5\x53')  # push rbp; mov rbp,rsp; push rbx
         g.bytes(b'\x48\x81\xEC' + struct.pack('<I', frame))
         g.bytes(b'\xB9' + struct.pack('<I', 65001))
@@ -600,10 +629,16 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             g.relativo(b'\xFF\x15', 'GetStdHandle')
             g.bytes(b'\x49\x89\xC4')  # R12 = stdin handle
     else:
-        frame = alinhar(slots * 8, 16)
+        frame = alinhar(slots * 8 + memoria_cache, 16)
         g.bytes(b'\x55\x48\x89\xE5')
         if frame:
             g.bytes(b'\x48\x81\xEC' + struct.pack('<I', frame))
+
+    if tem_leitura:
+        offset_cursor, offset_quantidade, _ = _offsets_cache_entrada(slots, windows)
+        g.bytes(b'\x31\xC0')
+        for offset in (offset_cursor, offset_quantidade):
+            g.bytes(b'\x48\x89\x85' + struct.pack('<i', offset))
 
     def emitir_bloco(instrucoes, laco=None):
         for op in instrucoes:
@@ -747,6 +782,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     else:
         g.bytes(b'\xB8\x3C\x00\x00\x00\x31\xFF\x0F\x05')
     imprime_inteiro(g, windows)
+    if tem_leitura:
+        emitir_cache_entrada(g, windows, slots)
     if tem_leitura and any(op[0] in ('leia_int', 'leia_indice') for op in percorrer_instrucoes(programa.instrucoes)):
         ler_inteiro(g, windows)
     if tem_leitura_texto:
