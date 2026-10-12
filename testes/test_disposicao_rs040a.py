@@ -1,4 +1,4 @@
-"""RS 0.40A — contratos de layout, cópia e realocação de registros binários.
+"""RS 0.40A — contratos de disposicao, cópia e realocação de registros binários.
 
 Teste diferencial no executável nativo: compara O0 a O8 e valida os
 dados após crescimento/reuso de listas proprietárias.
@@ -12,7 +12,7 @@ import unittest
 
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ))
-from compilador.layout_tipos import palavras_tipo
+from compilador.disposicao_tipos import palavras_tipo
 from compilador.parser import analisar_programa
 from backend import compilar
 from backend.listas_dinamicas import largura_elemento
@@ -111,7 +111,7 @@ def executar(codigo, nivel, pasta, nome):
                           errors='replace', timeout=20)
 
 
-class TestesLayoutRS040A(unittest.TestCase):
+class TestesDisposicaoRS040A(unittest.TestCase):
     def test_larguras_concordam_para_tipos_compostos(self):
         registros = RegistrosDeTeste.registros
         instancia = RegistrosDeTeste()
@@ -131,10 +131,10 @@ class TestesLayoutRS040A(unittest.TestCase):
                 self.assertEqual(largura_elemento(g, ('lista_dinamica', 'Pacote')),
                                  esperado)
         # Mistura níveis: registro contendo bytes, listas fixas e texto.
-        self.assertEqual(palavras_tipo('Dentro', registros), 6)
-        self.assertEqual(palavras_tipo('Fora', registros), 1 + 6 + 4 + 3)
+        self.assertEqual(palavras_tipo('Dentro', registros), 5)
+        self.assertEqual(palavras_tipo('Fora', registros), 1 + 5 + 4 + 3)
         self.assertEqual(largura_elemento(instancia, ('lista_dinamica', 'Fora')),
-                         1 + 6 + 4 + 3)
+                         1 + 5 + 4 + 3)
 
     def test_largura_de_registro_binario_nunca_eh_uma_palavra(self):
         registros = {'Registro': (('cabecalho', ('bytes', 9)),

@@ -4,6 +4,7 @@ from .expressoes import Expressao
 from .lexico import Token
 from .ast import NoExpressao
 from .tipos import MAX_VARIAVEIS, tipo_expressao
+from .disposicao_tipos import palavras_tipo
 
 
 class ContextoSemantico:
@@ -51,17 +52,7 @@ class ContextoSemantico:
         return interno
 
     def _espacos_tipo(self, tipo):
-        if isinstance(tipo, str) and tipo in self.registros:
-            return sum(self._espacos_tipo(t) for _, t in self.registros[tipo])
-        if isinstance(tipo, tuple) and tipo[0] == 'registro':
-            return sum(self._espacos_tipo(t) for _, t in tipo[2])
-        if isinstance(tipo, tuple) and tipo[0] == 'lista_dinamica':
-            return 3
-        if isinstance(tipo, tuple) and tipo[0] == 'lista':
-            return tipo[2]
-        if isinstance(tipo, tuple) and tipo[0] in ('texto', 'bytes'):
-            return 1 + (tipo[1] + 7) // 8
-        return 1
+        return palavras_tipo(tipo, self.registros)
 
     def _criar_campos(self, interno, tipo, inicio):
         """Mapeia recursivamente os campos preservando o bloco contíguo."""

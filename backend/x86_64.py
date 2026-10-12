@@ -2,6 +2,7 @@
 import struct
 from compilador.erros import ErroCompilacao
 from . import listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros, arquivos_abertos, publicacao_atomica
+from compilador.disposicao_tipos import palavras_tipo as _palavras_tipo
 from .base import Emissor, alinhar
 
 class Gerador(Emissor):
@@ -138,21 +139,6 @@ def _total_slots(programa):
     tipos = getattr(programa, 'tipos', {})
     return max((indice + _palavras_tipo(tipos.get(nome, 'inteiro'), registros)
                 for nome, indice in programa.variaveis.items()), default=0)
-
-
-def _palavras_tipo(tipo, registros):
-    """Quantidade de palavras de oito bytes em um valor completo."""
-    if listas_dinamicas.eh_lista_dinamica(tipo):
-        return 3
-    if isinstance(tipo, str) and tipo in registros:
-        return sum(_palavras_tipo(t, registros) for _, t in registros[tipo])
-    if isinstance(tipo, tuple) and tipo[0] == 'registro':
-        return sum(_palavras_tipo(t, registros) for _, t in tipo[2])
-    if isinstance(tipo, tuple) and tipo[0] == 'lista':
-        return tipo[2]
-    if isinstance(tipo, tuple) and tipo[0] in ('texto', 'bytes'):
-        return 1 + (tipo[1] + 7) // 8
-    return 1
 
 
 def _composto(tipo, registros):

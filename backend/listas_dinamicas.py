@@ -6,6 +6,7 @@ Cada elemento ocupa um inteiro de 64 bits. Ao criar, a lista é vazia.
 A memória cresce geometricamente e é devolvida ao sistema operacional.
 """
 import struct
+from compilador.disposicao_tipos import palavras_tipo
 
 TIPO_LISTA_DINAMICA = ('lista_dinamica', 'inteiro')
 
@@ -15,18 +16,10 @@ def eh_lista_dinamica(tipo):
 
 
 def largura_elemento(g, tipo):
-    """Número de palavras de oito bytes por elemento, inclusive registros aninhados."""
-    def palavras(valor):
-        if isinstance(valor, str) and valor in g.registros:
-            return sum(palavras(t) for _, t in g.registros[valor])
-        if isinstance(valor, tuple) and valor[0] == 'lista':
-            return valor[2]
-        if isinstance(valor, tuple) and valor[0] == 'texto':
-            return 1 + (valor[1] + 7) // 8
-        return 1
-    largura = palavras(tipo[1])
+    """Usa o mesmo contrato de disposicao da pilha e dos registros."""
+    largura = palavras_tipo(tipo[1], g.registros)
     if not 1 <= largura <= 0x0FFFFFFF:
-        raise ValueError('Registro excede a largura máxima de elemento nativo.')
+        raise ValueError('Registro excede a largura maxima de elemento nativo.')
     return largura
 
 
