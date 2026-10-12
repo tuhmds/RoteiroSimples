@@ -191,7 +191,7 @@ class TestesSSA(unittest.TestCase):
             self.assertTrue(any(b['phis'] for b in data['blocos']))
 
     def test_regressao_binarios_rs041(self):
-        referencia = json.loads((RAIZ/'testes/fixtures/rs041_binarios_11.json').read_text(encoding='utf-8'))
+        referencia = json.loads((RAIZ/'testes/fixtures/rs0411_binarios_11.json').read_text(encoding='utf-8'))
         self.assertEqual(len(referencia), 72)
         for chave, digest in referencia.items():
             nome, alvo, nivel = chave.split('|')

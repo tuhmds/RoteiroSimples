@@ -60,7 +60,7 @@ class TestesArquiteturaRS09(unittest.TestCase):
 
     def test_binarios_iguais_versao_041(self):
         """Confere novas assinaturas PE/ELF, mantendo originais historicas: 9 programas x 2 sistemas x 2 níveis de otimização."""
-        fixture = json.loads((RAIZ / 'testes/fixtures/rs041_binarios_08.json').read_text(encoding='utf-8'))
+        fixture = json.loads((RAIZ / 'testes/fixtures/rs0411_binarios_08.json').read_text(encoding='utf-8'))
         self.assertEqual(len(fixture), 9)
         comparados = 0
         for arquivo, esperados in fixture.items():
