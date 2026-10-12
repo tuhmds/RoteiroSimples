@@ -10,6 +10,7 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ))
 from backend import compilar
+from tamanho_codigo import tamanho_codigo_elf
 from backend.ssa_x86_64 import construir_backend_ssa, copias_paralelas
 from backend.x86_64 import Gerador
 from compilador.alocacao import Local
@@ -200,7 +201,7 @@ class TesteIntegracaoO6(unittest.TestCase):
                 a = compilar(prog, alvo, nivel=6)
                 self.assertEqual(a, compilar(prog, alvo, nivel=6))
                 if alvo == 'linux':
-                    self.assertLess(len(a), len(compilar(prog, alvo, nivel=5)))
+                    self.assertLess(tamanho_codigo_elf(a), tamanho_codigo_elf(compilar(prog, alvo, nivel=5)))
 
 
 if __name__ == '__main__':

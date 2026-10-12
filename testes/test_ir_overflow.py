@@ -11,6 +11,7 @@ sys.path.insert(0, str(RAIZ))
 
 from sintaxe import analisar_programa, ErroCompilacao
 from codigo_nativo import compilar
+from tamanho_codigo import tamanho_codigo_elf
 from ir import construir_ir, formatar_ir, ExpressaoIR, programa_para_backend
 
 
@@ -54,7 +55,7 @@ class TestesIR(unittest.TestCase):
         programa = analisar_programa('inicio {\n escreva((2 + 3) * (4 + 5) - 6)\n}')
         compilado_o0 = compilar(programa, 'linux', otimizar=False)
         compilado_o1 = compilar(programa, 'linux', otimizar=True)
-        self.assertLess(len(compilado_o1), len(compilado_o0))
+        self.assertLess(tamanho_codigo_elf(compilado_o1), tamanho_codigo_elf(compilado_o0))
         self.assertEqual(construir_ir(programa).instrucoes[0].argumentos[0].valor, 39)
 
     def test_ir_aninhada_e_variaveis(self):

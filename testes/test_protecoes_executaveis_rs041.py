@@ -103,13 +103,18 @@ class TestesProtecoesExecutaveisRS041(unittest.TestCase):
                 self.assertEqual(tipo, 3)       # ET_DYN, posição independente
                 self.assertEqual(maquina, 62)    # AMD64
                 self.assertEqual(entrada, 0x100)
-                self.assertEqual(len(programas), 2)
+                self.assertIn(len(programas), (2, 3))
                 carregavel = next(p for p in programas if p[0] == 1)
                 pilha = next(p for p in programas if p[0] == 0x6474e551)
                 self.assertEqual(carregavel[1], 5)     # leitura + execução
                 self.assertEqual(carregavel[2:5], (0, 0, 0))
-                self.assertEqual(carregavel[5], len(imagem))
-                self.assertEqual(carregavel[6], len(imagem))
+                self.assertEqual(carregavel[5], carregavel[6])
+                if len(programas) == 2:
+                    self.assertEqual(carregavel[5], len(imagem))
+                else:
+                    dados = next(p for p in programas if p[0] == 1 and p[1] == 4)
+                    self.assertEqual(dados[2] + dados[5], len(imagem))
+                    self.assertLess(carregavel[5], len(imagem))
                 self.assertEqual(pilha[1], 6)         # leitura + escrita; sem X
                 self.assertEqual((pilha[5], pilha[6]), (0, 0))
 

@@ -15,6 +15,7 @@ from compilador.fluxo_dados import analisar_fluxo
 from compilador.ir import construir_ir, formatar_ir
 from compilador.parser import analisar_programa
 from backend import compilar
+from tamanho_codigo import tamanho_codigo_elf
 
 
 def fluxo(fonte):
@@ -137,8 +138,8 @@ class TestesFluxoDados(unittest.TestCase):
         self.assertEqual(o1.instrucoes[1].argumentos[1].operacao, 'bin')
         self.assertEqual(o2.instrucoes[1].argumentos[1].valor, 10)
         self.assertEqual(o2.instrucoes[2].argumentos[0].valor, 10)
-        tamanho1 = len(compilar(p, 'linux', otimizar=True, nivel=1))
-        tamanho2 = len(compilar(p, 'linux', otimizar=True, nivel=2))
+        tamanho1 = tamanho_codigo_elf(compilar(p, 'linux', otimizar=True, nivel=1))
+        tamanho2 = tamanho_codigo_elf(compilar(p, 'linux', otimizar=True, nivel=2))
         self.assertLess(tamanho2, tamanho1)
 
     def test_regressao_diferencial_tres_niveis(self):
