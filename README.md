@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.41.3
+# RoteiroSimples (RS) — versão experimental 0.41.4
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,26 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.41.4 — Auditoria da ABI e metadados das rotinas auxiliares Windows
+
+Os caminhos fatais no Windows agora alinham a pilha e reservam espaço
+de sombra e argumento extra **antes** de chamar `WriteFile` e
+`ExitProcess`, mesmo quando o programa não utiliza listas.
+
+Rotinas com prólogos/epílogos compatíveis de arquivos, recursos,
+publicação e listas dinâmicas passaram a receber `.pdata`/`.xdata`
+**com registro e verificação dos bytes realmente emitidos**.
+Prólogos desconhecidos interrompem o registro, em vez de gerar
+metadados falsos. Foram adicionados testes de corrupção de prólogo,
+saída por erro e funcionamento nativo em Windows.
+
+**Cobertura ainda parcial:** rotinas com salvamento diferente de
+registradores e quadros não convencionais precisam de outra descrição.
+`HIGH_ENTROPY_VA` segue desativado até investigação e correção de
+sua falha de fechamento de arquivo. A linguagem continua experimental.
+
+[Auditoria técnica, verificações e limitações](docs/AUDITORIA_ABI_WINDOWS_RS_0_41_4.md).
 
 ## RS 0.41.3 — Sondagem própria e quadros grandes desenroláveis
 
