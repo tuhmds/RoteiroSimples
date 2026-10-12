@@ -39,6 +39,8 @@ def montar_pe(g, mensagens):
         nomes.extend(['ReadFile', 'GetLastError'])
     if 'ler_buffer_texto' in g.rotulos:
         nomes.append('SetConsoleCP')
+    if 'rs_lista_alocar' in g.rotulos:
+        nomes.extend(['VirtualAlloc', 'VirtualFree'])
     importacoes, enderecos, inicio_iat, tamanho_iat = construir_importacoes(base_importacoes, nomes)
     base_dados = alinhar(base_importacoes + len(importacoes), 0x1000)
     dados = bytearray()

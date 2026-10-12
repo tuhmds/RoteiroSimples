@@ -1,6 +1,7 @@
 """Emissão nativa de instruções AMD64, leitura/escrita e saltos."""
 import struct
 from compilador.erros import ErroCompilacao
+from . import listas_dinamicas
 from .base import Emissor, alinhar
 
 class Gerador(Emissor):
@@ -141,6 +142,8 @@ def _total_slots(programa):
 
 def _palavras_tipo(tipo, registros):
     """Quantidade de palavras de oito bytes em um valor completo."""
+    if tipo == listas_dinamicas.TIPO_LISTA_DINAMICA:
+        return 3
     if isinstance(tipo, str) and tipo in registros:
         return sum(_palavras_tipo(t, registros) for _, t in registros[tipo])
     if isinstance(tipo, tuple) and tipo[0] == 'registro':
@@ -258,6 +261,12 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
                 g.bytes(b'\x48\x83\xC4' + struct.pack('<B', limpar))
             else:
                 g.bytes(b'\x48\x81\xC4' + struct.pack('<I', limpar))
+    elif tipo == 'quantidade_lista_dinamica':
+        listas_dinamicas.quantidade(g, variaveis, expr[1], windows)
+    elif tipo == 'capacidade_lista_dinamica':
+        listas_dinamicas.quantidade(g, variaveis, expr[1], windows, capacidade=True)
+    elif tipo == 'indice_lista_dinamica':
+        listas_dinamicas.ler_indice(g, variaveis, expr[1], expr[2], windows, expressao)
     elif tipo == 'tamanho_texto':
         offset = deslocamento_variavel(variaveis, expr[1], windows)
         g.bytes(b'\x48\x8B\x85' + struct.pack('<i', offset))
@@ -752,9 +761,13 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     funcao_atual = None
     variaveis = programa.variaveis
     mensagens = {}
-    tem_leitura = any(op[0] in ('leia_int', 'leia_indice', 'leia_texto') for op in percorrer_instrucoes(programa.instrucoes))
+    tem_leitura = any(op[0] in ('leia_int', 'leia_indice', 'leia_indice_dinamico', 'leia_texto') for op in percorrer_instrucoes(programa.instrucoes))
     tipos = getattr(programa, 'tipos', {})
-    tem_listas = any(isinstance(t, tuple) and t[0] == 'lista' for t in tipos.values())
+    tem_dinamicas = any(t == listas_dinamicas.TIPO_LISTA_DINAMICA
+                        for t in tipos.values()) or any(
+        t == listas_dinamicas.TIPO_LISTA_DINAMICA
+        for f in g.funcoes.values() for t in f.programa.tipos.values())
+    tem_listas = tem_dinamicas or any(isinstance(t, tuple) and t[0] == 'lista' for t in tipos.values())
     tem_textos = any(isinstance(t, tuple) and t[0] == 'texto' for t in tipos.values())
     tem_leitura_texto = any(op[0] == 'leia_texto' for op in percorrer_instrucoes(programa.instrucoes))
     slots = _total_slots(programa)
@@ -830,6 +843,27 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 g.bytes(b'\x48\x89\xC2') # RDX=cap
                 g.chamada('ler_buffer_texto')
                 g.bytes(b'\x48\x89\x85' + struct.pack('<i', comprimento))
+            elif op[0] == 'crie_lista_dinamica':
+                listas_dinamicas.criar(g, variaveis, op[1], windows)
+            elif op[0] == 'adicione_lista_dinamica':
+                listas_dinamicas.acrescentar(g, variaveis, op[1], op[2], windows, expressao)
+            elif op[0] == 'limpe_lista_dinamica':
+                listas_dinamicas.limpar(g, variaveis, op[1], windows)
+            elif op[0] == 'remova_ultimo_lista_dinamica':
+                listas_dinamicas.retirar(g, variaveis, op[1], windows)
+            elif op[0] == 'libere_lista_dinamica':
+                listas_dinamicas.liberar(g, variaveis, op[1], windows, explicito=True)
+            elif op[0] == 'atribua_indice_dinamico':
+                listas_dinamicas.escrever_indice(g, variaveis, op[1], op[2], op[3],
+                                                windows, expressao)
+            elif op[0] == 'leia_indice_dinamico':
+                listas_dinamicas.indice(g, variaveis, op[1], op[2], windows, expressao)
+                g.bytes(b'\x50\x48\x83\xEC\x08')
+                g.chamada('ler_inteiro')
+                g.bytes(b'\x48\x83\xC4\x08\x59')
+                base = deslocamento_variavel(variaveis, op[1], windows)
+                g.bytes(b'\x48\x8B\x95' + struct.pack('<i', base))
+                g.bytes(b'\x48\x89\x04\xCA')
             elif op[0] == 'crie_lista':
                 nome, tamanho = op[1:]
                 inicio = deslocamento_variavel(variaveis, nome, windows)
@@ -996,6 +1030,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         emitir_bloco(programa.instrucoes)
     else:
         emissor_alternativo(g, mensagens, windows)
+    if tem_dinamicas:
+        listas_dinamicas.liberar_todas(g, variaveis, tipos, windows)
 
     if windows:
         g.bytes(b'\x31\xC9')
@@ -1053,6 +1089,9 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             indice_palavra += quantidade
         emitir_bloco(funcao.programa.instrucoes)
         g.marcar(f'funcao_fim_{nome}')
+        if tem_dinamicas:
+            listas_dinamicas.liberar_todas(g, variaveis, tipos, windows,
+                                           preservar_retorno=True)
         if windows:
             g.bytes(b'\x48\x8D\x65\xF8\x5B\x5D\xC3')  # restaura RBX e retorna
         else:
@@ -1061,10 +1100,12 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     variaveis = programa.variaveis
     g.campos_atual = getattr(programa, 'campos_registro', {})
     tipos = getattr(programa, 'tipos', {})
+    if tem_dinamicas:
+        listas_dinamicas.emitir_rotinas(g, windows)
     imprime_inteiro(g, windows)
     if tem_leitura:
         emitir_cache_entrada(g, windows, slots)
-    if tem_leitura and any(op[0] in ('leia_int', 'leia_indice') for op in percorrer_instrucoes(programa.instrucoes)):
+    if tem_leitura and any(op[0] in ('leia_int', 'leia_indice', 'leia_indice_dinamico') for op in percorrer_instrucoes(programa.instrucoes)):
         ler_inteiro(g, windows)
     if tem_leitura_texto:
         ler_buffer_texto(g, windows)
@@ -1102,7 +1143,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             g.relativo(b'\xFF\x15', 'ExitProcess')
         else:
             g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
-    if any(isinstance(t, tuple) and t[0] == 'lista' for t in getattr(programa, 'tipos', {}).values()):
+    if tem_listas:
         indice = len(mensagens)
         msg = 'Erro: índice fora dos limites da lista.\n'
         mensagens[indice] = msg
@@ -1141,6 +1182,22 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             g.marcar(rotulo)
             if windows and tem_listas:
                 g.bytes(b'\x48\x83\xE4\xF0')  # and rsp, -16
+            escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
+            if windows:
+                g.bytes(b'\xB9\x01\x00\x00\x00')
+                g.relativo(b'\xFF\x15', 'ExitProcess')
+            else:
+                g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+    if tem_dinamicas:
+        for rotulo, msg in [
+            ('erro_lista_liberada', 'Erro: lista dinamica usada depois da liberacao.\n'),
+            ('erro_lista_memoria', 'Erro: nao foi possivel reservar ou liberar memoria.\n'),
+        ]:
+            indice = len(mensagens)
+            mensagens[indice] = msg
+            g.marcar(rotulo)
+            if windows:
+                g.bytes(b'\x48\x83\xE4\xF0')
             escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
             if windows:
                 g.bytes(b'\xB9\x01\x00\x00\x00')

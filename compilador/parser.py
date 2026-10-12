@@ -140,7 +140,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     contexto = _contexto or ContextoSemantico(importa, assinaturas, registros)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'capacidade', 'copie', 'junte', 'limpe', 'funcao', 'retorne', 'tipo'}
+    reservadas = {'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'capacidade', 'copie', 'junte', 'limpe', 'funcao', 'retorne', 'tipo'}
 
     def indice_lista(partes, linha):
         if '[' not in partes or partes[-1] != ']':
@@ -148,10 +148,10 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
         posicao = partes.index('[')
         nome = contexto.resolver_caminho(partes[:posicao], linha)
         tipo = tipos.get(nome)
-        if not isinstance(tipo, tuple) or tipo[0] != 'lista':
+        if not isinstance(tipo, tuple) or tipo[0] not in ('lista', 'lista_dinamica'):
             raise ErroCompilacao(f'Linha {linha}: caminho não aponta para uma lista.')
         indice, _ = expressao_tipada(partes[posicao+1:-1], linha, 'inteiro')
-        return nome, indice, tipo[2]
+        return nome, indice, tipo[2] if tipo[0] == 'lista' else None
 
     def texto_destino(partes, linha):
         nome = contexto.resolver_caminho(partes, linha)
@@ -264,7 +264,10 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 destino = t[2:-1]
                 if '[' in destino:
                     nome, indice, tamanho = indice_lista(destino, n)
-                    adicionar(('leia_indice', nome, indice, tamanho), n, t)
+                    if tamanho is None:
+                        adicionar(('leia_indice_dinamico', nome, indice), n, t)
+                    else:
+                        adicionar(('leia_indice', nome, indice, tamanho), n, t)
                 elif len(destino) == 1 and isinstance(tipos.get(contexto.resolver(str(destino[0]))), tuple) and tipos[contexto.resolver(str(destino[0]))][0] == 'texto':
                     adicionar(('leia_texto', contexto.resolver(str(destino[0]))), n, t)
                 elif len(destino) == 1 and re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', destino[0]):
@@ -305,12 +308,44 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             elif t[0] == 'limpe' and len(t) >= 4 and t[:2] == ['limpe', '('] and t[-1] == ')':
                 nome, _ = texto_destino(t[2:-1], n)
                 adicionar(('limpe_texto', nome), n, t)
+            elif t[0] in ('adicione', 'remova_ultimo', 'limpe_lista', 'libere') and t[1:2] == ['('] and t[-1:] == [')']:
+                operacao = str(t[0])
+                conteudo = t[2:-1]
+                if operacao == 'adicione':
+                    if conteudo.count(',') != 1:
+                        raise ErroCompilacao(f'Linha {n}: use adicione(lista, valor).')
+                    virgula = conteudo.index(',')
+                    nome_parte = conteudo[:virgula]
+                    if len(nome_parte) != 1:
+                        raise ErroCompilacao(f'Linha {n}: adicione exige nome de lista proprietaria.')
+                    nome = contexto.resolver(str(nome_parte[0]))
+                    if tipos.get(nome) != ('lista_dinamica', 'inteiro'):
+                        raise ErroCompilacao(f'Linha {n}: adicione exige lista[] proprietaria.')
+                    valor, _ = expressao_tipada(conteudo[virgula+1:], n, 'inteiro')
+                    adicionar(('adicione_lista_dinamica', nome, valor), n, t)
+                else:
+                    if len(conteudo) != 1:
+                        raise ErroCompilacao(f'Linha {n}: {operacao} exige nome de lista proprietaria.')
+                    nome = contexto.resolver(str(conteudo[0]))
+                    if tipos.get(nome) != ('lista_dinamica', 'inteiro'):
+                        raise ErroCompilacao(f'Linha {n}: {operacao} exige lista[] proprietaria.')
+                    mapa = {'libere': 'libere_lista_dinamica',
+                            'limpe_lista': 'limpe_lista_dinamica',
+                            'remova_ultimo': 'remova_ultimo_lista_dinamica'}
+                    adicionar((mapa[operacao], nome), n, t)
             elif t[0] == 'seja':
                 nome = t[1] if len(t) > 1 else ''
                 if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', nome):
                     raise ErroCompilacao(f'Linha {n}: nome de variável inválido.')
                 if contexto.declarado_neste_escopo(str(nome)) or nome in reservadas:
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' duplicada ou reservada.")
+                if len(t) == 6 and t[2:] == [':', 'lista', '[', ']']:
+                    if profundidade:
+                        raise ErroCompilacao(f'Linha {n}: lista[] proprietaria deve ser declarada no corpo principal da funcao ou inicio, nao em blocos repetidos.')
+                    interno = registrar(str(nome), ('lista_dinamica', 'inteiro'), n)
+                    adicionar(('crie_lista_dinamica', interno), n, t)
+                    i += 1
+                    continue
                 if len(t) >= 4 and t[2] == ':' and str(t[3]) in registros:
                     tipo_nome = str(t[3])
                     interno = registrar(str(nome), ('registro', tipo_nome, registros[tipo_nome]), n)
@@ -372,6 +407,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     arvore, inferido = expressao_tipada(t[3:], n)
                 else:
                     raise ErroCompilacao(f"Linha {n}: use 'seja nome = valor' ou 'seja nome: inteiro = valor'.")
+                if inferido == ('lista_dinamica', 'inteiro'):
+                    raise ErroCompilacao(f'Linha {n}: lista[] tem dono unico; copiar ou inferir propriedade nao e permitido.')
                 tipo_armazenado = ('registro', inferido, registros[inferido]) if isinstance(inferido, str) and inferido in registros else inferido
                 interno = registrar(str(nome), tipo_armazenado, n)
                 if eh_composto(inferido):
@@ -398,11 +435,16 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 igual = t.index('=')
                 nome, indice, tamanho = indice_lista(t[:igual], n)
                 valor, _ = expressao_tipada(t[igual+1:], n, 'inteiro')
-                adicionar(('atribua_indice', nome, indice, valor, tamanho), n, t)
+                if tamanho is None:
+                    adicionar(('atribua_indice_dinamico', nome, indice, valor), n, t)
+                else:
+                    adicionar(('atribua_indice', nome, indice, valor, tamanho), n, t)
             elif len(t) >= 3 and t[1] == '=':
                 nome = contexto.resolver(str(t[0]))
                 if nome not in variaveis:
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' não foi declarada.")
+                if tipos[nome] == ('lista_dinamica', 'inteiro'):
+                    raise ErroCompilacao(f'Linha {n}: lista[] possui dono unico e nao admite atribuicao.')
                 esperado = tipos[nome][1] if isinstance(tipos[nome], tuple) and tipos[nome][0] == 'registro' else tipos[nome]
                 arvore, _ = expressao_tipada(t[2:], n, esperado)
                 if eh_composto(tipos[nome]):

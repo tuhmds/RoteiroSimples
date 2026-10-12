@@ -33,6 +33,17 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
         # Listas e textos são valores compostos; o contexto da operação
         # decide se podem ser usados (não participam da aritmética).
         return tipo
+    if categoria in ('quantidade_lista_dinamica', 'capacidade_lista_dinamica'):
+        if tipos.get(expr[1]) != ('lista_dinamica', 'inteiro'):
+            raise ErroCompilacao(f'Linha {linha}: operação exige uma lista dinamica valida.')
+        return 'inteiro'
+    if categoria == 'indice_lista_dinamica':
+        nome, indice = expr[1:]
+        if tipos.get(nome) != ('lista_dinamica', 'inteiro'):
+            raise ErroCompilacao(f'Linha {linha}: índice exige lista dinamica.')
+        if tipo_expressao(indice, tipos, linha, funcoes) != 'inteiro':
+            raise ErroCompilacao(f'Linha {linha}: índice deve ser inteiro.')
+        return 'inteiro'
     if categoria == 'tamanho_texto':
         if not isinstance(tipos.get(expr[1]), tuple) or tipos[expr[1]][0] != 'texto':
             raise ErroCompilacao(f'Linha {linha}: tamanho() exige texto válido.')

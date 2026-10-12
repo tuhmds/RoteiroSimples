@@ -55,6 +55,8 @@ class ContextoSemantico:
             return sum(self._espacos_tipo(t) for _, t in self.registros[tipo])
         if isinstance(tipo, tuple) and tipo[0] == 'registro':
             return sum(self._espacos_tipo(t) for _, t in tipo[2])
+        if isinstance(tipo, tuple) and tipo[0] == 'lista_dinamica':
+            return 3
         if isinstance(tipo, tuple) and tipo[0] == 'lista':
             return tipo[2]
         if isinstance(tipo, tuple) and tipo[0] == 'texto':

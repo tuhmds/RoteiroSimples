@@ -74,6 +74,8 @@ class Expressao:
                 nome = self.consumir()
                 self.consumir(')')
                 tipo = getattr(self, 'tipos', {}).get(nome)
+                if isinstance(tipo, tuple) and tipo[0] == 'lista_dinamica':
+                    return NoExpressao(('quantidade_lista_dinamica', nome), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'lista':
                     return NoExpressao(('numero', tipo[2]), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'texto':
@@ -84,8 +86,10 @@ class Expressao:
                 nome = self.consumir()
                 self.consumir(')')
                 tipo = getattr(self, 'tipos', {}).get(nome)
+                if isinstance(tipo, tuple) and tipo[0] == 'lista_dinamica':
+                    return NoExpressao(('capacidade_lista_dinamica', nome), getattr(token, 'origem', None))
                 if not isinstance(tipo, tuple) or tipo[0] != 'texto':
-                    raise ErroCompilacao(f'Linha {self.linha}: capacidade() exige buffer de texto.')
+                    raise ErroCompilacao(f'Linha {self.linha}: capacidade() exige buffer de texto ou lista dinamica.')
                 return NoExpressao(('numero', tipo[1]), getattr(token, 'origem', None))
             if self.olhar() == '(' and token in getattr(self, 'funcoes', {}):
                 self.consumir('(')
@@ -117,6 +121,8 @@ class Expressao:
                 indice = self.comparacao()
                 self.consumir(']')
                 tipo = getattr(self, 'tipos', {}).get(token)
+                if isinstance(tipo, tuple) and tipo[0] == 'lista_dinamica':
+                    return NoExpressao(('indice_lista_dinamica', token, indice), getattr(token, 'origem', None))
                 if not isinstance(tipo, tuple) or tipo[0] != 'lista':
                     raise ErroCompilacao(f'Linha {self.linha}: {token} não é uma lista.')
                 return NoExpressao(('indice', token, indice, tipo[2]), getattr(token, 'origem', None))

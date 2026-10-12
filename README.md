@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.31
+# RoteiroSimples (RS) — versão experimental 0.32
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -10,7 +10,33 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
 
-## Novo na RS 0.31 — resultados genéricos e propagação de falhas
+## Novo na RS 0.32 — listas dinâmicas e propriedade exclusiva
+
+A linguagem agora reconhece **lista[]**, com armazenamento nativo que cresce conforme os dados são adicionados e é liberado automaticamente no fim da função ou do programa proprietário.
+
+```text
+inicio {
+    seja pedidos: lista[]
+    adicione(pedidos, 10)
+    adicione(pedidos, 20)
+
+    escreva(tamanho(pedidos))
+    escreva(pedidos[1])
+
+    remova_ultimo(pedidos)
+    escreva(tamanho(pedidos))
+}
+```
+
+**Saída:** 2, 20 e 1, cada um em uma linha.
+
+As operações incluem `adicione`, `remova_ultimo`, `limpe_lista`, `libere`, `tamanho`, `capacidade` e índices verificados para leitura e escrita. O gerador usa `mmap/munmap` no Linux e `VirtualAlloc/VirtualFree` no Windows. A lista inicia com zero posições e cresce conforme necessário, sem um tamanho fixo declarado no código RS.
+
+**Propriedade única:** nesta etapa, cada lista dinâmica pertence a um único escopo de função ou `inicio`. Não é possível copiá-la, passá-la como argumento, retorná-la ou armazená-la em registros. Declarações em condicionais ou laços também continuam restritas enquanto o gerenciamento completo de pontos de saída estiver em construção. Isso evita referências pendentes e liberações duplicadas. A liberação explícita torna a lista inutilizável, com erro controlado em acessos posteriores; listas sem liberação explícita são liberadas ao final do proprietário.
+
+**Exemplo:** [`exemplos/listas_dinamicas.rts`](exemplos/listas_dinamicas.rts). Veja as [regras completas de propriedade, segurança e limitações](docs/LISTAS_DINAMICAS_RS_0_32.md). As listas fixas `lista[N]`, os resultados tipados e os níveis de otimização de `-O 0` a `-O 8` continuam disponíveis. Nenhum novo nível de otimização foi criado.
+
+## Histórico: RS 0.31 — resultados genéricos e propagação de falhas
 
 O sistema de tipos agora aceita **resultado[T]**, especializado na compilação para
 cada tipo concreto utilizado, inclusive **inteiros, lógicos, registros, textos e listas fixas**.
@@ -331,13 +357,13 @@ nativo. Não se promete segurança para aplicações de produção.
 1. Instale Python 3.10 ou posterior e confirme `py -3 --version`.
 2. Baixe ou clone este repositório e extraia o pacote em uma pasta.
 3. Execute **`INICIAR_RS.bat`** e escolha **1** para compilar e executar a demonstração
-   dos resultados genéricos da RS 0.31. A opção **2** abre o mesmo exemplo no Bloco de Notas.
+   das listas dinâmicas da RS 0.32. A opção **2** abre o mesmo exemplo no Bloco de Notas.
 4. Para executar os testes, escolha **3**.
 
 Via PowerShell:
 
 ```powershell
-py -3 compilar.py exemplos\resultados_genericos.rts --alvo windows -O 8 -o roteiro_windows.exe
+py -3 compilar.py exemplos\listas_dinamicas.rts --alvo windows -O 8 -o roteiro_windows.exe
 .\roteiro_windows.exe
 py -3 -m unittest discover -s testes -v
 ```
@@ -347,7 +373,7 @@ py -3 -m unittest discover -s testes -v
 Requer sistema Linux e processador x86-64:
 
 ```bash
-python3 compilar.py exemplos/resultados_genericos.rts --alvo linux -O 8 -o roteiro_linux
+python3 compilar.py exemplos/listas_dinamicas.rts --alvo linux -O 8 -o roteiro_linux
 ./roteiro_linux
 python3 -m unittest discover -s testes -v
 ```
@@ -357,7 +383,7 @@ nenhum nível foi criado na RS 0.29. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes até a RS 0.31
+## Recursos presentes até a RS 0.32
 
 | Recurso | Situação |
 |---|---|
@@ -376,6 +402,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Biblioteca Padrão RS escrita em .rts, 30 funções em quatro módulos | Implementado na 0.29 |
 | Resultados tipados e operações matemáticas com erro explícito | Implementado na 0.30 |
 | resultado[T], sucesso[T], falha[T] e propague | Implementado na 0.31 |
+| lista[] e proprietário exclusivo com liberação automática | Implementado na 0.32 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
 | Tipos reais/decimais, dados dinâmicos, referências e empréstimos | Ainda não |
@@ -386,6 +413,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
   e análises de fluxo.
 - `backend/`: emissão direta de instruções x86-64 e geração de PE/ELF.
 - `biblioteca_padrao/`: funções oficiais em módulos `.rts`, incluindo números, matemática, estatística, listas e resultados tipados.
+- `backend/listas_dinamicas.py`: gerador de alocação e liberação nativas das listas de propriedade exclusiva.
 - `bibliotecas/`: compatibilidade com antigas operações matemáticas internas.
 - `exemplos/`: programas `.rts`, inclusive a demonstração nova.
 - `testes/`: verificações estáticas, execução dos executáveis e regressões.
@@ -394,9 +422,8 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**RS 0.32 (planejamento):** decisões sobre propriedade da memória, tempo de vida,
-listas com tamanho variável e tipos numéricos adicionais. Propagação automática de
-erros, conversões entre resultados e captura de falhas nativas ainda não existem.
-Continuamos priorizando os fundamentos, sem criar outro nível de otimização.
+**RS 0.33 (planejamento):** transferência explícita de propriedade, tipos de empréstimo, limpeza de memória em todos os caminhos de escopo e elementos genéricos em listas dinâmicas. Memória dinâmica para textos e dados compostos virá depois, com verificações nativas específicas.
+
+O projeto ainda é experimental, não pronto para produção. Não estamos acrescentando níveis de otimização.
 
 Ainda não foi escolhida uma licença para publicação do código.

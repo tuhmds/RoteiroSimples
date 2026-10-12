@@ -1,0 +1,25 @@
+// RS 0.32 — crescimento real de lista na memória do sistema operacional.
+inicio {
+    seja notas: lista[]
+
+    para nota de 1 ate 12 {
+        adicione(notas, nota * 5)
+    }
+
+    escreva("RS 0.32: lista dinamica")
+    escreva(tamanho(notas))
+    escreva(notas[0])
+    escreva(notas[11])
+
+    notas[0] = 99
+    remova_ultimo(notas)
+    escreva(tamanho(notas))
+    escreva(notas[0])
+
+    limpe_lista(notas)
+    adicione(notas, 42)
+    escreva(notas[0])
+
+    // A memória não ficará presa ao executável: será devolvida
+    // automaticamente ao terminar o escopo proprietário.
+}
