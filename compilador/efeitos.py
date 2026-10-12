@@ -24,7 +24,10 @@ def efeito_expressao(expr):
     if expr.operacao in ('neg', 'bin'):
         # Overflow, divisão por zero e divisão fora do intervalo são observáveis.
         return e.combinar(Efeitos(pode_falhar=True))
-    return e
+    if expr.operacao in ('numero', 'logico', 'comparacao'):
+        return e
+    # Falha segura: novas expressões IR não se tornam puras por omissão.
+    return e.combinar(Efeitos(pode_falhar=True, desconhecido=True))
 
 
 def efeito_instrucao(instr):
@@ -64,7 +67,14 @@ def efeito_instrucao(instr):
     elif tag in ('imprima_num', 'texto'):
         e = e.combinar(Efeitos(saida=True))
     elif tag == 'para':
-        e = e.combinar(Efeitos(escritas=frozenset((a[0],)), pode_falhar=True))
+        e = e.combinar(Efeitos(escritas=frozenset((a[0],)),
+                              pode_falhar=True, controle=True))
+    elif tag in ('se', 'enquanto', 'pare', 'continue'):
+        e = e.combinar(Efeitos(controle=True))
+    elif tag not in ('atribua', 'crie_lista', 'crie_texto', 'limpe_texto'):
+        # Os nós IR futuros precisam ser declarados explicitamente.
+        # Não assumir ausência de efeitos em instruções desconhecidas.
+        e = e.combinar(Efeitos(pode_falhar=True, desconhecido=True))
     return e
 
 

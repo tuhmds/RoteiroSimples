@@ -79,6 +79,16 @@ class TestesContratoEfeitosRS040D(unittest.TestCase):
         self.assertTrue(expr.desconhecido)
         self.assertFalse(podem_trocar_de_ordem(Efeitos(), expr))
 
+    def test_ir_desconhecida_falha_de_modo_conservador(self):
+        from compilador.nos_ir import ExpressaoIR, InstrucaoIR
+        from compilador.efeitos import efeito_expressao, efeito_instrucao
+        expr = efeito_expressao(ExpressaoIR('inteiro', 'operacao_nova'))
+        instr = efeito_instrucao(InstrucaoIR('operacao_nova', ()))
+        self.assertTrue(expr.desconhecido)
+        self.assertTrue(instr.desconhecido)
+        self.assertFalse(podem_trocar_de_ordem(expr, Efeitos()))
+        self.assertFalse(podem_trocar_de_ordem(instr, Efeitos()))
+
     def test_chamadas_nao_sao_consideradas_puras(self):
         expr = efeito_expressao_arvore(
             ('chamada', 'somar', (('var', 'a'), ('numero', 2))))
