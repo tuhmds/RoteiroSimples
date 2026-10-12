@@ -725,7 +725,7 @@ def ler_buffer_texto(g, windows):
     g.bytes(b'\x5E\x41\x5F\x41\x5E\x41\x5D\xC3')
 
 
-def reservar_pilha(g, bytes_reservados):
+def reservar_pilha(g, bytes_reservados, windows=False):
     """Reserva quadro com sondagem de páginas, sem saltar a página de guarda.
 
     A sondagem é necessária para crescimento seguro da pilha Windows x64.
@@ -735,6 +735,14 @@ def reservar_pilha(g, bytes_reservados):
         return
     if bytes_reservados < 4096:
         g.bytes(b'\x48\x81\xEC' + struct.pack('<I', bytes_reservados))
+        return
+    if windows:
+        if bytes_reservados > 0xFFFFFFFF:
+            raise ErroCompilacao('Quadro Windows nao representavel em 32 bits.')
+        g.exige_sondagem_pilha = True
+        g.bytes(b'\x48\xB8' + struct.pack('<Q', bytes_reservados))  # movabs rax, quadro
+        g.chamada('rs_sondar_pilha')  # consulta páginas em passos de 4096 bytes
+        g.bytes(b'\x48\x29\xC4')  # sub rsp,rax (unwind conhece tamanho)
         return
     repeticoes, restante = divmod(bytes_reservados, 4096)
     identificador = g.proxima_condicao
@@ -751,9 +759,28 @@ def reservar_pilha(g, bytes_reservados):
         g.bytes(b'\xC6\x04\x24\x00')
 
 
+def emitir_sondagem_pilha_windows(g):
+    """Rotina folha nativa: preserva RAX/RSP, modifica só R10/R11 (voláteis)."""
+    g.marcar('rs_sondar_pilha')
+    g.bytes(b'\x4C\x8D\x54\x24\x08')  # lea r10,[rsp+8] = rsp do chamador
+    g.bytes(b'\x49\x89\xC3')  # mov r11,rax
+    g.marcar('rs_sondar_pilha_pagina')
+    g.bytes(b'\x49\x81\xFB\x00\x10\x00\x00')  # cmp r11,4096
+    g.salto('rs_sondar_pilha_restante', 'jb')
+    g.bytes(b'\x49\x81\xEA\x00\x10\x00\x00')  # sub r10,4096
+    g.bytes(b'\x41\xF6\x02\x00')  # test byte ptr [r10],0
+    g.bytes(b'\x49\x81\xEB\x00\x10\x00\x00')  # sub r11,4096
+    g.salto('rs_sondar_pilha_pagina')
+    g.marcar('rs_sondar_pilha_restante')
+    g.bytes(b'\x4D\x29\xDA')  # sub r10,r11
+    g.bytes(b'\x41\xF6\x02\x00')  # test byte ptr [r10],0
+    g.bytes(b'\xC3')  # ret
+
+
 def montar_codigo(programa, windows, emissor_alternativo=None):
     g = Gerador()
     g.desenrolamentos = []  # contratos reais para .pdata/.xdata
+    g.exige_sondagem_pilha = False
     g.funcoes = getattr(programa, 'funcoes', {})
     g.registros = getattr(programa, 'registros', {})
     g.campos_atual = getattr(programa, 'campos_registro', {})
@@ -799,7 +826,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         frame = ((8 * n + memoria_cache + 0x38 + 15) // 16) * 16 + 8
         g.marcar('rs_inicio_principal')
         g.bytes(b'\x55\x48\x89\xE5\x53')  # push rbp; mov rbp,rsp; push rbx
-        reservar_pilha(g, frame)
+        reservar_pilha(g, frame, windows)
         g.marcar('rs_fim_prologo_principal')
         g.desenrolamentos.append({
             'inicio': 'rs_inicio_principal',
@@ -823,7 +850,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         frame = alinhar(slots * 8 + memoria_cache, 16)
         g.bytes(b'\x55\x48\x89\xE5')
         if frame:
-            reservar_pilha(g, frame)
+            reservar_pilha(g, frame, windows)
 
     if tem_dinamicas:
         listas_dinamicas.inicializar_inativas(g, variaveis, tipos, windows)
@@ -1165,7 +1192,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             if funcao.recursiva:
                 g.bytes(b'\x48\x3D' + struct.pack('<I', 1024 * 1024))
                 g.salto('erro_recursao_limite', 'ja')
-        reservar_pilha(g, n_frame)
+        reservar_pilha(g, n_frame, windows)
         if windows:
             rotulo_prologo = f'rs_fim_prologo_funcao_{nome}'
             g.marcar(rotulo_prologo)
@@ -1224,6 +1251,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     g.campos_atual = getattr(programa, 'campos_registro', {})
     tipos = getattr(programa, 'tipos', {})
     g.tipos_atual = tipos
+    if windows and g.exige_sondagem_pilha:
+        emitir_sondagem_pilha_windows(g)
     if tem_dinamicas:
         listas_dinamicas.emitir_rotinas(g, windows)
     if windows and (tem_arquivos or tem_recursos or tem_arquivos_posicionais):
