@@ -1156,7 +1156,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             g.relativo(b'\xFF\x15', 'ExitProcess')
         else:
             g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
-    if tem_leitura and any(op[0] in ('leia_int', 'leia_indice') for op in percorrer_instrucoes(programa.instrucoes)):
+    if tem_leitura and any(op[0] in ('leia_int', 'leia_indice', 'leia_indice_dinamico') for op in percorrer_instrucoes(programa.instrucoes)):
         for indice, msg, rotulo in [
             (len(mensagens), 'Erro: entrada invalida; digite um numero inteiro.\n', 'erro_entrada_invalida'),
             (len(mensagens)+1, 'Erro: numero fora do limite de 64 bits.\n', 'erro_entrada_limite'),
