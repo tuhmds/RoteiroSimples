@@ -4,7 +4,7 @@ Linguagem experimental em português brasileiro, com compilador em Python 3.10+ 
 
 ## Novo na RS 0.19 — leitura bufferizada e efeitos de memória
 
-- **I/O nativa em blocos:** `leia` agora usa um cache único de **1.024 bytes**
+- **I/O nativa em blocos:** `leia` agora usa um cache único de **1.024 bytes no Linux e 256 bytes no Windows**
   para inteiros, elementos de listas e textos UTF-8. Leituras consecutivas
   reaproveitam corretamente os bytes já recebidos por pipe ou console.
 - **Proteções preservadas:** índices, capacidade dos buffers, UTF-8 e
@@ -44,7 +44,7 @@ inicio {
 
 `copie` e `junte` aceitam literais ou outro buffer. `limpe` zera o comprimento lógico; `leia` lê uma linha do teclado e **verifica UTF-8 e capacidade**. `tamanho` retorna **bytes ocupados**, e `capacidade` retorna bytes reservados: `á` ocupa dois bytes, `🌎` ocupa quatro. Excesso de capacidade ou UTF-8 inválido provoca erro e saída `1`. Buffers não podem ser usados diretamente em contas ou como ponteiros.
 
-A memória continua na pilha, com orçamento total conservador de 256 slots de 8 bytes (inclui listas, buffers e suas informações de comprimento); capacidades individuais vão de 1 a 2040 bytes, respeitando esse orçamento. Programas com buffers ou listas usam o backend seguro de pilha em qualquer nível `-O 0..6`; CFG/SSA ainda não considera efeitos da memória estruturada. Desde a RS 0.19, a entrada usa um cache compartilhado de 1.024 bytes.
+A memória continua na pilha, com orçamento total conservador de 256 slots de 8 bytes (inclui listas, buffers e suas informações de comprimento); capacidades individuais vão de 1 a 2040 bytes, respeitando esse orçamento. Programas com buffers ou listas usam o backend seguro de pilha em qualquer nível `-O 0..6`; CFG/SSA ainda não considera efeitos da memória estruturada. Desde a RS 0.19, a entrada usa um cache compartilhado de 1.024 bytes no Linux e 256 bytes no Windows.
 
 **Ainda não há** empréstimos/referências, ponteiros, heap, slices, strings dinâmicas ou garantia de que uma escrita parcial de sistema seja refeita. As regras de propriedade, empréstimo compartilhado e mutável, aliasing e tempo de vida são apenas uma especificação futura. Consulte [buffers e plano de referências](docs/MEMORIA_TEXTO_RS_0_18.md).
 

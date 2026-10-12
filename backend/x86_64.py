@@ -288,7 +288,8 @@ def _offsets_cache_entrada(slots, windows):
     # All offsets are relative to the main frame pointer (RBP); never to a
     # short-lived helper frame. In Windows [rbp-8] stores the saved RBX.
     base = -(16 + slots * 8) if windows else -(8 + slots * 8)
-    return base, base - 8, base - 8 - TAMANHO_CACHE_ENTRADA
+    capacidade = 256 if windows else TAMANHO_CACHE_ENTRADA
+    return base, base - 8, base - 8 - capacidade
 
 
 def emitir_cache_entrada(g, windows, slots):
@@ -299,6 +300,7 @@ def emitir_cache_entrada(g, windows, slots):
     after a newline are retained for later calls. The helper preserves RSI.
     """
     cursor, quantidade, buffer = _offsets_cache_entrada(slots, windows)
+    bloco = 256 if windows else TAMANHO_CACHE_ENTRADA
     g.marcar('entrada_proximo_byte')
     g.bytes(b'\x56')  # push rsi: preserve pointer to caller's UTF-8 buffer
     g.bytes(b'\x48\x8B\x85' + struct.pack('<i', cursor))
@@ -311,7 +313,7 @@ def emitir_cache_entrada(g, windows, slots):
         g.bytes(b'\x48\x83\xEC\x30')
         g.bytes(b'\x4C\x89\xE1')  # rcx = R12 = handle stdin
         g.bytes(b'\x48\x8D\x95' + struct.pack('<i', buffer))  # rdx = buffer
-        g.bytes(b'\x41\xB8' + struct.pack('<I', TAMANHO_CACHE_ENTRADA))
+        g.bytes(b'\x41\xB8' + struct.pack('<I', bloco))
         g.bytes(b'\x4C\x8D\x4C\x24\x28')  # r9= &nread
         g.bytes(b'\x48\xC7\x44\x24\x20\x00\x00\x00\x00')
         g.relativo(b'\xFF\x15', 'ReadFile')
@@ -610,7 +612,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     tem_textos = any(isinstance(t, tuple) and t[0] == 'texto' for t in tipos.values())
     tem_leitura_texto = any(op[0] == 'leia_texto' for op in percorrer_instrucoes(programa.instrucoes))
     slots = _total_slots(programa)
-    memoria_cache = (TAMANHO_CACHE_ENTRADA + 16) if tem_leitura else 0
+    memoria_cache = ((256 if windows else TAMANHO_CACHE_ENTRADA) + 16) if tem_leitura else 0
     if windows:
         n = slots
         frame = ((8 * n + memoria_cache + 0x38 + 15) // 16) * 16 + 8

@@ -2,7 +2,7 @@
 
 ## Implementado
 
-O runtime x86-64 mantém **um único cache de entrada de 1.024 bytes** na pilha do
+O runtime x86-64 mantém **um único cache de entrada de 1.024 bytes no Linux e 256 bytes no Windows** na pilha do
 programa, com dois índices de 64 bits: bytes disponíveis e posição de leitura.
 A rotina `entrada_proximo_byte` devolve 1 + byte, 0 (EOF) ou -1 (falha de E/S).
 No Linux usa `read` e, no Windows, `ReadFile`. `leia(inteiro)`,
@@ -10,7 +10,7 @@ No Linux usa `read` e, no Windows, `ReadFile`. `leia(inteiro)`,
 os bytes adiantados pela chamada ao sistema operacional. O cache é ativado
 apenas em programas que usam leitura.
 
-O tamanho conservador de 1.024 bytes, somado ao teto atual de 256 slots locais,
+O tamanho conservador de 1.024 bytes no Linux e 256 bytes no Windows, somado ao teto atual de 256 slots locais,
 mantém a reserva principal de pilha abaixo de uma página de 4 KiB na versão
 Windows, que ainda não oferece sondagem de páginas de pilha. Este não é um
 substituto para uma implementação geral de stack probing.
