@@ -156,7 +156,9 @@ class TestesResultadosGenericos(unittest.TestCase):
                 escreva(pessoa.valor.codigo)
             }
             """,encoding='utf-8')
-            fontes=preparar_resultados_genericos(carregar_fontes(base/'principal.rts'))
+            origem_reunida=carregar_fontes(base/'principal.rts')
+            self.assertNotIn('dados . Cliente', origem_reunida.texto, origem_reunida.texto)
+            fontes=preparar_resultados_genericos(origem_reunida)
             self.assertEqual(fontes.texto.count('tipo RsInternoGenerico_Resultado_'),1)
             programa=analisar_programa(fontes.texto)
             self.assertTrue(programa.funcoes)
