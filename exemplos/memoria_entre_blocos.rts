@@ -1,0 +1,24 @@
+inicio {
+    seja resultados: lista[3]
+    seja opcao: inteiro = 0
+
+    escreva("RS 0.22 - propagacao segura entre caminhos")
+    escreva("Digite 0 ou 1:")
+    leia(opcao)
+
+    se opcao == 0 {
+        resultados[0] = 42
+    } senao {
+        resultados[0] = 42
+    }
+
+    resultados[1] = 8
+    enquanto resultados[1] < 10 {
+        resultados[1] = 10
+    }
+
+    escreva("Resultado conhecido nos dois caminhos:")
+    escreva(resultados[0])
+    escreva("Resultado do laco:")
+    escreva(resultados[1])
+}

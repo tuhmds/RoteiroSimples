@@ -73,6 +73,10 @@ def construir_ir(programa, otimizar=True, nivel=1):
                                        for t in programa.tipos.values()):
         from .otimizador_memoria import otimizar_acessos_memoria
         ir = otimizar_acessos_memoria(ir)
+    if otimizar and nivel >= 8 and any(isinstance(t, tuple) and t[0] == 'lista'
+                                        for t in programa.tipos.values()):
+        from .otimizacao_entre_blocos import otimizar_entre_blocos
+        ir = otimizar_entre_blocos(ir)
     return ir
 
 

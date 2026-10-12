@@ -5,22 +5,22 @@ cd /d "%~dp0"
 :MENU
 cls
 echo ==============================================
-echo         RoteiroSimples RS 0.21
+echo         RoteiroSimples RS 0.22
 echo ==============================================
 echo.
-echo  [1] Compilar e executar exemplo de memoria otimizada (-O 7)
+echo  [1] Compilar e executar a propagacao entre caminhos (-O 8)
 echo  [2] Editar o exemplo no Bloco de Notas
 echo  [3] Rodar testes automatizados
  echo  [4] Executar o ultimo .exe gerado
- echo  [5] Mostrar AST e CFG e gerar fluxo.dot
+ echo  [5] Mostrar arvore sintatica e grafo de fluxo
  echo  [6] Mostrar fluxo de dados e salvar analise.json
- echo  [7] Mostrar SSA e gerar ssa.json
- echo  [8] Mostrar plano de copias phi por aresta
+ echo  [7] Mostrar atribuicao unica e gerar ssa.json
+ echo  [8] Mostrar copias dos nos de juncao
  echo  [9] Ver alocacao de registradores e pilha
- echo  [A] Benchmark de velocidade -O 3, -O 4, -O 5 e -O 6
+ echo  [A] Medicao de desempenho -O 3, -O 4, -O 5 e -O 6
 echo  [B] Mostrar efeitos de memoria e E/S
-echo  [C] Mostrar Memory SSA e salvar memoria.json
-echo  [D] Mostrar a IR com otimizacao Memory SSA (-O 7)
+echo  [C] Mostrar memoria versionada e salvar memoria.json
+echo  [D] Mostrar propagacao de memoria entre blocos (-O 8)
 echo  [0] Sair
  echo.
 choice /c 1234567890ABCD /n /m "Escolha uma opcao: "
@@ -42,7 +42,7 @@ if errorlevel 1 goto COMPILAR
 call "%~dp0COMPILAR_WINDOWS.bat"
 goto MENU
 :EDITAR
-notepad "%~dp0exemplos\memoria_otimizada.rts"
+notepad "%~dp0exemplos\memoria_entre_blocos.rts"
 goto MENU
 :TESTES
 py -3 -m unittest discover -s testes -v
@@ -98,13 +98,13 @@ if errorlevel 1 echo Falha ao mostrar efeitos da IR.
 pause
 goto MENU
 :OTIMIZACAO_MEMORIA
-py -3 compilar.py exemplos\memoria_otimizada.rts --alvo windows -O 7 --mostrar-ir -o roteiro_windows.exe
+py -3 compilar.py exemplos\memoria_entre_blocos.rts --alvo windows -O 8 --mostrar-ir -o roteiro_windows.exe
 if errorlevel 1 echo Falha ao mostrar IR otimizada.
 pause
 goto MENU
 :MEMORY_SSA
-py -3 compilar.py exemplos\memory_ssa.rts --alvo windows -O 6 --mostrar-memory-ssa --salvar-memory-ssa memoria.json -o roteiro_windows.exe
-if errorlevel 1 echo Falha ao gerar a Memory SSA.
+py -3 compilar.py exemplos\memory_ssa.rts --alvo windows -O 6 --mostrar-memoria-versionada --salvar-memoria-versionada memoria.json -o roteiro_windows.exe
+if errorlevel 1 echo Falha ao analisar a memoria versionada.
 echo.
 pause
 goto MENU

@@ -1,6 +1,26 @@
-# RoteiroSimples (RS) — versão experimental 0.21
+# RoteiroSimples (RS) — versão experimental 0.22
 
 Linguagem experimental em português brasileiro, com compilador em Python 3.10+ que **gera diretamente instruções de máquina x86-64**, em executáveis ELF64 (Linux) e PE32+ (Windows). Os programas gerados não dependem do Python para executar. **Não usar em produção.**
+
+## Novo na RS 0.22 — propagação de valores entre blocos
+
+A linguagem mantém palavras reservadas **sem acentos**. As mensagens, a documentação e a terminologia técnica usam **português brasileiro**: grafo de fluxo de controle, memória versionada, nós de junção, propagação de valores e gerador nativo. Nomes anteriores usados por ferramentas continuam disponíveis como alternativas de compatibilidade.
+
+O novo nível **`-O 8`** propaga valores conhecidos de posições de listas entre os blocos do programa. Um valor só é usado depois de uma decisão se **todos os caminhos possíveis concordarem**. A análise também examina laços e descarta o conhecimento quando há escrita capaz de alterar aquela posição.
+
+Exemplo: se ambos os ramos de `se` atribuírem `42` a `notas[0]`, uma leitura posterior pode ser substituída por `42`. Caso haja valores diferentes, leitura pelo teclado, índice variável ou risco de erro, as verificações necessárias continuam ativas.
+
+- **Implementado:** propagação de valores de listas locais em junções e laços; remoção de escritas literais comprovadamente redundantes; preservação do comportamento de `-O 0` a `-O 7`.
+- **Ainda pendente:** referências, ponteiros brutos, alocação dinâmica e otimizações gerais de memória com nomes compartilhados.
+
+Consulte [Propagação entre blocos — RS 0.22](docs/PROPAGACAO_ENTRE_BLOCOS_RS_0_22.md) para a especificação, os limites e o vocabulário adotado.
+
+```powershell
+py -3 compilar.py exemplos\memoria_entre_blocos.rts --alvo windows -O 8 --mostrar-ir --mostrar-memoria-versionada -o roteiro_windows.exe
+.\roteiro_windows.exe
+```
+
+---
 
 ## Novo na RS 0.21 — primeira otimizacao real guiada pela Memory SSA
 

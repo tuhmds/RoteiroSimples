@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.21: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.22: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import re
@@ -11,26 +11,27 @@ from backend import compilar
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.20')
+    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.22')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--alvo', choices=['windows', 'linux'], default='windows')
     parser.add_argument('-o', '--saida', type=Path, help='arquivo executável de saída')
-    parser.add_argument('-O', '--otimizacao', choices=['0', '1', '2', '3', '4', '5', '6', '7'], default='1', help='otimização (0 = sem, 1 = constantes, 2 = propagação local, 3 = SSA, 4 = SSA nativa, 5 = layout, 6 = coalescencia e saltos curtos, 7 = Memory SSA segura)' )
-    parser.add_argument('--mostrar-ir', action='store_true', help='mostra a IR tipada antes de gerar código')
+    parser.add_argument('-O', '--otimizacao', choices=['0', '1', '2', '3', '4', '5', '6', '7', '8'], default='1', help='otimização (0 = sem, 1 = constantes, 2 = propagação local, 3 = SSA, 4 = SSA nativa, 5 = layout, 6 = coalescencia e saltos curtos, 7 = memoria versionada local, 8 = propagacao entre blocos)' )
+    parser.add_argument('--mostrar-representacao-intermediaria', '--mostrar-ir', dest='mostrar_ir', action='store_true', help='mostra a representacao intermediaria tipada')
     parser.add_argument('--mostrar-efeitos', action='store_true', help='exibe leituras/escritas de memoria, E/S e falhas por instrucao')
-    parser.add_argument('--mostrar-memory-ssa', action='store_true', help='exibe versoes de memoria, dependencias e nos phi')
-    parser.add_argument('--salvar-memory-ssa', type=Path, help='salva a Memory SSA em JSON')
+    parser.add_argument('--mostrar-memoria-versionada', '--mostrar-memory-ssa', dest='mostrar_memory_ssa', action='store_true', help='exibe versoes de memoria, dependencias e nos de juncao')
+    parser.add_argument('--salvar-memoria-versionada', '--salvar-memory-ssa', dest='salvar_memory_ssa', type=Path, help='salva a analise de memoria versionada em JSON')
     parser.add_argument('--salvar-efeitos', type=Path, help='salva a analise de efeitos em JSON')
-    parser.add_argument('--mostrar-ast', action='store_true', help='mostra a AST com linha e coluna')
+    parser.add_argument('--mostrar-arvore-sintatica', '--mostrar-ast', dest='mostrar_ast', action='store_true', help='mostra a arvore sintatica com linha e coluna')
     parser.add_argument('--mostrar-fluxo', action='store_true', help='mostra análise de dados por bloco')
     parser.add_argument('--salvar-fluxo', type=Path, help='salva análise em JSON')
     parser.add_argument('--mostrar-alocacao', action='store_true', help='mostra registradores e spills planejados pelo backend -O 4/5')
-    parser.add_argument('--mostrar-copias-phi', action='store_true', help='exibe o plano de copias paralelas de cada aresta phi (nao emitidas)')
-    parser.add_argument('--mostrar-ssa', action='store_true', help='mostra renomeação SSA e nós phi')
-    parser.add_argument('--salvar-ssa', type=Path, help='salva SSA tipada em arquivo JSON')
-    parser.add_argument('--mostrar-cfg', action='store_true', help='exibe grafo de controle em texto')
-    parser.add_argument('--salvar-cfg', type=Path, help='salva grafo de controle em formato DOT')
-    op = parser.parse_args(argv)
+    parser.add_argument('--mostrar-copias-juncao', '--mostrar-copias-phi', dest='mostrar_copias_phi', action='store_true', help='exibe o plano de copias paralelas de cada aresta phi (nao emitidas)')
+    parser.add_argument('--mostrar-atribuicao-unica', '--mostrar-ssa', dest='mostrar_ssa', action='store_true', help='mostra atribuicoes unicas e nos de juncao')
+    parser.add_argument('--salvar-atribuicao-unica', '--salvar-ssa', dest='salvar_ssa', type=Path, help='salva a analise de atribuicoes unicas em JSON')
+    parser.add_argument('--mostrar-grafo-fluxo', '--mostrar-cfg', dest='mostrar_cfg', action='store_true', help='exibe grafo de controle em texto')
+    parser.add_argument('--salvar-grafo-fluxo', '--salvar-cfg', dest='salvar_cfg', type=Path, help='salva grafo de controle em formato DOT')
+    argumentos = sys.argv[1:] if argv is None else argv
+    op = parser.parse_args(argumentos)
     saida = op.saida or op.fonte.with_suffix('.exe' if op.alvo == 'windows' else '')
     fonte_texto = ''
     try:
@@ -50,10 +51,10 @@ def main(argv=None):
             from compilador.memory_ssa import construir_memory_ssa
             mssa = construir_memory_ssa(construir_ir(programa, otimizar=nivel > 0, nivel=nivel))
             if op.mostrar_memory_ssa:
-                print(mssa.formatar())
+                print(mssa.formatar_ptbr() if '--mostrar-memoria-versionada' in argumentos else mssa.formatar())
             if op.salvar_memory_ssa:
                 op.salvar_memory_ssa.write_text(mssa.para_json(), encoding='utf-8')
-                print(f'Memory SSA salva em: {op.salvar_memory_ssa}')
+                print(f'Análise de memória versionada salva em: {op.salvar_memory_ssa}')
         if op.mostrar_efeitos or op.salvar_efeitos:
             from compilador.ir import construir_ir
             from compilador.efeitos import formatar_efeitos, efeitos_para_json
@@ -99,7 +100,7 @@ def main(argv=None):
                 print(grafo.formatar())
             if op.salvar_cfg:
                 op.salvar_cfg.write_text(grafo.para_dot(), encoding='utf-8')
-                print(f'CFG salvo em: {op.salvar_cfg}')
+                print(f'Grafo de fluxo de controle salvo em: {op.salvar_cfg}')
         if op.mostrar_alocacao:
             if nivel not in (4, 5, 6):
                 raise ErroCompilacao('Use -O 4, -O 5 ou -O 6 com --mostrar-alocacao.')

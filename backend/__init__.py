@@ -8,7 +8,7 @@ from .linux_elf import montar_elf
 def compilar(programa, alvo, otimizar=True, nivel=1):
     if alvo not in ('windows', 'linux'):
         raise ValueError('Alvo desconhecido: use windows ou linux.')
-    ir = construir_ir(programa, otimizar=otimizar, nivel=(7 if nivel >= 7 else min(nivel, 3)))
+    ir = construir_ir(programa, otimizar=otimizar, nivel=(nivel if nivel >= 7 else min(nivel, 3)))
     legado = programa_para_backend(ir)
     tem_listas = any(isinstance(t, tuple) and t[0] in ('lista', 'texto') for t in programa.tipos.values())
     if nivel >= 4 and otimizar and not tem_listas:

@@ -131,6 +131,14 @@ class ProgramaMemorySSA:
             } for bid, bb in self.blocos.items()],
         }
 
+    def formatar_ptbr(self):
+        """Relatório com termos em português, sem alterar a saída legada."""
+        texto = self.formatar()
+        return (texto.replace('RS 0.20 - Memory SSA (analise, sem alteracao no backend)',
+                              'RS 0.22 - Memoria versionada em atribuicao unica (analise)')
+                    .replace(' idom=', ' dominador_imediato=')
+                    .replace(' = phi(', ' = juncao('))
+
     def para_json(self):
         return json.dumps(self.para_dict(), ensure_ascii=False, indent=2) + '\n'
 
