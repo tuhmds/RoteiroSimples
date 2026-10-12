@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.40B
+# RoteiroSimples (RS) — versão experimental 0.40C
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,26 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.40C — Contrato verificável da representação intermediária
+
+O compilador possui agora um diagnóstico para mostrar quais instruções e
+expressões são representadas na IR, além dos motivos exatos para
+selecionar o gerador conservador. Novos comandos não podem entrar
+silenciosamente na IR antiga por meio da seleção de otimizações.
+
+```text
+python compilar.py exemplos/aplicacoes/analisar_entregas.rts --alvo linux -O 8 --mostrar-cobertura-intermediaria --mostrar-estrategia
+```
+
+A opção `--mostrar-cobertura-intermediaria` conta operações e explica
+lacunas. Análises `--mostrar-ir`, `--mostrar-efeitos`, SSA e fluxo
+não fingem suporte a um programa que só pode seguir pelo conservador;
+o executável normal continua disponível. Os testes incluem casos
+diferenciais entre `-O 0` e `-O 8` em Linux e Windows.
+
+[Contrato, exemplos e limites da IR](docs/COBERTURA_INTERMEDIARIA_RS_0_40C.md).
+Nenhuma dependência externa de execução foi adicionada.
 
 ## RS 0.40B — Proteção uniforme de abertura de arquivos
 
