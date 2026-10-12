@@ -795,6 +795,9 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         if frame:
             reservar_pilha(g, frame)
 
+    if tem_dinamicas:
+        listas_dinamicas.inicializar_inativas(g, variaveis, tipos, windows)
+
     if tem_leitura:
         offset_cursor, offset_quantidade, _ = _offsets_cache_entrada(slots, windows)
         g.bytes(b'\x31\xC0')
@@ -845,6 +848,11 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 g.bytes(b'\x48\x89\x85' + struct.pack('<i', comprimento))
             elif op[0] == 'crie_lista_dinamica':
                 listas_dinamicas.criar(g, variaveis, op[1], windows)
+            elif op[0] == 'mova_lista_dinamica':
+                listas_dinamicas.mover(g, variaveis, op[1], op[2], windows)
+            elif op[0] == 'libere_escopo_listas':
+                for nome in op[1]:
+                    listas_dinamicas.liberar(g, variaveis, nome, windows)
             elif op[0] == 'adicione_lista_dinamica':
                 listas_dinamicas.acrescentar(g, variaveis, op[1], op[2], windows, expressao)
             elif op[0] == 'limpe_lista_dinamica':
@@ -1067,6 +1075,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 g.bytes(b'\x48\x3D' + struct.pack('<I', 1024 * 1024))
                 g.salto('erro_recursao_limite', 'ja')
         reservar_pilha(g, n_frame)
+        if tem_dinamicas:
+            listas_dinamicas.inicializar_inativas(g, variaveis, tipos, windows)
         g.bytes(b'\x48\x89\x85' + struct.pack('<i', deslocamento_variavel(variaveis, '__rs_uso_pilha', windows)))
         total_palavras = sum(_palavras_tipo(t, g.registros) for _, t in funcao.parametros)
         base_argumentos = 32 if _composto(funcao.retorno, g.registros) else 24

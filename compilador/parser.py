@@ -140,7 +140,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     contexto = _contexto or ContextoSemantico(importa, assinaturas, registros)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'capacidade', 'copie', 'junte', 'limpe', 'funcao', 'retorne', 'tipo'}
+    reservadas = {'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'capacidade', 'copie', 'junte', 'limpe', 'funcao', 'retorne', 'tipo'}
 
     def indice_lista(partes, linha):
         if '[' not in partes or partes[-1] != ']':
@@ -171,7 +171,10 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
         nome, cap = texto_destino(partes, linha)
         return ('buffer', nome, cap)
 
-    def bloco(i, profundidade=0, em_laco=False):
+    def bloco(i, profundidade=0, em_laco=False, pilha_listas=None, limite_laco=None):
+        # Cada chamada acompanha os donos de seu bloco léxico.
+        pilha_listas = ([] if pilha_listas is None else pilha_listas) + [[]]
+        donos_locais = pilha_listas[-1]
         if profundidade:
             contexto.entrar_escopo()
         instrucoes = []
@@ -182,6 +185,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
         while i < len(normalizadas):
             n, t = normalizadas[i]
             if t == ['}']:
+                if profundidade and donos_locais:
+                    adicionar(('libere_escopo_listas', tuple(reversed(donos_locais))), n, t)
                 if profundidade:
                     contexto.sair_escopo()
                 return instrucoes, i + 1
@@ -207,17 +212,17 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 cond, tipo_condicao = expressao_tipada(t[1:-1], n)
                 if tipo_condicao not in ('inteiro', 'logico'):
                     raise ErroCompilacao(f'Linha {n}: condição exige inteiro ou logico.')
-                verdadeiro, i = bloco(i+1, profundidade+1, em_laco)
+                verdadeiro, i = bloco(i+1, profundidade+1, em_laco, pilha_listas, limite_laco)
                 falso = []
                 if i < len(normalizadas) and normalizadas[i][1] == ['senao', '{']:
-                    falso, i = bloco(i+1, profundidade+1, em_laco)
+                    falso, i = bloco(i+1, profundidade+1, em_laco, pilha_listas, limite_laco)
                 adicionar(('se', cond, verdadeiro, falso), n, t)
                 continue
             if len(t) >= 3 and t[0] == 'enquanto' and t[-1] == '{':
                 cond, tipo_condicao = expressao_tipada(t[1:-1], n)
                 if tipo_condicao not in ('inteiro', 'logico'):
                     raise ErroCompilacao(f'Linha {n}: condição exige inteiro ou logico.')
-                corpo, i = bloco(i+1, profundidade+1, True)
+                corpo, i = bloco(i+1, profundidade+1, True, pilha_listas, len(pilha_listas))
                 adicionar(('enquanto', cond, corpo), n, t)
                 continue
             if len(t) >= 7 and t[0] == 'para' and t[-1] == '{':
@@ -251,12 +256,16 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     interno = registrar(str(nome), 'inteiro', n)
                 elif tipos[interno] != 'inteiro':
                     raise ErroCompilacao(f'Linha {n}: contador do para precisa ser inteiro.')
-                corpo, i = bloco(i+1, profundidade+1, True)
+                corpo, i = bloco(i+1, profundidade+1, True, pilha_listas, len(pilha_listas))
                 adicionar(('para', interno, inicial, final, passo, corpo), n, t)
                 continue
             if t in (['pare'], ['continue']):
                 if not em_laco:
                     raise ErroCompilacao(f"Linha {n}: '{t[0]}' só pode ser usado dentro de um laço.")
+                # Libera donos do laço atual e de seus blocos internos.
+                donos = [nome for escopo in pilha_listas[limite_laco:] for nome in escopo]
+                if donos:
+                    adicionar(('libere_escopo_listas', tuple(reversed(donos))), n, t)
                 adicionar((t[0],), n, t)
                 i += 1
                 continue
@@ -308,6 +317,18 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             elif t[0] == 'limpe' and len(t) >= 4 and t[:2] == ['limpe', '('] and t[-1] == ')':
                 nome, _ = texto_destino(t[2:-1], n)
                 adicionar(('limpe_texto', nome), n, t)
+            elif t[0] == 'mova' and t[1:2] == ['('] and t[-1:] == [')']:
+                partes = t[2:-1]
+                if len(partes) != 3 or partes[1] != ',':
+                    raise ErroCompilacao(f'Linha {n}: use mova(destino, origem).')
+                destino = contexto.resolver(str(partes[0]))
+                origem = contexto.resolver(str(partes[2]))
+                if destino == origem:
+                    raise ErroCompilacao(f'Linha {n}: mova exige origem e destino diferentes.')
+                if (tipos.get(destino) != ('lista_dinamica', 'inteiro') or
+                        tipos.get(origem) != ('lista_dinamica', 'inteiro')):
+                    raise ErroCompilacao(f'Linha {n}: mova exige duas listas[] proprietarias.')
+                adicionar(('mova_lista_dinamica', destino, origem), n, t)
             elif t[0] in ('adicione', 'remova_ultimo', 'limpe_lista', 'libere') and t[1:2] == ['('] and t[-1:] == [')']:
                 operacao = str(t[0])
                 conteudo = t[2:-1]
@@ -340,9 +361,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 if contexto.declarado_neste_escopo(str(nome)) or nome in reservadas:
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' duplicada ou reservada.")
                 if len(t) == 6 and t[2:] == [':', 'lista', '[', ']']:
-                    if profundidade:
-                        raise ErroCompilacao(f'Linha {n}: lista[] proprietaria deve ser declarada no corpo principal da funcao ou inicio, nao em blocos repetidos.')
                     interno = registrar(str(nome), ('lista_dinamica', 'inteiro'), n)
+                    donos_locais.append(interno)
                     adicionar(('crie_lista_dinamica', interno), n, t)
                     i += 1
                     continue

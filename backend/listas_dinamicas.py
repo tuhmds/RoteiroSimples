@@ -21,6 +21,26 @@ def criar(g, variaveis, nome, windows):
         g.bytes(b'\x48\x89\x85' + struct.pack('<i', pos))
 
 
+def inicializar_inativas(g, variaveis, tipos, windows):
+    """Marca descritores não alcançados como inativos na entrada."""
+    for nome, tipo in tipos.items():
+        if tipo != TIPO_LISTA_DINAMICA:
+            continue
+        base = deslocamento(variaveis, nome, windows)
+        g.bytes(b'\x31\xC0')
+        g.bytes(b'\x48\x89\x85' + struct.pack('<i', base))
+        g.bytes(b'\x48\x89\x85' + struct.pack('<i', base - 16))
+        g.bytes(b'\x48\xC7\x85' + struct.pack('<i', base - 8) + b'\xFF\xFF\xFF\xFF')
+
+
+def mover(g, variaveis, destino, origem, windows):
+    endereco(g, variaveis, destino, windows)
+    g.bytes(b'\x57')  # destino salvo no topo da pilha
+    endereco(g, variaveis, origem, windows)
+    g.bytes(b'\x48\x89\xFE\x5F')  # rsi=origem; rdi=destino
+    g.chamada('rs_lista_mover_descritor')
+
+
 def endereco(g, variaveis, nome, windows):
     g.bytes(b'\x48\x8D\xBD' + struct.pack('<i', deslocamento(variaveis, nome, windows)))
 
@@ -179,6 +199,21 @@ def emitir_rotinas(g, windows):
     g.bytes(b'\x48\xC7\xC0\xFF\xFF\xFF\xFF')
     g.bytes(b'\x48\x89\x47\xF8')
     g.marcar(fim)
+    g.bytes(b'\x48\x89\xEC\x5D\xC3')
+
+    g.marcar('rs_lista_mover_descritor')
+    # RDI=destino, RSI=origem. Verifica antes de liberar o destino.
+    g.bytes(b'\x55\x48\x89\xE5\x48\x83\xEC\x20')
+    g.bytes(b'\x48\x89\x7D\xF8\x48\x89\x75\xF0')
+    g.bytes(b'\x48\x8B\x46\xF8\x48\x85\xC0')
+    g.salto('erro_lista_liberada', 'js')
+    g.chamada('rs_lista_liberar_descritor')
+    g.bytes(b'\x48\x8B\x7D\xF8\x48\x8B\x75\xF0')
+    g.bytes(b'\x48\x8B\x06\x48\x89\x07')
+    g.bytes(b'\x48\x8B\x46\xF8\x48\x89\x47\xF8')
+    g.bytes(b'\x48\x8B\x46\xF0\x48\x89\x47\xF0')
+    g.bytes(b'\x31\xC0\x48\x89\x06\x48\x89\x46\xF0')
+    g.bytes(b'\x48\xC7\x46\xF8\xFF\xFF\xFF\xFF')
     g.bytes(b'\x48\x89\xEC\x5D\xC3')
 
     g.marcar('rs_lista_acrescentar')
