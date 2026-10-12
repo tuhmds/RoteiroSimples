@@ -69,7 +69,7 @@ class Gerador(Emissor):
         self.rotulos[nome] = len(self.codigo)
 
     def salto(self, nome, tipo='jmp'):
-        prefixo = {'jmp': b'\xE9', 'jz': b'\x0F\x84', 'jnz': b'\x0F\x85', 'jns': b'\x0F\x89', 'jg': b'\x0F\x8F', 'jl': b'\x0F\x8C', 'jo': b'\x0F\x80', 'jne': b'\x0F\x85', 'jb': b'\x0F\x82', 'ja': b'\x0F\x87', 'js': b'\x0F\x88'}[tipo]
+        prefixo = {'jmp': b'\xE9', 'jz': b'\x0F\x84', 'jnz': b'\x0F\x85', 'jns': b'\x0F\x89', 'jg': b'\x0F\x8F', 'jl': b'\x0F\x8C', 'jo': b'\x0F\x80', 'je': b'\x0F\x84', 'jne': b'\x0F\x85', 'jb': b'\x0F\x82', 'ja': b'\x0F\x87', 'js': b'\x0F\x88'}[tipo]
         self.relativo(prefixo, nome)
 
     def chamada(self, nome):
@@ -80,7 +80,11 @@ class Gerador(Emissor):
 
 
 def carregar_numero(g, numero):
-    """Menor mov imediato equivalente sem alterar as flags da CPU."""
+    """Menor MOV imediato equivalente, sem modificar flags do processador.
+
+    mov eax,imm32 zera os 32 bits altos de RAX; mov rax,imm32 estende sinal.
+    Os demais inteiros continuam com movabs rax,imm64.
+    """
     if 0 <= numero <= 0xFFFFFFFF:
         g.bytes(b'\xB8' + struct.pack('<I', numero))
     elif -(1 << 31) <= numero < 0:
@@ -90,9 +94,9 @@ def carregar_numero(g, numero):
 
 
 def deslocamento_variavel(variaveis, nome, windows):
+    """Posicao da variavel local na pilha do programa (em bytes)."""
     indice = variaveis[nome]
     return -(16 + indice*8) if windows else -(8 + indice*8)
-
 
 
 def expressao(g, expr, variaveis, windows):
@@ -103,8 +107,13 @@ def expressao(g, expr, variaveis, windows):
         offset = deslocamento_variavel(variaveis, expr[1], windows)
         g.bytes(b'\x48\x8B\x85' + struct.pack('<i', offset))
     elif tipo == 'neg':
-        expressao(g, expr[1], variaveis, windows)
-        g.bytes(b'\x48\xF7\xD8')  # neg rax
+        if expr[1] == ('numero', 1 << 63):
+            # Menor inteiro: o valor positivo 2^63 não cabe, mas sua negação sim.
+            carregar_numero(g, -(1 << 63))
+        else:
+            expressao(g, expr[1], variaveis, windows)
+            g.bytes(b'\x48\xF7\xD8')  # neg rax
+            g.salto('erro_overflow_aritmetico', 'jo')
     elif tipo == 'comparacao':
         _, op, esquerda, direita = expr
         expressao(g, esquerda, variaveis, windows)
@@ -122,10 +131,14 @@ def expressao(g, expr, variaveis, windows):
         g.bytes(b'\x59')  # pop rcx: esquerda
         if op == '+':
             g.bytes(b'\x48\x01\xC8')  # add rax, rcx
+            g.salto('erro_overflow_aritmetico', 'jo')
         elif op == '-':
-            g.bytes(b'\x48\x29\xC1\x48\x89\xC8')  # sub rcx,rax; mov rax,rcx
+            g.bytes(b'\x48\x29\xC1')  # sub rcx,rax (mantém OF para o teste)
+            g.salto('erro_overflow_aritmetico', 'jo')
+            g.bytes(b'\x48\x89\xC8')  # mov rax, rcx
         elif op == '*':
             g.bytes(b'\x48\x0F\xAF\xC1')  # imul rax,rcx
+            g.salto('erro_overflow_aritmetico', 'jo')
         elif op in ('/', '%'):
             g.bytes(b'\x49\x89\xC2')  # mov r10,rax (divisor)
             g.bytes(b'\x4D\x85\xD2')  # test r10,r10
@@ -203,7 +216,7 @@ def imprime_inteiro(g, windows):
 
 
 def percorrer_instrucoes(instrucoes):
-    """Percorre AST, incluindo ramos e lacos."""
+    """Itera sobre o AST, inclusive instrucoes aninhadas."""
     for op in instrucoes:
         yield op
         if op[0] == 'se':
@@ -216,108 +229,120 @@ def percorrer_instrucoes(instrucoes):
 
 
 def ler_inteiro(g, windows):
-    """Le um inteiro ASCII com sinal de stdin, sem alocar heap."""
+    """Leitura de um inteiro ASCII com sinal em stdin, sem alocacao dinamica.
+
+    Aceita espacos antes/depois, sinal opcional, CRLF ou LF e EOF depois
+    de digitos. Falhas de IO, entrada vazia, letra e overflow terminam em 1.
+    A rotina le um byte por vez: correta, mas ainda nao otimizada.
+    """
     g.marcar('ler_inteiro')
-    g.bytes(b'\x41\x55\x41\x56\x41\x57')  # push r13, r14, r15
+    # Windows: registradores r13-r15 sao callee-saved; Linux tambem.
+    g.bytes(b'\x41\x55\x41\x56\x41\x57')  # push r13 r14 r15
     g.bytes(b'\x48\x83\xEC\x40' if windows else b'\x48\x83\xEC\x10')
-    g.bytes(b'\x45\x31\xED\x45\x31\xF6\x45\x31\xFF')
-    # r13=magnitude, r14=estado (0:inicio,1:sinal,2:digitos,3:espacos finais)
-    # r15=negativo; R12=stdin no Windows.
+    g.bytes(b'\x45\x31\xED\x45\x31\xF6\x45\x31\xFF')  # xor r13d, r14d, r15d
+    # r13 = magnitude, r14d = estado (0 inicio,1 sinal,2 digitos,3 sufixo), r15d = negativo
     g.marcar('leia_proximo_byte')
     if windows:
-        g.bytes(b'\x4C\x89\xE1')  # rcx = handle de stdin
-        g.bytes(b'\x48\x8D\x54\x24\x30')  # rdx = byte temporario
-        g.bytes(b'\x41\xB8\x01\x00\x00\x00')  # r8 = quantidade 1
-        g.bytes(b'\x4C\x8D\x4C\x24\x38')  # r9 = bytes lidos
+        g.bytes(b'\x4C\x89\xE1')  # mov rcx,r12 (stdin)
+        g.bytes(b'\x48\x8D\x54\x24\x30')  # lea rdx,[rsp+0x30] buffer
+        g.bytes(b'\x41\xB8\x01\x00\x00\x00')  # mov r8d,1
+        g.bytes(b'\x4C\x8D\x4C\x24\x38')  # lea r9,[rsp+0x38] qtd
         g.bytes(b'\xC7\x44\x24\x20\x00\x00\x00\x00')  # overlapped NULL
         g.relativo(b'\xFF\x15', 'ReadFile')
         g.bytes(b'\x85\xC0')
         g.salto('leia_lida', 'jnz')
+        # Pipes fechados retornam FALSE + ERROR_BROKEN_PIPE (109), que e EOF.
         g.relativo(b'\xFF\x15', 'GetLastError')
-        g.bytes(b'\x83\xF8\x6D')  # ERROR_BROKEN_PIPE = 109 (EOF)
+        g.bytes(b'\x83\xF8\x6D')  # cmp eax,109
         g.salto('leia_fim_entrada', 'jz')
-        g.bytes(b'\x83\xF8\x26')  # ERROR_HANDLE_EOF = 38
+        g.bytes(b'\x83\xF8\x26')  # cmp eax,38 (ERROR_HANDLE_EOF)
         g.salto('leia_fim_entrada', 'jz')
         g.salto('erro_entrada_invalida')
         g.marcar('leia_lida')
-        g.bytes(b'\x8B\x44\x24\x38\x85\xC0')
+        g.bytes(b'\x8B\x44\x24\x38\x85\xC0')  # bytes lidos
         g.salto('leia_fim_entrada', 'jz')
         g.bytes(b'\x44\x8A\x54\x24\x30')  # r10b = byte
     else:
         g.bytes(b'\x31\xC0\x31\xFF')  # sys_read=0, fd=0
-        g.bytes(b'\x48\x89\xE6')  # buffer em rsp
-        g.bytes(b'\xBA\x01\x00\x00\x00\x0F\x05')  # syscall
+        g.bytes(b'\x48\x89\xE6')  # rsi = rsp (1-byte buffer)
+        g.bytes(b'\xBA\x01\x00\x00\x00\x0F\x05')  # edx=1; syscall
         g.bytes(b'\x48\x85\xC0')
         g.salto('erro_entrada_invalida', 'js')
         g.salto('leia_fim_entrada', 'jz')
-        g.bytes(b'\x44\x8A\x14\x24')  # r10b = byte
+        g.bytes(b'\x44\x8A\x14\x24')  # r10b=[rsp]
 
-    g.bytes(b'\x41\x80\xFA\x0A')  # LF encerra a linha
+    g.bytes(b'\x41\x80\xFA\x0A')  # LF = fim de linha
     g.salto('leia_fim_entrada', 'jz')
-    for byte in (0x20, 0x09, 0x0D):
+    for byte in (0x20, 0x09, 0x0D):  # SPACE, TAB, CR
         g.bytes(b'\x41\x80\xFA' + bytes((byte,)))
         g.salto('leia_espaco', 'jz')
-    g.bytes(b'\x41\x83\xFE\x00')
+
+    g.bytes(b'\x41\x83\xFE\x00')  # estado 0?
     g.salto('leia_sinais', 'jz')
+    # Estado 1 ou 2 continua para checagem de digito; estado 3 rejeita.
     g.bytes(b'\x41\x83\xFE\x03')
     g.salto('erro_entrada_invalida', 'jz')
     g.salto('leia_digito')
+
     g.marcar('leia_sinais')
-    g.bytes(b'\x41\x80\xFA\x2D')  # -
+    g.bytes(b'\x41\x80\xFA\x2D')  # '-'
     g.salto('leia_negativo', 'jz')
-    g.bytes(b'\x41\x80\xFA\x2B')  # +
+    g.bytes(b'\x41\x80\xFA\x2B')  # '+'
     g.salto('leia_positivo', 'jz')
     g.salto('leia_digito')
     g.marcar('leia_negativo')
-    g.bytes(b'\x41\xBF\x01\x00\x00\x00')  # negativo
+    g.bytes(b'\x41\xBF\x01\x00\x00\x00')  # mov r15d,1
     g.marcar('leia_positivo')
-    g.bytes(b'\x41\xBE\x01\x00\x00\x00')  # sinal recebido
+    g.bytes(b'\x41\xBE\x01\x00\x00\x00')  # estado=1
     g.salto('leia_proximo_byte')
 
     g.marcar('leia_espaco')
-    g.bytes(b'\x41\x83\xFE\x01')
+    g.bytes(b'\x41\x83\xFE\x01')  # espaco depois do sinal nao aceito
     g.salto('erro_entrada_invalida', 'jz')
-    g.bytes(b'\x41\x83\xFE\x02')
+    g.bytes(b'\x41\x83\xFE\x02')  # depois dos digitos marca sufixo
     g.salto('leia_marcar_sufixo', 'jz')
     g.salto('leia_proximo_byte')
     g.marcar('leia_marcar_sufixo')
     g.bytes(b'\x41\xBE\x03\x00\x00\x00')
     g.salto('leia_proximo_byte')
+
     g.marcar('leia_digito')
-    g.bytes(b'\x41\x80\xFA\x30')
+    g.bytes(b'\x41\x80\xFA\x30')  # menor que '0'
     g.salto('erro_entrada_invalida', 'jb')
-    g.bytes(b'\x41\x80\xFA\x39')
+    g.bytes(b'\x41\x80\xFA\x39')  # maior que '9'
     g.salto('erro_entrada_invalida', 'ja')
-    g.bytes(b'\x41\xBE\x02\x00\x00\x00')
-    g.bytes(b'\x45\x0F\xB6\xD2')  # r10d = digito ASCII
-    g.bytes(b'\x49\x83\xEA\x30')  # menos 48
+    g.bytes(b'\x41\xBE\x02\x00\x00\x00')  # estado=digitos
+    g.bytes(b'\x45\x0F\xB6\xD2')  # movzx r10d,r10b
+    g.bytes(b'\x49\x83\xEA\x30')  # sub r10,48
+    # magnitude <= 922337203685477580 antes de multiplicar por 10.
     carregar_numero(g, 922337203685477580)
-    g.bytes(b'\x49\x39\xC5')  # cmp magnitude,limite/10
+    g.bytes(b'\x49\x39\xC5')  # cmp r13,rax
     g.salto('erro_entrada_limite', 'ja')
     g.salto('leia_multiplicar', 'jne')
-    g.bytes(b'\x41\x83\xFF\x00')
+    # Ultimo algarismo so pode ser 0..7 (positivo) ou 0..8 (negativo).
+    g.bytes(b'\x41\x83\xFF\x00')  # cmp r15d,0
     g.salto('leia_ultimo_negativo', 'jne')
-    g.bytes(b'\x41\x83\xFA\x07')
+    g.bytes(b'\x41\x83\xFA\x07')  # cmp r10d,7
     g.salto('erro_entrada_limite', 'ja')
     g.salto('leia_multiplicar')
     g.marcar('leia_ultimo_negativo')
     g.bytes(b'\x41\x83\xFA\x08')
     g.salto('erro_entrada_limite', 'ja')
     g.marcar('leia_multiplicar')
-    g.bytes(b'\x4D\x6B\xED\x0A')  # magnitude *= 10
-    g.bytes(b'\x4D\x01\xD5')  # magnitude += digito
+    g.bytes(b'\x4D\x6B\xED\x0A')  # imul r13,r13,10
+    g.bytes(b'\x4D\x01\xD5')  # add r13,r10
     g.salto('leia_proximo_byte')
 
     g.marcar('leia_fim_entrada')
-    g.bytes(b'\x41\x83\xFE\x02')
+    g.bytes(b'\x41\x83\xFE\x02')  # estado >= 2 (digitos ou espaco apos)
     g.salto('erro_entrada_invalida', 'jb')
-    g.bytes(b'\x4C\x89\xE8')  # retorno em rax
-    g.bytes(b'\x45\x85\xFF')
+    g.bytes(b'\x4C\x89\xE8')  # mov rax,r13
+    g.bytes(b'\x45\x85\xFF')  # test r15d,r15d
     g.salto('leia_retornar', 'jz')
-    g.bytes(b'\x48\xF7\xD8')  # torna negativo
+    g.bytes(b'\x48\xF7\xD8')  # neg rax (INT64_MIN mantem o mesmo padrao de bits)
     g.marcar('leia_retornar')
     g.bytes(b'\x48\x83\xC4\x40' if windows else b'\x48\x83\xC4\x10')
-    g.bytes(b'\x41\x5F\x41\x5E\x41\x5D\xC3')
+    g.bytes(b'\x41\x5F\x41\x5E\x41\x5D\xC3')  # pop r15 r14 r13; ret
 
 
 def montar_codigo(programa, windows):
@@ -336,9 +361,9 @@ def montar_codigo(programa, windows):
         g.relativo(b'\xFF\x15', 'GetStdHandle')
         g.bytes(b'\x48\x89\xC3')  # RBX = stdout handle
         if tem_leitura:
-            g.bytes(b'\xB9\xF6\xFF\xFF\xFF')
+            g.bytes(b'\xB9\xF6\xFF\xFF\xFF')  # STD_INPUT_HANDLE (-10)
             g.relativo(b'\xFF\x15', 'GetStdHandle')
-            g.bytes(b'\x49\x89\xC4')  # R12 = stdin
+            g.bytes(b'\x49\x89\xC4')  # R12 = stdin handle
     else:
         frame = alinhar(len(variaveis) * 8, 16)
         g.bytes(b'\x55\x48\x89\xE5')
@@ -357,8 +382,8 @@ def montar_codigo(programa, windows):
                 g.bytes(b'\x48\x89\x85' + struct.pack('<i', offset))
             elif op[0] == 'leia_int':
                 g.chamada('ler_inteiro')
-                offset = deslocamento_variavel(variaveis, op[1], windows)
-                g.bytes(b'\x48\x89\x85' + struct.pack('<i', offset))
+                posicao = deslocamento_variavel(variaveis, op[1], windows)
+                g.bytes(b'\x48\x89\x85' + struct.pack('<i', posicao))
             elif op[0] == 'imprima_num':
                 expressao(g, op[1], variaveis, windows)
                 g.chamada('imprimir_inteiro')
@@ -412,7 +437,7 @@ def montar_codigo(programa, windows):
                 carregar_numero(g, passo)  # passo em RAX
                 g.bytes(b'\x48\x8B\x8D' + struct.pack('<i', deslocamento))
                 g.bytes(b'\x48\x01\xC8')  # add RAX,RCX
-                g.salto(fim, 'jo')  # encerra ao exceder os limites do inteiro
+                g.salto(fim, 'jo')  # ao ultrapassar 64 bits, encerra sem dar a volta
                 g.bytes(b'\x48\x89\x85' + struct.pack('<i', deslocamento))
                 g.salto(inicio)
                 g.marcar(fim)
@@ -440,8 +465,10 @@ def montar_codigo(programa, windows):
 
     primeiro_erro = len(mensagens)
     for indice, msg in [(primeiro_erro, 'Erro: divisão por zero.\n'),
-                        (primeiro_erro + 1, 'Erro: divisão inteira fora do limite.\n')]:
-        rotulo = 'erro_divisao_zero' if indice == primeiro_erro else 'erro_estouro'
+                        (primeiro_erro + 1, 'Erro: divisão inteira fora do limite.\n'),
+                        (primeiro_erro + 2, 'Erro: estouro aritmético em inteiro de 64 bits.\n')]:
+        rotulo = {primeiro_erro: 'erro_divisao_zero', primeiro_erro + 1: 'erro_estouro',
+                  primeiro_erro + 2: 'erro_overflow_aritmetico'}[indice]
         g.marcar(rotulo)
         mensagens[indice] = msg
         if windows:
@@ -489,7 +516,7 @@ def montar_elf(g, mensagens):
 def montar_pe(g, mensagens):
     base_codigo, base_importacoes, base_dados = 0x1000, 0x2000, 0x3000
     nomes = ['GetStdHandle', 'SetConsoleOutputCP', 'WriteFile', 'ExitProcess']
-    if 'ler_inteiro' in g.rotulos:
+    if any(label[0] == 'ler_inteiro' for label in g.rotulos.items()):
         nomes.extend(['ReadFile', 'GetLastError'])
     importacoes, enderecos, inicio_iat, tamanho_iat = construir_importacoes(base_importacoes, nomes)
     dados = bytearray()
@@ -497,7 +524,7 @@ def montar_pe(g, mensagens):
         enderecos[f'mensagem_{i}'] = base_dados + len(dados)
         dados += msg.encode('utf-8')
     if max(len(g.codigo), len(importacoes), len(dados)) > 0x1000:
-        raise ErroCompilacao('Programa grande demais para as seções fixas da versão 0.7 (4 KiB).')
+        raise ErroCompilacao('Programa grande demais para as seções fixas da versão 0.8 (4 KiB).')
     g.finalizar(base_codigo, enderecos)
     secoes = [(b'.text', bytes(g.codigo), base_codigo, 0x60000020),
               (b'.idata', bytes(importacoes), base_importacoes, 0xC0000040),
@@ -543,7 +570,9 @@ def montar_pe(g, mensagens):
     return bytes(resultado)
 
 
-def compilar(programa, alvo):
+def compilar(programa, alvo, otimizar=True):
     windows = alvo == 'windows'
+    from ir import construir_ir, programa_para_backend
+    programa = programa_para_backend(construir_ir(programa, otimizar=otimizar))
     g, mensagens = montar_codigo(programa, windows)
     return montar_pe(g, mensagens) if windows else montar_elf(g, mensagens)

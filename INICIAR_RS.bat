@@ -5,10 +5,10 @@ cd /d "%~dp0"
 :MENU
 cls
 echo ==============================================
-echo         RoteiroSimples RS 0.7
+echo         RoteiroSimples RS 0.8
 echo ==============================================
 echo.
-echo  [1] Compilar e executar exemplo de tipos pelo teclado
+echo  [1] Compilar e executar exemplo de otimizacao e verificacao
 echo  [2] Editar o exemplo no Bloco de Notas
 echo  [3] Rodar testes automatizados
  echo  [4] Executar o ultimo .exe gerado
@@ -24,7 +24,7 @@ if errorlevel 1 goto COMPILAR
 call "%~dp0COMPILAR_WINDOWS.bat"
 goto MENU
 :EDITAR
-notepad "%~dp0exemplos\tipos.rts"
+notepad "%~dp0exemplos\otimizacao.rts"
 goto MENU
 :TESTES
 py -3 -m unittest discover -s testes -v

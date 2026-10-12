@@ -1,0 +1,13 @@
+inclua matematica
+inicio {
+    seja preco: inteiro = 10
+    seja distancia: inteiro = 5
+    seja taxa = 2 * 3 + 4
+    seja total = somar(preco, distancia * taxa)
+    escreva("RS 0.8: operações verificadas")
+    escreva(total)
+    escreva(-9223372036854775808)
+    se total > 40 {
+        escreva("Cálculo aprovado!")
+    }
+}

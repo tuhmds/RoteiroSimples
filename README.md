@@ -1,12 +1,34 @@
-# RoteiroSimples (RS) — versão experimental 0.7
+# RoteiroSimples (RS) — versão experimental 0.8
 
-**RoteiroSimples** é um projeto experimental de linguagem de programação em português brasileiro. O compilador de desenvolvimento está escrito em Python 3.10+ e gera instruções x86-64 diretamente para executáveis Windows (PE32+) e Linux (ELF64), sem passar por C, Rust ou LLVM. Os programas gerados não precisam de Python para executar.
+Linguagem experimental em português brasileiro, com compilador em Python 3.10+ que **gera diretamente instruções de máquina x86-64**, em executáveis ELF64 (Linux) e PE32+ (Windows). Os programas gerados não dependem do Python para executar. **Não usar em produção.**
 
-> Estado do projeto: protótipo educacional. Ainda não é seguro para sistemas de produção.
+## Novo na RS 0.8: estouro verificado e IR tipada
 
-## Novo na RS 0.7: tipos de dados e controle básico da pilha
+```text
+inicio {
+    seja valor: inteiro = 9223372036854775807
+    escreva(valor + 1) // erro de estouro aritmético; código de saída 1
+}
+```
 
-As palavras reservadas continuam **sem acentos**, como `inicio`, `senao`, `inteiro` e `logico`.
+- **Soma, subtração, multiplicação e negação unária** agora verificam estouro de inteiro com as flags de máquina do x86-64 (`OF`, salto `jo`) e terminam com mensagem e código de saída 1.
+- **O menor valor válido**, `-9223372036854775808`, continua permitido, inclusive sem otimização. Negar esse valor *depois* da criação é um estouro e produz erro.
+- As proteções anteriores de **divisão por zero** e de `-9223372036854775808 / -1` permanecem. A atualização interna do contador `para` é uma exceção intencional: ao atingir overflow, o laço termina sem gerar erro.
+- Nova **IR tipada** em `ir.py`, com nós imutáveis para expressões e instruções. O analisador produz uma AST, que é convertida em IR para otimização, e depois traduzida ao backend x86-64 existente. **Ainda não** temos CFG, SSA, alocador de registradores ou análise global de fluxo.
+- `-O 0` mantém as expressões sem dobramento de constantes; `-O 1` (padrão) avalia em tempo de compilação **somente contas constantes seguras**. Operações que gerariam estouro ou divisão por zero continuam executadas com verificação nativa. Não alteramos a ordem dos comandos nem das leituras.
+
+Exemplo sem entrada: `exemplos/otimizacao.rts`.
+
+No PowerShell:
+
+```powershell
+py -3 compilar.py exemplos\otimizacao.rts --alvo windows -O 1 --mostrar-ir -o roteiro_windows.exe
+.\roteiro_windows.exe
+```
+
+Para comparar com otimizações desativadas, use `-O 0`. Exemplo medido no Linux, com `escreva((2 + 3) * (4 + 5) - 6)`: o ELF completo diminuiu de **676 para 608 bytes** (10,1%). No mesmo exemplo Windows, os dois PE completos ficaram com **2.048 bytes** por alinhamento das seções. **Isso não demonstra ganho de velocidade**, apenas diferença no tamanho do arquivo.
+
+## Mantido desde a RS 0.7: tipos verificados pelo compilador
 
 ```text
 inicio {
@@ -20,45 +42,18 @@ inicio {
 }
 ```
 
-- `inteiro` representa números com sinal de 64 bits. `logico` representa `verdadeiro` ou `falso`.
-- Pode escrever `seja valor: inteiro = 42` ou deixar a linguagem inferir, como em `seja valor = 42`.
-- Comparações inferem `logico`, e o compilador proíbe misturar booleanos e inteiros em expressões incompatíveis. `leia` aceita apenas variáveis `inteiro`.
-- Para preservar compatibilidade, `se` e `enquanto` continuam aceitando valores inteiros (zero equivale a falso).
-- `escreva(logico)` atualmente imprime `1` ou `0`. Os textos entre aspas continuam aceitando UTF-8 normalmente.
-- Cada variável local ocupa 8 bytes na pilha. Impusemos limite provisório de **256 variáveis** até implementar sondagem de pilha (especialmente no Windows).
-- Não há ponteiros, heap, listas ou gerenciamento dinâmico de memória. A checagem de tipos é um **primeiro passo**, não uma garantia geral de segurança.
-- O compilador rejeita literais inteiros positivos fora do intervalo, mas operações em tempo de execução ainda podem transbordar sem diagnóstico.
+- `inteiro` é um número com sinal de **64 bits**; `logico` é `verdadeiro` ou `falso`, representado por 1 ou 0 nos atuais executáveis.
+- `seja idade: inteiro = 17` declara explicitamente o tipo; `seja idade = 17` permanece válido e infere `inteiro`.
+- Comparações inferem `logico`. O compilador impede misturar tipos incompatíveis, como somar `verdadeiro + 5` ou atribuir `1` a uma variável `logico`.
+- `leia` recebe apenas variáveis `inteiro`; contadores de `para` são inteiros. Para manter os programas antigos compatíveis, `se` e `enquanto` ainda aceitam um inteiro não zero como condição.
+- Os **dois tipos ocupam 8 bytes por variável na pilha** na atual implementação, sem ponteiros ou alocação dinâmica. Temporariamente limitamos a **256 variáveis locais**, para evitar ultrapassar páginas de pilha sem sondagem (stack probing) no Windows.
+- Um literal positivo acima de 9223372036854775807 é rejeitado, mas -9223372036854775808 é permitido.
 
-**Exemplo novo:** `exemplos/tipos.rts`. Veja [tipos e memória da RS 0.7](docs/TIPOS_E_MEMORIA_RS_0_7.md) para os detalhes e limitações.
+Os literais lógicos são escritos sem acentos, como todas as palavras reservadas. `escreva(verdadeiro)` imprime `1` por enquanto, não a palavra `verdadeiro`.
 
-## Padrão da RS 0.5: sintaxe sem acentos
+Veja a [especificação de tipos e memória](docs/TIPOS_E_MEMORIA_RS_0_7.md). **Os testes de tipo protegem as operações aceitas; ainda não existe proteção geral de memória ou gerenciamento de ponteiros. Os erros de estouro e divisão já são verificados em tempo de execução.**
 
-**Regra oficial:** comandos, nomes de variáveis e bibliotecas usam apenas caracteres ASCII, como `inicio`, `senao`, `preco` e `matematica`. Não são aceitas grafias acentuadas como código. **Não haverá aliases automáticos** nem normalização Unicode de identificadores nesta fase.
-
-Textos entre aspas, comentários e mensagens de erro continuam em português brasileiro e aceitam UTF-8 normalmente: `escreva("Olá, coração!")`.
-
-**Mudança de compatibilidade:** programas anteriores que continham comandos ou nomes de variáveis com acentos devem trocar essas grafias pela forma sem acentos. Todos os exemplos e testes deste repositório foram atualizados.
-
-## Incluído desde a RS 0.5: repeticao com `para`
-
-A linguagem continua usando **comandos e identificadores sem acentos**. Textos entre aspas e comentarios continuam aceitando portugues brasileiro em UTF-8.
-
-```text
-inicio {
-    para numero de 1 ate 5 {
-        escreva(numero)
-    }
-    para numero de 5 ate 1 passo -2 {
-        escreva(numero)
-    }
-}
-```
-
-`para numero de 1 ate 5` percorre de 1 a 5 **inclusive**, com passo 1 por padrao. `passo -2` permite contagem regressiva. O contador e criado automaticamente caso ainda nao exista e permanece acessivel apos o bloco (ate que exista escopo de blocos). O valor inicial e calculado uma vez; o valor final e recalculado a cada iteracao. O passo precisa ser um inteiro constante diferente de zero; o programa encerra a contagem se o incremento extrapolaria um inteiro de 64 bits. `pare` encerra o laco atual e `continue` executa o incremento antes da proxima iteracao.
-
-Variaveis com `seja` ainda devem ser declaradas fora de blocos `para`, `enquanto` ou `se` nesta versao.
-
-## RS 0.6 — leitura de inteiros e primeiros cuidados de memória
+## Mantido desde a RS 0.6: `leia` — entrada pelo teclado
 
 ```text
 inicio {
@@ -73,98 +68,62 @@ inicio {
 }
 ```
 
-`leia` recebe **uma variável inteira já declarada**, lê stdin nativamente e aceita sinal opcional, espaços, LF/CRLF e EOF após dígitos. Entradas vazias, letras, decimais e valores fora do intervalo de inteiros com sinal de 64 bits causam erro (código 1). O programa gerado não usa Python, mas a leitura inicial ainda é byte a byte e não está otimizada.
+`leia` recebe **uma variável inteira já declarada**. A entrada aceita números com sinal opcional (`-25`, `0`, `+42`), espaços nas extremidades, LF ou CRLF, e EOF após os dígitos. Uma entrada inválida, vazia ou fora do intervalo de -9223372036854775808 a 9223372036854775807 encerra o programa com código 1. No Linux, a mensagem sai no stderr; no Windows, por enquanto, no stdout. A entrada é lida de `stdin` pela rotina nativa, sem heap ou biblioteca Python. A leitura byte a byte **ainda não está otimizada** para grandes volumes.
 
-**Primeira otimização:** carga de constantes com instruções `mov` de 5 ou 7 bytes quando possível (em vez de sempre 10 bytes), sem alterar resultados ou flags. Cálculo dos endereços locais na pilha centralizado. Veja [arquitetura, ponteiros, memória e otimizações](docs/ARQUITETURA_E_OTIMIZACOES.md). Ponteiros brutos e heap ainda não estão implementados.
+**Primeira otimização real:** o compilador gera a menor instrução `mov` disponível que preserve valor e flags, carregando algumas constantes em 5 ou 7 bytes em vez dos 10 bytes de `movabs`. Os endereços das variáveis locais na pilha são calculados por uma função comum. Isso reduz código e risco de erros, mas não significa automaticamente execução mais rápida.
 
-## Comece aqui no Windows
+**[Plano técnico: memória, ponteiros, instruções primitivas e otimizações](docs/ARQUITETURA_E_OTIMIZACOES.md)**. Ponteiros brutos, heap e objetos ainda são propostas, não recursos da versão 0.8.
 
-1. Baixe ou clone este repositório.
-2. Instale Python 3 e confirme que `py -3 --version` funciona no PowerShell.
-3. Dê dois cliques em **`INICIAR_RS.bat`**. O menu permanece disponível para você escolher as próximas operações.
-4. Escolha **1** para compilar e executar `exemplos/tipos.rts`, **2** para editar no Bloco de Notas, **3** para executar os testes ou **4** para executar o último programa compilado.
-5. Escolha **0** para sair.
+## Executar no Windows
 
-**Importante:** `TESTAR_WINDOWS.bat` apenas executa um programa já compilado. Quando aparecer "pressione qualquer tecla", apertar uma tecla **encerra a janela**, não inicia uma nova etapa. Use `INICIAR_RS.bat` para trabalhar com o projeto.
+1. Baixe o ZIP ou clone este repositório; instale Python 3 e confira `py -3 --version`.
+2. Abra **`INICIAR_RS.bat`**. Escolha **1** para compilar e executar `exemplos/otimizacao.rts` (sem entrada pelo teclado).
+3. A opção **2** abre o exemplo no Bloco de Notas; a opção **3** roda os testes; **4** executa o último `.exe` gerado; **0** sai do menu.
+4. O antigo `TESTAR_WINDOWS.bat` só executa o binário pronto: apertar uma tecla no final fecha a janela, não inicia outro comando.
 
-### Novo na RS 0.4: repetição em português
-
-O laço `enquanto` repete um bloco enquanto a condição for diferente de zero. `pare` interrompe o laço mais interno e `continue` passa para a próxima iteração do laço mais interno.
-
-Arquivo `exemplos/tipos.rts`: 
-
-```text
-inicio {
-    seja contador = 0
-    enquanto contador < 5 {
-        contador = contador + 1
-        se contador == 3 {
-            continue
-        }
-        escreva(contador)
-        se contador == 4 {
-            pare
-        }
-    }
-}
-```
-
-Saída esperada: `1`, `2` e `4`, cada número em uma linha.
-
-Laços podem ser aninhados e conter decisões `se`/`senao`. `pare` e `continue` fora de um laço produzem erro de compilação. Por enquanto, todas as variáveis devem ser declaradas fora dos blocos `se` e `enquanto`. Um laço sem condição de saída pode executar indefinidamente.
-
-### Compilação manual
-
-Windows, no PowerShell aberto na pasta do projeto:
+Ou pelo PowerShell na pasta do projeto:
 
 ```powershell
-py -3 compilar.py exemplos\tipos.rts --alvo windows -o roteiro_windows.exe
+py -3 compilar.py exemplos\otimizacao.rts --alvo windows -O 1 -o roteiro_windows.exe
 .\roteiro_windows.exe
 ```
 
-Linux x86-64:
+No Linux x86-64:
 
 ```bash
-python3 compilar.py exemplos/tipos.rts --alvo linux -o roteiro_linux
+python3 compilar.py exemplos/otimizacao.rts --alvo linux -O 1 -o roteiro_linux
 ./roteiro_linux
 ```
 
-Para rodar os testes automatizados:
+Para rodar a suíte automatizada:
 
 ```bash
 python3 -m unittest discover -s testes -v
 ```
 
-## Recursos implementados
+## Sintaxe e recursos existentes
 
-- Programa `inicio { ... }`, instruções uma por linha e comentários `//`.
-- `escreva("texto")` em UTF-8 e `escreva(expressão numérica)`.
-- Variáveis `seja nome = expressão` e atribuição posterior `nome = expressão`.
-- Inteiros de 64 bits com sinal; expressões `+`, `-`, `*`, `/`, `%` e parênteses.
-- Biblioteca `inclua matematica`: `somar`, `subtrair`, `multiplicar`, `dividir`, `resto`.
-- Comparações `==`, `!=`, `<`, `<=`, `>` e `>=`, que retornam 1 (verdadeiro) ou 0 (falso).
-- `se condição { ... } senao { ... }`, incluindo blocos aninhados. `senao` é opcional.
-- **Novo na 0.4:** `enquanto`, `pare` e `continue`, com laços aninhados e emissão direta de saltos x86-64.
-- **Novo na 0.5:** `para nome de inicio ate fim [passo inteiro]`, inclusive e compilado diretamente em saltos nativos.
-- Erros em português; divisão por zero e divisão inteira fora do intervalo retornam código de erro 1.
+- Palavras reservadas e nomes de variáveis **sem acentos**: `inicio`, `seja`, `se`, `senao`, `para`, `enquanto`, `leia`, `escreva`. Textos entre aspas e comentários aceitam UTF-8 normal.
+- Declarações tipadas `inteiro` e `logico`, inferência com `seja`, verificação estática das atribuições e literais `verdadeiro`/`falso`.
+- Inteiros de 64 bits, `+`, `-`, `*`, `/`, `%`, parênteses, atribuição e comparações.
+- `inclua matematica`: `somar`, `subtrair`, `multiplicar`, `dividir` e `resto`.
+- Decisões com `se` / `senao`; laços `enquanto` e `para numero de 1 ate 5 passo 1`, com `pare` e `continue`.
+- Entrada de inteiros com `leia(nome)` e saída de números e textos com `escreva(...)`.
+- Código nativo para Windows x86-64 e Linux x86-64, com testes que exercitam programas reais.
 
-## Limitações conhecidas
+## Limitações importantes
 
-- **Não há números decimais, entrada de texto**, funções criadas pelo usuário, aplicativos gráficos, jogos ou integração com bibliotecas externas.
-- Por enquanto, variáveis precisam ser declaradas fora dos blocos `se`/`senao` e antes de serem utilizadas.
-- Soma, subtração e multiplicação usam resultados de 64 bits sem detecção de estouro.
-- Divisão inteira trunca em direção a zero (por exemplo, `-17 / 5` resulta em `-3`).
-- O executável Windows gerado não foi executado por este ambiente Linux; a execução deve ser validada num Windows real. A estrutura PE é verificada nos testes.
-- O formato PE atual usa três seções limitadas a 4 KiB cada. O compilador ainda não é endurecido para produção.
-- A biblioteca matemática mapeia operações para instruções nativas; não é uma biblioteca Python instalada nos executáveis.
+Não temos ainda números decimais, entrada de textos, funções definidas pelo usuário, listas, ponteiros, alocação dinâmica, gerenciador de memória, interfaces gráficas ou bibliotecas de jogos. Variáveis precisam ser declaradas fora de blocos nesta versão. Soma, subtração, multiplicação e negação têm detecção de estouro em tempo de execução. No Windows, o backend tem seções fixas de 4 KiB e não foi auditado para distribuição profissional. O verificador de tipos desta versão é apenas o primeiro passo; precisamos de análise de tempo de vida, limites e representação de memória antes de oferecer ponteiros de baixo nível.
 
-## Organização do código
+## Organização
 
-- `sintaxe.py`: análise léxica, expressões e instruções.
-- `codigo_nativo.py`: emissão de instruções AMD64 e formatos PE/ELF.
-- `bibliotecas/matematica.py`: nomes públicos das funções matemáticas.
-- `compilar.py`: interface de linha de comando.
-- `testes/`: verificações automatizadas, incluindo execução nativa no Linux e no Windows quando disponíveis.
-- `exemplos/`: programas `.rts` de referência.
+- `sintaxe.py`: analisador léxico, sintático e verificação inicial de tipos.
+- `ir.py`: IR tipada e otimização de constantes conservadora.
+- `codigo_nativo.py`: instruções AMD64 e geração de executáveis PE/ELF.
+- `bibliotecas/matematica.py`: mapeamentos da biblioteca matemática.
+- `compilar.py`: comando de compilação.
+- `testes/`: testes unitários, execução nativa e limites de entrada.
+- `exemplos/otimizacao.rts`: exemplo da RS 0.8; `tipos.rts` e demais exemplos preservados.
+- `docs/ARQUITETURA_E_OTIMIZACOES.md`: arquitetura e próximos passos.
 
-**Próximas etapas:** tipos, referências seguras, entrada em blocos, números decimais, IR e benchmarks. Ainda não foi escolhida uma licença.
+**Próxima prioridade:** IR com fluxo de controle explícito, buffer de entrada mais eficiente, tipos compostos, diagnóstico com linhas de origem e verificação de memória. Licença ainda não definida.
