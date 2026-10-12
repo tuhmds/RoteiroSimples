@@ -51,3 +51,26 @@ utilizada pelo chamador após a função retornar.
 Este mecanismo cobre empréstimos imutáveis em chamadas síncronas. Não é
 um sistema geral de empréstimos mutáveis, empréstimos armazenados ou
 referências de longo prazo, nem uma auditoria completa de segurança.
+
+## Listas dinâmicas de registros por valor
+
+O tipo `lista[Nome]`, com `Nome` declarado por `tipo`, guarda cópias
+independentes do registro. Registros aninhados, textos de comprimento fixo
+e listas fixas em seus campos são representados por várias palavras
+de oito bytes, sem ponteiros compartilhados.
+
+`adicione(lista, registro)` exige um registro variável do tipo correto.
+`lista[indice] = registro` substitui um elemento já existente.
+`seja copia: Nome = lista[indice]` lê o registro para uma variável
+independente, inclusive dentro de funções com empréstimos imutáveis.
+Para mudar um campo, copie o registro, altere o campo e devolva a cópia
+à posição da lista.
+
+O compilador calcula a largura estática do registro e a utiliza para
+reservar, crescer, indexar, transferir e liberar o armazenamento nativo.
+Os índices continuam verificados antes do acesso. Tipos incompatíveis
+são rejeitados na compilação.
+
+A sintaxe `lista[]` continua equivalendo a `lista[inteiro]`.
+A passagem/retorno de listas proprietárias em funções continua proibida.
+Empréstimos temporários podem ser passados para consulta.

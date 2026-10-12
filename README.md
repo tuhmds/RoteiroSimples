@@ -70,8 +70,15 @@ verificada em tempo de execução.
 Listas dinâmicas agora aceitam `lista[inteiro]` e `lista[logico]`
 (além do legado `lista[]` como inteiro). O empréstimo preserva o tipo:
 `emprestimo[lista[logico]]`, por exemplo. Transferências entre listas
-de tipos diferentes são erros de compilação. Registros e elementos
-compostos ainda exigem implementação própria e permanecem pendentes.
+de tipos diferentes são erros de compilação. Registros declarados com `tipo` também podem ser elementos de
+`lista[Registro]`. O armazenamento cresce com a largura real do registro,
+inclusive campos aninhados, e permite `adicione(lista, registro)`,
+`lista[indice] = registro`, cópias por valor com
+`seja copia: Registro = lista[indice]` e empréstimos somente para leitura.
+Um índice não cria uma referência prolongada ao elemento; a leitura
+de um registro produz uma cópia independente. Ainda não é possível
+editar campos diretamente como `lista[indice].campo`. Textos dinâmicos
+e tipos arbitrários compostos permanecem em planejamento.
 A RS permanece experimental. Leia
 [`docs/PROPRIEDADE_E_ESCOPOS_RS_0_33.md`](docs/PROPRIEDADE_E_ESCOPOS_RS_0_33.md).
 

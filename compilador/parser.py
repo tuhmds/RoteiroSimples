@@ -82,12 +82,12 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
         if len(partes) == 4 and partes == ['emprestimo', '[', 'lista', ']']:
             return ('lista_emprestada', 'inteiro')
         if (len(partes) == 7 and partes[:4] == ['emprestimo', '[', 'lista', '[']
-                and partes[-2:] == [']', ']'] and partes[4] in ('inteiro', 'logico')):
+                and partes[-2:] == [']', ']'] and (partes[4] in ('inteiro', 'logico') or partes[4] in registros)):
             return ('lista_emprestada', str(partes[4]))
         if len(partes) == 4 and partes[1] == '[' and partes[3] == ']':
             categoria = str(partes[0])
             valor = str(partes[2])
-            if categoria == 'lista' and valor in ('inteiro', 'logico'):
+            if categoria == 'lista' and (valor in ('inteiro', 'logico') or valor in registros):
                 return ('lista_dinamica', valor)
             if categoria in ('lista', 'texto') and valor.isascii() and valor.isdecimal():
                 tamanho = int(valor)
@@ -115,6 +115,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             retorno = ler_tipo(cabecalho[fim_par+3:-1], n)
             if isinstance(retorno, tuple) and retorno[0] == 'lista_emprestada':
                 raise ErroCompilacao(f'Linha {n}: emprestimo[lista] so pode aparecer em parametros; nao pode ser retornado.')
+            if isinstance(retorno, tuple) and retorno[0] == 'lista_dinamica':
+                raise ErroCompilacao(f'Linha {n}: lista dinamica proprietaria nao pode ser retornada por valor.')
             partes = cabecalho[3:fim_par]
             parametros = []
             if partes:
@@ -129,7 +131,10 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                         raise ErroCompilacao(f'Linha {n}: use parametro: tipo.')
                     if grupo[0] in (x[0] for x in parametros):
                         raise ErroCompilacao(f'Linha {n}: parâmetro duplicado: {grupo[0]}.')
-                    parametros.append((str(grupo[0]), ler_tipo(grupo[2:], n)))
+                    tipo_parametro = ler_tipo(grupo[2:], n)
+                    if isinstance(tipo_parametro, tuple) and tipo_parametro[0] == 'lista_dinamica':
+                        raise ErroCompilacao(f'Linha {n}: use emprestimo[lista[Tipo]] para receber listas, nao transferencia implicita.')
+                    parametros.append((str(grupo[0]), tipo_parametro))
             if nome in assinaturas or nome in registros:
                 raise ErroCompilacao(f'Linha {n}: função {nome!r} já foi declarada.')
             assinaturas[nome] = (tuple(tipo for _, tipo in parametros), retorno)
@@ -357,6 +362,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     if not isinstance(tipos.get(nome), tuple) or tipos[nome][0] != 'lista_dinamica':
                         raise ErroCompilacao(f'Linha {n}: adicione exige lista dinamica proprietaria.')
                     valor, _ = expressao_tipada(conteudo[virgula+1:], n, tipos[nome][1])
+                    if tipos[nome][1] in registros and valor[0] != 'var':
+                        raise ErroCompilacao(f'Linha {n}: adicione com registro exige variavel de mesmo tipo.')
                     adicionar(('adicione_lista_dinamica', nome, valor), n, t)
                 else:
                     if len(conteudo) != 1:
@@ -378,7 +385,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f'Linha {n}: emprestimo[lista] so e permitido como parametro de funcao.')
                 if (t[2:5] == [':', 'lista', '['] and t[-1:] == [']']
                         and ((len(t) == 6 and t[5] == ']') or
-                             (len(t) == 7 and t[5] in ('inteiro', 'logico')))):
+                             (len(t) == 7 and (t[5] in ('inteiro', 'logico') or t[5] in registros)))):
                     elemento = 'inteiro' if len(t) == 6 else str(t[5])
                     interno = registrar(str(nome), ('lista_dinamica', elemento), n)
                     donos_locais.append(interno)
@@ -392,7 +399,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                         adicionar(('crie_registro', interno, tuple(contexto.campos_registro[interno].values())), n, t)
                     elif len(t) >= 6 and t[4] == '=':
                         arvore, _ = expressao_tipada(t[5:], n, tipo_nome)
-                        if arvore[0] not in ('var', 'chamada'):
+                        if arvore[0] not in ('var', 'chamada', 'indice_lista_dinamica', 'indice_lista_emprestada'):
                             raise ErroCompilacao(f'Linha {n}: registro precisa de origem composta.')
                         adicionar(('copie_composto', interno, arvore), n, t)
                     else:
@@ -453,8 +460,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 tipo_armazenado = ('registro', inferido, registros[inferido]) if isinstance(inferido, str) and inferido in registros else inferido
                 interno = registrar(str(nome), tipo_armazenado, n)
                 if eh_composto(inferido):
-                    if arvore[0] not in ('var', 'chamada'):
-                        raise ErroCompilacao(f'Linha {n}: cópia composta exige variável ou função.')
+                    if arvore[0] not in ('var', 'chamada', 'indice_lista_dinamica', 'indice_lista_emprestada'):
+                        raise ErroCompilacao(f'Linha {n}: cópia composta exige variável, função ou índice de lista tipada.')
                     adicionar(('copie_composto', interno, arvore), n, t)
                 else:
                     adicionar(('atribua', interno, arvore), n, t)
@@ -478,6 +485,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 esperado = tipos[nome][1] if tamanho is None else 'inteiro'
                 valor, _ = expressao_tipada(t[igual+1:], n, esperado)
                 if tamanho is None:
+                    if esperado in registros and valor[0] != 'var':
+                        raise ErroCompilacao(f'Linha {n}: atribuicao de registro em lista exige variavel.')
                     adicionar(('atribua_indice_dinamico', nome, indice, valor), n, t)
                 else:
                     adicionar(('atribua_indice', nome, indice, valor, tamanho), n, t)
@@ -492,8 +501,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 esperado = tipos[nome][1] if isinstance(tipos[nome], tuple) and tipos[nome][0] == 'registro' else tipos[nome]
                 arvore, _ = expressao_tipada(t[2:], n, esperado)
                 if eh_composto(tipos[nome]):
-                    if arvore[0] not in ('var', 'chamada'):
-                        raise ErroCompilacao(f'Linha {n}: atribuição composta exige variável ou função.')
+                    if arvore[0] not in ('var', 'chamada', 'indice_lista_dinamica', 'indice_lista_emprestada'):
+                        raise ErroCompilacao(f'Linha {n}: atribuição composta exige variável, função ou índice de lista tipada.')
                     adicionar(('copie_composto', nome, arvore), n, t)
                 else:
                     adicionar(('atribua', nome, arvore), n, t)

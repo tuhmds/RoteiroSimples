@@ -857,21 +857,30 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             elif op[0] == 'crie_lista_dinamica':
                 listas_dinamicas.criar(g, variaveis, op[1], windows)
             elif op[0] == 'mova_lista_dinamica':
-                listas_dinamicas.mover(g, variaveis, op[1], op[2], windows)
+                listas_dinamicas.mover(g, variaveis, op[1], op[2], windows,
+                                       listas_dinamicas.largura_elemento(g, tipos[op[1]]))
             elif op[0] == 'libere_escopo_listas':
                 for nome in op[1]:
-                    listas_dinamicas.liberar(g, variaveis, nome, windows)
+                    listas_dinamicas.liberar(g, variaveis, nome, windows,
+                                              largura=listas_dinamicas.largura_elemento(g, tipos[nome]))
             elif op[0] == 'adicione_lista_dinamica':
-                listas_dinamicas.acrescentar(g, variaveis, op[1], op[2], windows, expressao)
+                listas_dinamicas.acrescentar(g, variaveis, op[1], op[2], windows, expressao,
+                                            listas_dinamicas.largura_elemento(g, tipos[op[1]]))
             elif op[0] == 'limpe_lista_dinamica':
                 listas_dinamicas.limpar(g, variaveis, op[1], windows)
             elif op[0] == 'remova_ultimo_lista_dinamica':
                 listas_dinamicas.retirar(g, variaveis, op[1], windows)
             elif op[0] == 'libere_lista_dinamica':
-                listas_dinamicas.liberar(g, variaveis, op[1], windows, explicito=True)
+                listas_dinamicas.liberar(g, variaveis, op[1], windows, explicito=True,
+                                        largura=listas_dinamicas.largura_elemento(g, tipos[op[1]]))
             elif op[0] == 'atribua_indice_dinamico':
-                listas_dinamicas.escrever_indice(g, variaveis, op[1], op[2], op[3],
-                                                windows, expressao)
+                largura = listas_dinamicas.largura_elemento(g, tipos[op[1]])
+                if tipos[op[1]][1] in g.registros:
+                    listas_dinamicas.escrever_composto(g, variaveis, op[1], op[2], op[3],
+                                                       windows, expressao, largura)
+                else:
+                    listas_dinamicas.escrever_indice(g, variaveis, op[1], op[2], op[3],
+                                                    windows, expressao)
             elif op[0] == 'leia_indice_dinamico':
                 listas_dinamicas.indice(g, variaveis, op[1], op[2], windows, expressao)
                 g.bytes(b'\x50\x48\x83\xEC\x08')
@@ -943,6 +952,12 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 destino, origem = op[1], op[2]
                 if origem[0] == 'chamada':
                     expressao(g, origem, variaveis, windows, destino_composto=destino)
+                elif origem[0] in ('indice_lista_dinamica', 'indice_lista_emprestada'):
+                    nome = origem[1]
+                    largura = listas_dinamicas.largura_elemento(g, tipos[nome])
+                    listas_dinamicas.copiar_composto(g, variaveis, destino, nome, origem[2],
+                        windows, expressao, largura,
+                        emprestada=(origem[0] == 'indice_lista_emprestada'))
                 else:
                     if origem[0] != 'var':
                         raise ValueError('Cópia de composto exige valor de variável.')

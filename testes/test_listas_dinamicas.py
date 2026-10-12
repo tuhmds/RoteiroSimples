@@ -599,5 +599,128 @@ class TestesListasDinamicas(unittest.TestCase):
         r=executar(fonte)
         self.assertEqual((r.returncode,r.stdout),(0,'1\n'),r.stderr)
 
+
+    def test_rs033_listas_de_registros_crescimento_copia(self):
+        fonte = """tipo Entrega {
+            numero: inteiro
+            concluida: logico
+        }
+        inicio {
+            seja pedido: Entrega
+            seja pedidos: lista[Entrega]
+            para i de 1 ate 12 {
+                pedido.numero = i * 10
+                pedido.concluida = i > 5
+                adicione(pedidos, pedido)
+            }
+            escreva(tamanho(pedidos))
+            seja primeiro: Entrega = pedidos[0]
+            seja ultimo: Entrega = pedidos[11]
+            escreva(primeiro.numero)
+            escreva(ultimo.numero)
+            escreva(ultimo.concluida)
+            primeiro.numero = 700
+            pedidos[1] = primeiro
+            seja segundo: Entrega = pedidos[1]
+            escreva(segundo.numero)
+            escreva(primeiro.numero)
+            escreva(tamanho(pedidos))
+        }"""
+        r=executar(fonte)
+        self.assertEqual((r.returncode,r.stdout),
+                         (0,'12\n10\n120\n1\n700\n700\n12\n'), r.stderr)
+
+    def test_rs033_registro_emprestado_e_transferencia(self):
+        fonte = """tipo Ponto {
+            x: inteiro
+            y: inteiro
+        }
+        funcao pegar(dados: emprestimo[lista[Ponto]]) -> inteiro {
+            seja local: Ponto = dados[1]
+            retorne local.x + local.y
+        }
+        inicio {
+            seja pontos: lista[Ponto]
+            seja outro: lista[Ponto]
+            seja posicao: Ponto
+            posicao.x = 4
+            posicao.y = 5
+            adicione(pontos, posicao)
+            posicao.x = 7
+            posicao.y = 8
+            adicione(pontos, posicao)
+            mova(outro, pontos)
+            escreva(pegar(empreste(outro)))
+            escreva(tamanho(outro))
+        }"""
+        r=executar(fonte)
+        self.assertEqual((r.returncode,r.stdout),(0,'15\n2\n'),r.stderr)
+
+    def test_rs033_registro_aninhado_de_tres_palavras(self):
+        fonte = """tipo Coordenada {
+            x: inteiro
+            y: inteiro
+        }
+        tipo Marcacao {
+            coordenada: Coordenada
+            aprovado: logico
+        }
+        inicio {
+            seja r: Marcacao
+            seja itens: lista[Marcacao]
+            para i de 1 ate 20 {
+                r.coordenada.x = i
+                r.coordenada.y = i * 2
+                r.aprovado = i > 10
+                adicione(itens, r)
+            }
+            seja encontrado: Marcacao = itens[19]
+            escreva(encontrado.coordenada.x)
+            escreva(encontrado.coordenada.y)
+            escreva(encontrado.aprovado)
+        }"""
+        r=executar(fonte)
+        self.assertEqual((r.returncode,r.stdout),(0,'20\n40\n1\n'),r.stderr)
+
+    def test_rs033_rejeita_registro_de_outro_tipo_e_emprestimo_proprietario(self):
+        exemplos=[
+            """tipo A { numero: inteiro }
+            inicio { escreva(1) }""",
+            """tipo A {
+                numero: inteiro
+            }
+            tipo B {
+                numero: inteiro
+            }
+            inicio {
+                seja a: A
+                seja itens: lista[B]
+                adicione(itens, a)
+            }""",
+            """tipo Entrega {
+                numero: inteiro
+            }
+            funcao tomar(itens: lista[Entrega]) -> inteiro {
+                retorne 1
+            }
+            inicio {
+                escreva(1)
+            }""",
+            """tipo Entrega {
+                numero: inteiro
+            }
+            funcao expor() -> lista[Entrega] {
+                seja itens: lista[Entrega]
+                retorne itens
+            }
+            inicio {
+                escreva(1)
+            }""",
+        ]
+        for caso in exemplos:
+            with self.subTest(caso=caso):
+                with self.assertRaises(ErroCompilacao):
+                    analisar_programa(caso)
+
 if __name__ == '__main__':
     unittest.main()
