@@ -777,6 +777,19 @@ def emitir_sondagem_pilha_windows(g):
     g.bytes(b'\xC3')  # ret
 
 
+def preparar_saida_fatal_windows(g):
+    """Prepara pilha e espaço de sombra antes de imprimir erro e encerrar.
+
+    As saídas podem ser atingidas com operandos temporários empilhados
+    ou de dentro de rotinas auxiliares com quadros diferentes.
+    Alinhar RSP e reservar 48 bytes oferece 32 bytes de sombra,
+    argumento extra em [RSP+32] e margem independente do chamador.
+    Esta saída NÃO retorna ao programa.
+    """
+    g.bytes(b'\x48\x83\xE4\xF0')  # and rsp,-16
+    g.bytes(b'\x48\x83\xEC\x30')  # sub rsp,48
+
+
 def montar_codigo(programa, windows, emissor_alternativo=None):
     g = Gerador()
     g.desenrolamentos = []  # contratos reais para .pdata/.xdata
@@ -1285,8 +1298,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             # Uma expressao pode ter deixado operandos no stack ao falhar.
             # Antes de chamar WriteFile/ExitProcess restauramos o alinhamento
             # obrigatorio de 16 bytes da ABI Windows x64.
-            if tem_listas:
-                g.bytes(b'\x48\x83\xE4\xF0')  # and rsp, -16
+            preparar_saida_fatal_windows(g)  # and rsp, -16
             escreve_literal(g, indice, msg, True)
             g.bytes(b'\xB9\x01\x00\x00\x00')
             g.relativo(b'\xFF\x15', 'ExitProcess')
@@ -1299,7 +1311,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         mensagens[indice] = msg
         g.marcar('erro_recursao_limite')
         if windows:
-            g.bytes(b'\x48\x83\xE4\xF0')
+            preparar_saida_fatal_windows(g)
         escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
         if windows:
             g.bytes(b'\xB9\x01\x00\x00\x00')
@@ -1311,8 +1323,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         msg = 'Erro: índice fora dos limites da lista.\n'
         mensagens[indice] = msg
         g.marcar('erro_indice_lista')
-        if windows and tem_listas:
-            g.bytes(b'\x48\x83\xE4\xF0')  # and rsp, -16
+        if windows:
+            preparar_saida_fatal_windows(g)  # and rsp, -16
         escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
         if windows:
             g.bytes(b'\xB9\x01\x00\x00\x00')
@@ -1326,8 +1338,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         ]:
             mensagens[indice] = msg
             g.marcar(rotulo)
-            if windows and tem_listas:
-                g.bytes(b'\x48\x83\xE4\xF0')  # and rsp, -16
+            if windows:
+                preparar_saida_fatal_windows(g)  # and rsp, -16
             escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
             if windows:
                 g.bytes(b'\xB9\x01\x00\x00\x00')
@@ -1343,8 +1355,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             indice = len(mensagens)
             mensagens[indice] = msg
             g.marcar(rotulo)
-            if windows and tem_listas:
-                g.bytes(b'\x48\x83\xE4\xF0')  # and rsp, -16
+            if windows:
+                preparar_saida_fatal_windows(g)  # and rsp, -16
             escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
             if windows:
                 g.bytes(b'\xB9\x01\x00\x00\x00')
@@ -1360,7 +1372,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             mensagens[indice] = msg
             g.marcar(rotulo)
             if windows:
-                g.bytes(b'\x48\x83\xE4\xF0')
+                preparar_saida_fatal_windows(g)
             escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
             if windows:
                 g.bytes(b'\xB9\x01\x00\x00\x00')
@@ -1376,7 +1388,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             mensagens[indice] = mensagem
             g.marcar(nome)
             if windows:
-                g.bytes(b'\x48\x83\xE4\xF0')
+                preparar_saida_fatal_windows(g)
             escreve_literal(g, indice, mensagem, windows, 'saida' if windows else 'erro')
             if windows:
                 g.bytes(b'\xB9\x01\x00\x00\x00')
@@ -1389,7 +1401,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         mensagens[indice] = mensagem
         g.marcar('erro_codigo_saida')
         if windows:
-            g.bytes(b'\x48\x83\xE4\xF0')
+            preparar_saida_fatal_windows(g)
         escreve_literal(g, indice, mensagem, windows, 'saida' if windows else 'erro')
         if windows:
             g.bytes(b'\xB9\x01\x00\x00\x00')
@@ -1402,7 +1414,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         mensagens[indice] = mensagem
         g.marcar('erro_fechamento_implicito')
         if windows:
-            g.bytes(b'\x48\x83\xE4\xF0')
+            preparar_saida_fatal_windows(g)
         escreve_literal(g, indice, mensagem, windows, 'saida' if windows else 'erro')
         if windows:
             g.bytes(b'\xB9\x01\x00\x00\x00')
@@ -1420,7 +1432,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             mensagens[indice] = mensagem
             g.marcar(nome)
             if windows:
-                g.bytes(b'\x48\x83\xE4\xF0')
+                preparar_saida_fatal_windows(g)
             escreve_literal(g, indice, mensagem, windows, 'saida' if windows else 'erro')
             if windows:
                 g.bytes(b'\xB9\x01\x00\x00\x00')
