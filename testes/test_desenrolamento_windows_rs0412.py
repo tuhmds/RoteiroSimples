@@ -152,7 +152,7 @@ class TestesDesenrolamentoWindowsRS0412(unittest.TestCase):
                 }
                 retorne contar(numero - 1) + 1
             }
-            inicio { escreva(contar(7)) }""",'7\n'),
+            inicio {\n                escreva(contar(7))\n            }""",'7\n'),
             ("""inicio {
                 seja arq: arquivo
                 seja estado = 0
