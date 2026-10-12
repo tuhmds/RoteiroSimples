@@ -140,7 +140,53 @@ def emitir_comando(g, op, variaveis, tipos, windows, mensagens, endereco_buffer,
         g.marcar(fim)
 
 
-def _rotina_caminho_verificado(g):
+def _rejeitar_dispositivos_windows(g, invalido):
+    """Impede nomes Win32 reservados independentemente da caixa e extensão.
+
+    Chega aqui depois de validar cada caractere; R8 aponta para os bytes
+    e R9 contém o comprimento, sem leitura além dele.
+    """
+    terminar = 'rs_caminho_dispositivo_ok'
+    _emitir(g, '49 83 F9 03')  # len < 3?
+    g.salto(terminar, 'jb')
+    _emitir(g, '41 0F B6 00 83 E0 DF')   # primeiro, maiúsculo
+    _emitir(g, '41 0F B6 50 01 83 E2 DF')  # segundo, maiúsculo
+    _emitir(g, '45 0F B6 50 02 41 83 E2 DF')  # terceiro, maiúsculo
+
+    simples = ('CON', 'PRN', 'AUX', 'NUL')
+    compostos = ('COM', 'LPT')
+    for prefixo in simples + compostos:
+        proximo = f'rs_dispositivo_proximo_{prefixo.lower()}'
+        _emitir(g, f'3C {ord(prefixo[0]):02X}')
+        g.salto(proximo, 'jne')
+        _emitir(g, f'80 FA {ord(prefixo[1]):02X}')
+        g.salto(proximo, 'jne')
+        _emitir(g, f'41 80 FA {ord(prefixo[2]):02X}')
+        g.salto(proximo, 'jne')
+
+        if prefixo in simples:
+            _emitir(g, '49 83 F9 03')
+            g.salto(invalido, 'je')
+            # Para prefixo reservado, próximo caractere '.' preserva
+            # a semântica especial mesmo em CON.txt ou NUL.rsd.
+            _emitir(g, '41 0F B6 48 03 80 F9 2E')
+            g.salto(invalido, 'je')
+        else:
+            _emitir(g, '49 83 F9 04')
+            g.salto(proximo, 'jb')
+            _emitir(g, '41 0F B6 48 03 80 F9 31')
+            g.salto(proximo, 'jb')
+            _emitir(g, '80 F9 39')
+            g.salto(proximo, 'ja')
+            _emitir(g, '49 83 F9 04')
+            g.salto(invalido, 'je')
+            _emitir(g, '41 0F B6 48 04 80 F9 2E')
+            g.salto(invalido, 'je')
+        g.marcar(proximo)
+    g.marcar(terminar)
+
+
+def _rotina_caminho_verificado(g, windows):
     """Valida e copia um basename ASCII texto[N] para C NUL terminada.
 
     RDI = bytes originais; RSI = comprimento; RDX = modo.
@@ -192,6 +238,10 @@ def _rotina_caminho_verificado(g):
     _emitir(g, '48 FF C1')
     g.salto(loop)
     g.marcar(finalizar)
+    if windows:
+        _rejeitar_dispositivos_windows(g, invalido)
+    # A checagem Windows pode alterar RCX: reconstituímos índice = tamanho
+    _emitir(g, '4C 89 C9')
     _emitir(g, 'C6 84 0D D0 FE FF FF 00')
     _emitir(g, '48 8D BD D0 FE FF FF 48 8B 75 E8')
     g.chamada('rs_abrir_recurso')
@@ -381,7 +431,7 @@ def _rotina_transferir(g, windows, gravar):
 
 
 def emitir_rotinas(g, windows):
-    _rotina_caminho_verificado(g)
+    _rotina_caminho_verificado(g, windows)
     _rotina_abrir(g, windows)
     _rotina_fechar(g, windows)
     _rotina_sincronizar(g, windows)
