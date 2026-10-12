@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.40C: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.40D: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import re
@@ -19,7 +19,7 @@ def main(argv=None):
     for canal in (sys.stdout, sys.stderr):
         if canal is not None and hasattr(canal, 'reconfigure'):
             canal.reconfigure(encoding='utf-8')
-    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.40C')
+    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.40D')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--mostrar-modulos', action='store_true', help='lista os módulos e a ordem de importação')
     parser.add_argument('--mostrar-estrategia', action='store_true', help='explica quais otimizações serão aplicadas de fato')
@@ -30,6 +30,10 @@ def main(argv=None):
     parser.add_argument('-O', '--otimizacao', choices=['0', '1', '2', '3', '4', '5', '6', '7', '8'], default='1', help='otimização (0 = sem, 1 = constantes, 2 = propagação local, 3 = SSA, 4 = SSA nativa, 5 = layout, 6 = coalescencia e saltos curtos, 7 = memoria versionada local, 8 = propagacao entre blocos)' )
     parser.add_argument('--mostrar-representacao-intermediaria', '--mostrar-ir', dest='mostrar_ir', action='store_true', help='mostra a representacao intermediaria tipada')
     parser.add_argument('--mostrar-efeitos', action='store_true', help='exibe leituras/escritas de memoria, E/S e falhas por instrucao')
+    parser.add_argument('--mostrar-efeitos-do-programa', action='store_true',
+                        help='exibe efeitos e propriedade de todos os comandos, inclusive sem IR/SSA')
+    parser.add_argument('--salvar-efeitos-do-programa', type=Path,
+                        help='salva analise completa da arvore sintatica em JSON')
     parser.add_argument('--mostrar-memoria-versionada', '--mostrar-memory-ssa', dest='mostrar_memory_ssa', action='store_true', help='exibe versoes de memoria, dependencias e nos de juncao')
     parser.add_argument('--salvar-memoria-versionada', '--salvar-memory-ssa', dest='salvar_memory_ssa', type=Path, help='salva a analise de memoria versionada em JSON')
     parser.add_argument('--salvar-efeitos', type=Path, help='salva a analise de efeitos em JSON')
@@ -60,6 +64,16 @@ def main(argv=None):
         decisao = decidir_estrategia(programa, nivel, otimizar=nivel > 0)
         if op.mostrar_cobertura_intermediaria:
             print(formatar_cobertura(analisar_cobertura(programa), decisao))
+        if op.mostrar_efeitos_do_programa or op.salvar_efeitos_do_programa:
+            from compilador.efeitos_programa import (
+                formatar_efeitos_programa, efeitos_programa_para_json,
+            )
+            if op.mostrar_efeitos_do_programa:
+                print(formatar_efeitos_programa(programa))
+            if op.salvar_efeitos_do_programa:
+                op.salvar_efeitos_do_programa.write_text(
+                    efeitos_programa_para_json(programa), encoding='utf-8')
+                print(f'Efeitos completos salvos em: {op.salvar_efeitos_do_programa}')
         if op.mostrar_estrategia:
             print(descrever_estrategia(decisao))
         analises_ir = (

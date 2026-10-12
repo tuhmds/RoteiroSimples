@@ -3,30 +3,10 @@
 Classificacao para diagnostico e para preparar Memory SSA. Nao autoriza mover,
 substituir nem remover operacoes: o backend continua respeitando sua ordem.
 """
-from dataclasses import dataclass
 import json
 
 from .nos_ir import ExpressaoIR, InstrucaoIR
-
-
-@dataclass(frozen=True)
-class Efeitos:
-    leituras: frozenset = frozenset()
-    escritas: frozenset = frozenset()
-    entrada: bool = False
-    saida: bool = False
-    pode_falhar: bool = False
-
-    def combinar(self, outro):
-        return Efeitos(self.leituras | outro.leituras,
-                       self.escritas | outro.escritas,
-                       self.entrada or outro.entrada, self.saida or outro.saida,
-                       self.pode_falhar or outro.pode_falhar)
-
-    def para_dict(self):
-        return {'leituras': sorted(self.leituras), 'escritas': sorted(self.escritas),
-                'entrada': self.entrada, 'saida': self.saida,
-                'pode_falhar': self.pode_falhar}
+from .contrato_efeitos import Efeitos
 
 
 def efeito_expressao(expr):
