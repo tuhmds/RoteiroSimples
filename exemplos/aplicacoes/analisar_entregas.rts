@@ -1,0 +1,51 @@
+// Processa 150 registros compostos com listas de propriedade unica.
+// Valores monetarios sao inteiros em centavos, sem ponto flutuante.
+
+tipo Entrega {
+    codigo: inteiro
+    distancia_km: inteiro
+    preco_centavos: inteiro
+    concluida: logico
+}
+
+funcao contar_concluidas(itens: emprestimo[lista[Entrega]]) -> inteiro {
+    seja total = 0
+    para indice de 0 ate tamanho(itens) - 1 {
+        seja atual: Entrega = itens[indice]
+        se atual.concluida {
+            total = total + 1
+        }
+    }
+    retorne total
+}
+
+funcao valor_concluido(itens: emprestimo[lista[Entrega]]) -> inteiro {
+    seja total = 0
+    para indice de 0 ate tamanho(itens) - 1 {
+        seja atual: Entrega = itens[indice]
+        se atual.concluida {
+            total = total + atual.preco_centavos
+        }
+    }
+    retorne total
+}
+
+inicio {
+    seja entregas: lista[Entrega]
+    seja entrega: Entrega
+
+    para numero de 1 ate 150 {
+        entrega.codigo = 1000 + numero
+        entrega.distancia_km = numero % 7 + 1
+        entrega.preco_centavos = 990 + entrega.distancia_km * 200
+        entrega.concluida = numero % 3 != 0
+        adicione(entregas, entrega)
+    }
+
+    escreva("Total de entregas:")
+    escreva(tamanho(entregas))
+    escreva("Entregas concluidas:")
+    escreva(contar_concluidas(empreste(entregas)))
+    escreva("Receita concluida em centavos:")
+    escreva(valor_concluido(empreste(entregas)))
+}

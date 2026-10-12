@@ -1,0 +1,46 @@
+// Copia binarios, inclusive bytes nulos, sem bibliotecas externas.
+// Configuracao: origem.bin -> copia.bin no diretorio de execucao.
+// IMPORTANTE: o destino precisa ser novo/vazio (grave_trecho nao trunca).
+inicio {
+    seja bloco: texto[4096]
+    seja posicao = 0
+    seja leitura = 0
+    seja gravacao = 0
+    seja terminou = falso
+    seja houve_erro = falso
+
+    enquanto terminou == falso {
+        carregue_trecho("origem.bin", bloco, posicao, 4096, leitura)
+        se leitura < 0 {
+            escreva("Falha ao ler arquivo de origem")
+            escreva(leitura)
+            houve_erro = verdadeiro
+            terminou = verdadeiro
+        } senao {
+            se leitura == 0 {
+                terminou = verdadeiro
+            } senao {
+                grave_trecho("copia.bin", bloco, posicao, gravacao)
+                se gravacao < 0 {
+                    escreva("Falha ao gravar arquivo de destino")
+                    escreva(gravacao)
+                    houve_erro = verdadeiro
+                    terminou = verdadeiro
+                } senao {
+                    se gravacao != leitura {
+                        escreva("Falha: bytes gravados diferentes dos lidos")
+                        houve_erro = verdadeiro
+                        terminou = verdadeiro
+                    } senao {
+                        posicao = posicao + leitura
+                    }
+                }
+            }
+        }
+    }
+
+    se houve_erro == falso {
+        escreva("Copia concluida; total de bytes:")
+        escreva(posicao)
+    }
+}
