@@ -25,7 +25,7 @@ def compilar(programa, alvo, otimizar=True, nivel=1):
 
     if (getattr(programa, 'funcoes', None) or getattr(programa, 'registros', None)
             or getattr(programa, 'escopos_locais', False) or contem_copia_composta(programa.instrucoes)
-            or any(t == ('lista_dinamica', 'inteiro') for t in programa.tipos.values())):
+            or any(isinstance(t, tuple) and t[0] == 'lista_dinamica' for t in programa.tipos.values())):
         gerador, mensagens = montar_codigo(programa, alvo == 'windows')
         return montar_pe(gerador, mensagens) if alvo == 'windows' else montar_elf(gerador, mensagens)
     ir = construir_ir(programa, otimizar=otimizar, nivel=(nivel if nivel >= 7 else min(nivel, 3)))
