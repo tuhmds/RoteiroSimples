@@ -753,6 +753,7 @@ def reservar_pilha(g, bytes_reservados):
 
 def montar_codigo(programa, windows, emissor_alternativo=None):
     g = Gerador()
+    g.desenrolamentos = []  # contratos reais para .pdata/.xdata
     g.funcoes = getattr(programa, 'funcoes', {})
     g.registros = getattr(programa, 'registros', {})
     g.campos_atual = getattr(programa, 'campos_registro', {})
@@ -796,8 +797,16 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     if windows:
         n = slots
         frame = ((8 * n + memoria_cache + 0x38 + 15) // 16) * 16 + 8
+        g.marcar('rs_inicio_principal')
         g.bytes(b'\x55\x48\x89\xE5\x53')  # push rbp; mov rbp,rsp; push rbx
         reservar_pilha(g, frame)
+        g.marcar('rs_fim_prologo_principal')
+        g.desenrolamentos.append({
+            'inicio': 'rs_inicio_principal',
+            'fim': 'rs_fim_principal',
+            'fim_prologo': 'rs_fim_prologo_principal',
+            'quadro': frame,
+        })
         g.bytes(b'\xB9' + struct.pack('<I', 65001))
         g.relativo(b'\xFF\x15', 'SetConsoleOutputCP')
         if tem_leitura_texto:
@@ -1124,6 +1133,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     if windows:
         g.bytes(b'\x31\xC9')
         g.relativo(b'\xFF\x15', 'ExitProcess')
+        g.marcar('rs_fim_principal')
     else:
         g.bytes(b'\xB8\x3C\x00\x00\x00\x31\xFF\x0F\x05')
     # As definições usam quadros locais independentes e instruções CALL/RET
@@ -1156,6 +1166,15 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 g.bytes(b'\x48\x3D' + struct.pack('<I', 1024 * 1024))
                 g.salto('erro_recursao_limite', 'ja')
         reservar_pilha(g, n_frame)
+        if windows:
+            rotulo_prologo = f'rs_fim_prologo_funcao_{nome}'
+            g.marcar(rotulo_prologo)
+            g.desenrolamentos.append({
+                'inicio': f'funcao_{nome}',
+                'fim': f'rs_fim_funcao_{nome}',
+                'fim_prologo': rotulo_prologo,
+                'quadro': n_frame,
+            })
         if tem_dinamicas:
             listas_dinamicas.inicializar_inativas(g, variaveis, tipos, windows)
         if tem_recursos:
@@ -1197,6 +1216,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             g.bytes(b'\x48\x8B\x85' + struct.pack('<i',retorno_guardado))
         if windows:
             g.bytes(b'\x48\x8D\x65\xF8\x5B\x5D\xC3')  # restaura RBX e retorna
+            g.marcar(f'rs_fim_funcao_{nome}')
         else:
             g.bytes(b'\x48\x89\xEC\x5D\xC3')
     funcao_atual = None
