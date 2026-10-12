@@ -1,0 +1,12 @@
+importe "financeiro.rts" como financeiro
+importe "estoque.rts" como estoque
+
+inicio {
+    seja venda: financeiro.Pedido
+    venda.valor = 25
+    seja compra: estoque.Pedido
+    compra.valor = 25
+    escreva("RS 0.28: espacos de nomes")
+    escreva(financeiro.calcular(venda))
+    escreva(estoque.calcular(compra))
+}

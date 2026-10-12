@@ -1,0 +1,7 @@
+publico tipo Pedido {
+    valor: inteiro
+}
+
+publico funcao calcular(pedido: Pedido) -> inteiro {
+    retorne pedido.valor * 2
+}

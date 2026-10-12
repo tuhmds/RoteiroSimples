@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.27
+# RoteiroSimples (RS) — versão experimental 0.28
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -10,7 +10,36 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
 
-## Novo na RS 0.27 — sistema de módulos em português
+## Novo na RS 0.28 — espaços de nomes e visibilidade
+
+Podemos usar funções e tipos com nomes iguais em módulos diferentes, graças à importação com apelido:
+
+```text
+// principal.rts
+importe "financeiro.rts" como financeiro
+importe "estoque.rts" como estoque
+
+inicio {
+    seja pedido: financeiro.Pedido
+    pedido.valor = 25
+    escreva(financeiro.calcular(pedido))
+}
+```
+
+No módulo `financeiro.rts`, utilizamos `publico funcao calcular(...)` para permitir a chamada pelo importador e `privado funcao acrescentar_taxa(...)` para proteger uma função de uso interno. Isso também funciona com declarações de `tipo`.
+
+- **`publico`** deixa a definição acessível para quem importar o módulo.
+- **`privado`** impede o acesso externo, sem impedir chamadas dentro do próprio módulo.
+- Declarações sem modificador permanecem públicas para preservar os programas anteriores.
+- **`importe "arquivo.rts" como apelido`** exige nomes qualificados (`apelido.funcao`, `apelido.Tipo`); a forma anterior sem apelido continua funcionando.
+- Módulos importados duas vezes não são duplicados; nomes e tipos internos de arquivos distintos permanecem separados.
+- Erros de conflito, acesso privado, nome inexistente e dependência circular são diagnosticados na compilação.
+
+**Exemplo executável:** [`exemplos/espacos_nomes/principal.rts`](exemplos/espacos_nomes/principal.rts), com dois tipos `Pedido` e duas funções `calcular`. Saída: `RS 0.28: espacos de nomes`, `30` e `50`.
+
+Consulte a [especificação dos espaços de nomes](docs/ESPACOS_DE_NOMES_RS_0_28.md). Mantivemos os níveis de `-O 0` a `-O 8`; não criamos outro nível de otimização.
+
+## Histórico: RS 0.27 — sistema de módulos em português
 
 Agora podemos organizar um projeto em **vários arquivos `.rts`**, reutilizando tipos e funções próprias com o comando `importe`:
 
@@ -46,7 +75,7 @@ inicio {
 
 **Resultado:** `105`. O compilador resolve as dependências, reúne os arquivos e gera um único executável Windows ou Linux, sem carregar módulos durante a execução.
 
-A importação usa caminho relativo ao arquivo que importa; apenas arquivos `.rts` dentro da pasta do projeto são aceitos. Importações repetidas são reunidas uma única vez, dependências circulares e nomes duplicados geram erros. Nesta versão todos os tipos e funções compartilham o mesmo espaço global; nomes qualificados e elementos privados ainda não existem.
+A importação usa caminho relativo ao arquivo que importa; apenas arquivos `.rts` dentro da pasta do projeto são aceitos. Importações repetidas são reunidas uma única vez, dependências circulares e nomes duplicados geram erros. Na RS 0.27 todos os tipos e funções compartilhavam o mesmo espaço global. A RS 0.28 adicionou apelidos, qualificadores e elementos privados.
 
 **Exemplo:** [`exemplos/projeto_modulos.rts`](exemplos/projeto_modulos.rts). Veja [a documentação completa dos módulos](docs/MODULOS_RS_0_27.md). O parâmetro `--mostrar-modulos` mostra os arquivos carregados. Os níveis de otimização continuam de `-O 0` a `-O 8`, sem acrescentar outro nível.
 
@@ -204,7 +233,7 @@ nativo. Não se promete segurança para aplicações de produção.
 Via PowerShell:
 
 ```powershell
-py -3 compilar.py exemplos\projeto_modulos.rts --alvo windows -O 8 -o roteiro_windows.exe
+py -3 compilar.py exemplos\espacos_nomes\principal.rts --alvo windows -O 8 -o roteiro_windows.exe
 .\roteiro_windows.exe
 py -3 -m unittest discover -s testes -v
 ```
@@ -214,7 +243,7 @@ py -3 -m unittest discover -s testes -v
 Requer sistema Linux e processador x86-64:
 
 ```bash
-python3 compilar.py exemplos/projeto_modulos.rts --alvo linux -O 8 -o roteiro_linux
+python3 compilar.py exemplos/espacos_nomes/principal.rts --alvo linux -O 8 -o roteiro_linux
 ./roteiro_linux
 python3 -m unittest discover -s testes -v
 ```
@@ -224,7 +253,7 @@ nenhum nível foi criado na RS 0.26. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes até a RS 0.27
+## Recursos presentes até a RS 0.28
 
 | Recurso | Situação |
 |---|---|
@@ -239,9 +268,10 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Representação intermediária tipada, fluxo de controle, versões únicas, memória versionada | Implementado para a parte já suportada da linguagem |
 | Registros aninhados, campos de listas e texto | Implementado na 0.26 |
 | Importação de módulos e resolução de dependências | Implementado na 0.27 |
+| Espaços de nomes com apelidos e visibilidade pública/privada | Implementado na 0.28 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
-| Tipos reais/decimais, módulos, dados dinâmicos, referências e empréstimos | Ainda não |
+| Tipos reais/decimais, dados dinâmicos, referências e empréstimos | Ainda não |
 
 ## Organização atual
 
@@ -256,6 +286,6 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**RS 0.28 (planejamento):** espaços de nomes e controle de visibilidade entre módulos, seguidos por compilação incremental e bibliotecas padronizadas. Em seguida, ampliar tipos numéricos, memória dinâmica e referências seguras, sem acrescentar novos níveis de otimização antes de amadurecer a linguagem.
+**RS 0.29 (planejamento):** organização da interface pública dos módulos, testes de compilação incremental e biblioteca padrão mais ampla. Em seguida, ampliar tipos numéricos, memória dinâmica e referências seguras, sem acrescentar níveis de otimização antes de amadurecer a linguagem.
 
 Ainda não foi escolhida uma licença para publicação do código.

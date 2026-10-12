@@ -1,0 +1,11 @@
+publico tipo Pedido {
+    valor: inteiro
+}
+
+privado funcao acrescentar_taxa(valor: inteiro) -> inteiro {
+    retorne valor + 5
+}
+
+publico funcao calcular(pedido: Pedido) -> inteiro {
+    retorne acrescentar_taxa(pedido.valor)
+}

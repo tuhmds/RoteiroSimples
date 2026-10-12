@@ -160,3 +160,50 @@ def apresentar_erro(erro, origens):
         referencia += f', coluna {coluna}'
     return (mensagem[:achado.start()] + referencia + ':' + mensagem[achado.end():],
             origem, coluna)
+
+
+# RS 0.28: mantém a expansão antiga intacta para projetos sem visibilidade
+# explícita e sem apelidos. Os novos recursos usam um resolvedor separado.
+_carregar_fontes_legado = carregar_fontes
+
+
+def _requer_espacos_nomes(principal):
+    raiz = Path(principal).resolve().parent
+    pendentes = [Path(principal).resolve()]
+    visitados = set()
+    while pendentes:
+        caminho = pendentes.pop()
+        if caminho in visitados:
+            continue
+        visitados.add(caminho)
+        try:
+            fonte = caminho.read_text(encoding='utf-8-sig')
+        except (OSError, UnicodeError):
+            continue
+        for numero, linha in enumerate(fonte.splitlines(), 1):
+            partes = tokens(linha, numero)
+            if not partes:
+                continue
+            if (partes[0] in ('publico', 'privado') and len(partes) > 1 and
+                    partes[1] in ('funcao', 'tipo')):
+                return True
+            if partes[0] == 'importe':
+                if 'como' in partes:
+                    return True
+                if len(partes) >= 2 and partes[1].startswith('"'):
+                    try:
+                        nome = json.loads(partes[1])
+                    except (ValueError, UnicodeError):
+                        continue
+                    if isinstance(nome, str):
+                        proximo = (caminho.parent / nome).resolve()
+                        if proximo.is_relative_to(raiz) and proximo.is_file():
+                            pendentes.append(proximo)
+    return False
+
+
+def carregar_fontes(principal):
+    if _requer_espacos_nomes(principal):
+        from .espacos_nomes import carregar_com_espacos
+        return carregar_com_espacos(principal)
+    return _carregar_fontes_legado(principal)

@@ -5,10 +5,10 @@ cd /d "%~dp0"
 :MENU
 cls
 echo ==============================================
-echo         RoteiroSimples RS 0.27
+echo         RoteiroSimples RS 0.28
 echo ==============================================
 echo.
-echo  [1] Compilar e executar projeto com modulos (RS 0.27)
+echo  [1] Compilar e executar espacos de nomes (RS 0.28)
 echo  [2] Editar o exemplo no Bloco de Notas
 echo  [3] Rodar testes automatizados
  echo  [4] Executar o ultimo .exe gerado
@@ -42,7 +42,7 @@ if errorlevel 1 goto COMPILAR
 call "%~dp0COMPILAR_WINDOWS.bat"
 goto MENU
 :EDITAR
-notepad "%~dp0exemplos\projeto_modulos.rts"
+notepad "%~dp0exemplos\espacos_nomes\principal.rts"
 goto MENU
 :TESTES
 py -3 -m unittest discover -s testes -v
