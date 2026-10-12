@@ -59,23 +59,33 @@ def emitir_comando(g, op, variaveis, tipos, windows, mensagens, endereco_buffer,
 
     if comando == 'abra_recurso':
         _, caminho, _, modo, _ = op
-        indice = len(mensagens)
-        mensagens[indice] = caminho + '\x00'
+        caminho_variavel = isinstance(caminho, tuple) and caminho[0] == 'caminho_buffer'
+        if not caminho_variavel:
+            indice = len(mensagens)
+            mensagens[indice] = caminho + '\x00'
         _ler_recurso(g, variaveis, recurso, windows)
         _emitir(g, '48 83 FF FF')
         ja_aberto = f'recurso_ja_aberto_{ident}'
         g.salto(ja_aberto, 'jne')
-        g.relativo(b'\x48\x8D\x3D', f'mensagem_{indice}')
-        _emitir(g, 'BE ' + struct.pack('<I', modo).hex(' '))
-        g.chamada('rs_abrir_recurso')
-        _emitir(g, '48 83 F8 FF')
+        if caminho_variavel:
+            dados, comprimento, _ = endereco_buffer(
+                variaveis, caminho[1], tipos, windows)
+            g.bytes(b'\x48\x8D\xBD' + struct.pack('<i', dados))
+            g.bytes(b'\x48\x8B\xB5' + struct.pack('<i', comprimento))
+            _emitir(g, 'BA ' + struct.pack('<I', modo).hex(' '))
+            g.chamada('rs_abrir_caminho_verificado')
+        else:
+            g.relativo(b'\x48\x8D\x3D', f'mensagem_{indice}')
+            _emitir(g, 'BE ' + struct.pack('<I', modo).hex(' '))
+            g.chamada('rs_abrir_recurso')
+        _emitir(g, '48 85 C0')
         falha = f'recurso_falha_abertura_{ident}'
-        g.salto(falha, 'je')
+        g.salto(falha, 'js')
         _guardar_estado(g, variaveis, recurso, windows)
         _emitir(g, '31 C0')  # 0 = sucesso
         g.salto(finalizar)
         g.marcar(falha)
-        _emitir(g, '48 C7 C0 FF FF FF FF')
+        # RAX já contém -1 (OS) ou -3 (caminho inválido).
         g.salto(finalizar)
         g.marcar(ja_aberto)
         _emitir(g, '48 C7 C0 FB FF FF FF')  # -5, ativo
@@ -128,6 +138,68 @@ def emitir_comando(g, op, variaveis, tipos, windows, mensagens, endereco_buffer,
         _emitir(g, '31 C0')
         g.bytes(b'\x48\x89\x85' + struct.pack('<i', comprimento))
         g.marcar(fim)
+
+
+def _rotina_caminho_verificado(g):
+    """Valida e copia um basename ASCII texto[N] para C NUL terminada.
+
+    RDI = bytes originais; RSI = comprimento; RDX = modo.
+    Nunca acessa além de len; não grava no buffer do programa.
+    Aceita apenas [A-Za-z0-9_][A-Za-z0-9_.-]*, até 240 bytes.
+    """
+    g.marcar('rs_abrir_caminho_verificado')
+    _emitir(g, '55 48 89 E5 48 81 EC 30 01 00 00')  # 304 bytes
+    _emitir(g, '48 89 7D F8 48 89 75 F0 48 89 55 E8')
+    invalido='rs_caminho_invalido'
+    loop='rs_caminho_loop'
+    valido='rs_caminho_caractere_valido'
+    pontuacao='rs_caminho_pontuacao'
+    finalizar='rs_caminho_validado'
+    fim='rs_caminho_fim'
+    _emitir(g, '48 85 F6')
+    g.salto(invalido, 'jle')
+    _emitir(g, '48 81 FE F0 00 00 00')
+    g.salto(invalido, 'ja')
+    _emitir(g, '4C 8B 45 F8 4C 8B 4D F0 31 C9')
+    g.marcar(loop)
+    _emitir(g, '4C 39 C9')  # cmp rcx,r9
+    g.salto(finalizar, 'je')
+    _emitir(g, '41 0F B6 04 08') # movzx eax,byte ptr [r8+rcx]
+    _emitir(g, '3C 30')
+    g.salto(pontuacao, 'jb')
+    _emitir(g, '3C 39')
+    g.salto(valido, 'jbe')
+    _emitir(g, '3C 41')
+    g.salto(pontuacao, 'jb')
+    _emitir(g, '3C 5A')
+    g.salto(valido, 'jbe')
+    _emitir(g, '3C 5F')
+    g.salto(valido, 'je')
+    _emitir(g, '3C 61')
+    g.salto(pontuacao, 'jb')
+    _emitir(g, '3C 7A')
+    g.salto(valido, 'jbe')
+    g.marcar(pontuacao)
+    _emitir(g, '48 85 C9') # no primeiro byte: não aceita ponto nem hífen
+    g.salto(invalido, 'jz')
+    _emitir(g, '3C 2D')
+    g.salto(valido, 'je')
+    _emitir(g, '3C 2E')
+    g.salto(valido, 'je')
+    g.salto(invalido)
+    g.marcar(valido)
+    _emitir(g, '88 84 0D D0 FE FF FF') # [rbp+rcx-304]=al
+    _emitir(g, '48 FF C1')
+    g.salto(loop)
+    g.marcar(finalizar)
+    _emitir(g, 'C6 84 0D D0 FE FF FF 00')
+    _emitir(g, '48 8D BD D0 FE FF FF 48 8B 75 E8')
+    g.chamada('rs_abrir_recurso')
+    g.salto(fim)
+    g.marcar(invalido)
+    _emitir(g, '48 C7 C0 FD FF FF FF') # -3
+    g.marcar(fim)
+    _emitir(g, '48 89 EC 5D C3')
 
 
 def _rotina_abrir(g, windows):
@@ -309,6 +381,7 @@ def _rotina_transferir(g, windows, gravar):
 
 
 def emitir_rotinas(g, windows):
+    _rotina_caminho_verificado(g)
     _rotina_abrir(g, windows)
     _rotina_fechar(g, windows)
     _rotina_sincronizar(g, windows)

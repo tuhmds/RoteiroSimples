@@ -415,7 +415,14 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 if comando == 'abra_arquivo':
                     if len(grupos) != 4:
                         raise ErroCompilacao(f'Linha {n}: use abra_arquivo("nome", recurso, "modo", estado).')
-                    caminho = validar_caminho(grupos[0], n)
+                    if len(grupos[0]) == 1 and grupos[0][0].startswith('"'):
+                        caminho = validar_caminho(grupos[0], n)
+                    else:
+                        nome_caminho = contexto.resolver_caminho(grupos[0], n)
+                        tipo_caminho = tipos.get(nome_caminho)
+                        if not isinstance(tipo_caminho, tuple) or tipo_caminho[0] != 'texto':
+                            raise ErroCompilacao(f'Linha {n}: caminho deve ser literal ou variavel texto[N].')
+                        caminho = ('caminho_buffer', nome_caminho)
                     recurso = recurso_nome(grupos[1], n)
                     modo_texto = grupos[2]
                     if len(modo_texto) != 1 or not modo_texto[0].startswith('"'):
