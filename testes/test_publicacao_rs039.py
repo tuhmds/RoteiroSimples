@@ -275,6 +275,26 @@ class TestesRS039(unittest.TestCase):
             r=executar(construir(pasta,'trava',fonte),pasta)
             self.assertEqual((r.returncode,r.stdout),(0,'0\n0\n0\n-3\n'),r.stderr)
 
+    def test_exclusividade_de_abertura_no_windows(self):
+        if alvo() != 'windows':
+            self.skipTest('Compartilhamento exclusivo da API Windows.')
+        fonte = """inicio {
+            seja arq: arquivo
+            seja estado = 0
+            abra_arquivo("ocupado.rsd", arq, "alteracao", estado)
+            escreva(estado)
+        }"""
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo=Path(pasta)/'ocupado.rsd'
+            arquivo.write_bytes(b'ORIGINAL')
+            exe=construir(pasta,'ocupar',fonte)
+            with arquivo.open('rb') as mantido:
+                r=executar(exe,pasta)
+                self.assertEqual((r.returncode,r.stdout),(0,'-1\n'),r.stderr)
+            r=executar(exe,pasta)
+            self.assertEqual((r.returncode,r.stdout),(0,'0\n'),r.stderr)
+            self.assertEqual(arquivo.read_bytes(),b'ORIGINAL')
+
     def test_concorrencia_de_flock_no_linux(self):
         if alvo() != 'linux':
             self.skipTest('Bloqueio de flock Linux; Windows tem exclusão por abertura.')
