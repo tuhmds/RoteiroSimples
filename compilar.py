@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.8: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.9: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import sys
 from pathlib import Path
-from sintaxe import ErroCompilacao, analisar_programa
-from codigo_nativo import compilar
+from compilador.erros import ErroCompilacao
+from compilador.parser import analisar_programa
+from backend import compilar
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.8')
+    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.9')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--alvo', choices=['windows', 'linux'], default='windows')
     parser.add_argument('-o', '--saida', type=Path, help='arquivo executável de saída')
@@ -20,7 +21,7 @@ def main(argv=None):
     try:
         programa = analisar_programa(op.fonte.read_text(encoding='utf-8-sig'))
         if op.mostrar_ir:
-            from ir import construir_ir, formatar_ir
+            from compilador.ir import construir_ir, formatar_ir
             print(formatar_ir(construir_ir(programa, otimizar=op.otimizacao == '1')))
         binario = compilar(programa, op.alvo, otimizar=op.otimizacao == '1')
         saida.write_bytes(binario)

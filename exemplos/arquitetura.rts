@@ -1,0 +1,12 @@
+inicio {
+    seja pontos: inteiro = 0
+    seja pronto: logico = verdadeiro
+    para rodada de 1 ate 3 {
+        pontos = pontos + rodada * 10
+    }
+    se pronto {
+        escreva("RoteiroSimples RS 0.9")
+    }
+    escreva("Pontos calculados:")
+    escreva(pontos)
+}
