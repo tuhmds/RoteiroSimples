@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.39
+# RoteiroSimples (RS) — versão experimental 0.40A
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,22 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.40A — Integridade da disposição de tipos
+
+As dimensões de memória de valores compostos agora partem de uma única
+regra no módulo `compilador/disposicao_tipos.py`. A análise semântica,
+a emissão de código nativo e as listas dinâmicas consultam essa mesma
+regra, inclusive para registros aninhados que contêm `bytes[N]`.
+Os novos testes conferem crescimento e realocação em O0–O8,
+nas duas plataformas.
+
+A RS preserva a geração direta de executáveis independentes do
+compilador. O compilador ainda é desenvolvido em Python e **ainda não é
+autocompilado**. A política de usar português brasileiro sem acentos
+nos identificadores novos e de manter independência de runtimes
+externos obrigatórios está documentada em
+[Princípios permanentes da RS](docs/PRINCIPIOS_RS.md).
 
 ## RS 0.39 — Publicação de arquivos e proteção de nomes
 
