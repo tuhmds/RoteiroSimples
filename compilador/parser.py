@@ -154,7 +154,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     contexto = _contexto or ContextoSemantico(importa, assinaturas, registros)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'encerre', 'funcao', 'retorne', 'tipo'}
+    reservadas = {'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'encerre', 'arquivo', 'abra_arquivo', 'grave_em', 'carregue_de', 'sincronize_arquivo', 'feche_arquivo', 'funcao', 'retorne', 'tipo'}
 
     def indice_lista(partes, linha):
         if '[' not in partes or partes[-1] != ']':
@@ -186,6 +186,61 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             return ('literal', conteudo, len(bruto))
         nome, cap = texto_destino(partes, linha)
         return ('buffer', nome, cap)
+
+    def argumentos_externos(tokens_instrucao, linha):
+        """Separa parâmetros mantendo chamadas e índices aninhados."""
+        grupos = []
+        inicio = 2
+        nivel_par = nivel_col = 0
+        for pos in range(2, len(tokens_instrucao)-1):
+            item = tokens_instrucao[pos]
+            if item == ',' and nivel_par == 0 and nivel_col == 0:
+                grupos.append(tokens_instrucao[inicio:pos])
+                inicio = pos+1
+            elif item == '(':
+                nivel_par += 1
+            elif item == ')':
+                nivel_par -= 1
+            elif item == '[':
+                nivel_col += 1
+            elif item == ']':
+                nivel_col -= 1
+            if min(nivel_par,nivel_col) < 0:
+                raise ErroCompilacao(f'Linha {linha}: parenteses ou colchetes desequilibrados.')
+        grupos.append(tokens_instrucao[inicio:-1])
+        if any(not x for x in grupos) or nivel_par or nivel_col:
+            raise ErroCompilacao(f'Linha {linha}: argumentos incompletos.')
+        return grupos
+
+    def validar_caminho(parte, linha):
+        if len(parte) != 1 or not parte[0].startswith('"'):
+            raise ErroCompilacao(f'Linha {linha}: nome de arquivo deve ser texto literal.')
+        try:
+            caminho = json.loads(str(parte[0]))
+        except (ValueError, UnicodeError) as exc:
+            raise ErroCompilacao(f'Linha {linha}: caminho invalido.') from exc
+        if (not isinstance(caminho,str) or not 1 <= len(caminho) <= 240
+                or not re.fullmatch(r'[A-Za-z0-9_./-]+',caminho,re.ASCII)
+                or caminho.startswith('/') or caminho.endswith('/')
+                or any(item in ('','.','..') for item in caminho.split('/'))):
+            raise ErroCompilacao(f'Linha {linha}: use caminho relativo ASCII, sem . ou .. como segmento.')
+        return caminho
+
+    def recurso_nome(parte, linha):
+        if len(parte) != 1:
+            raise ErroCompilacao(f'Linha {linha}: recurso deve ser variavel simples do tipo arquivo.')
+        nome = contexto.resolver(str(parte[0]))
+        if tipos.get(nome) != 'arquivo':
+            raise ErroCompilacao(f'Linha {linha}: recurso deve ser variavel do tipo arquivo.')
+        return nome
+
+    def estado_nome(parte, linha):
+        if len(parte) != 1:
+            raise ErroCompilacao(f'Linha {linha}: estado deve ser variavel do tipo inteiro.')
+        nome = contexto.resolver(str(parte[0]))
+        if tipos.get(nome) != 'inteiro':
+            raise ErroCompilacao(f'Linha {linha}: estado deve ser variavel do tipo inteiro.')
+        return nome
 
     def bloco(i, profundidade=0, em_laco=False, pilha_listas=None, limite_laco=None):
         # Cada chamada acompanha os donos de seu bloco léxico.
@@ -337,6 +392,51 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f'Linha {n}: adicione_byte exige buffer bytes[N].')
                 valor, _ = expressao_tipada(t[virgula+1:-1], n, 'inteiro')
                 adicionar(('adicione_byte', nome, valor), n, t)
+            elif t[0] in ('abra_arquivo', 'feche_arquivo', 'sincronize_arquivo',
+                            'grave_em', 'carregue_de') and t[1:2] == ['('] and t[-1:] == [')']:
+                grupos = argumentos_externos(t, n)
+                comando = str(t[0])
+                if comando == 'abra_arquivo':
+                    if len(grupos) != 4:
+                        raise ErroCompilacao(f'Linha {n}: use abra_arquivo("nome", recurso, "modo", estado).')
+                    caminho = validar_caminho(grupos[0], n)
+                    recurso = recurso_nome(grupos[1], n)
+                    modo_texto = grupos[2]
+                    if len(modo_texto) != 1 or not modo_texto[0].startswith('"'):
+                        raise ErroCompilacao(f'Linha {n}: modo exige literal "leitura", "alteracao" ou "novo".')
+                    try:
+                        modo = json.loads(str(modo_texto[0]))
+                    except (ValueError, UnicodeError) as exc:
+                        raise ErroCompilacao(f'Linha {n}: modo invalido.') from exc
+                    if modo not in ('leitura','alteracao','novo'):
+                        raise ErroCompilacao(f'Linha {n}: modo deve ser "leitura", "alteracao" ou "novo".')
+                    estado = estado_nome(grupos[3], n)
+                    adicionar(('abra_recurso', caminho, recurso,
+                               {'leitura':0,'alteracao':1,'novo':2}[modo], estado), n,t)
+                elif comando in ('feche_arquivo','sincronize_arquivo'):
+                    if len(grupos) != 2:
+                        raise ErroCompilacao(f'Linha {n}: use {comando}(recurso, estado).')
+                    recurso = recurso_nome(grupos[0],n)
+                    estado = estado_nome(grupos[1],n)
+                    adicionar(('feche_recurso' if comando == 'feche_arquivo'
+                              else 'sincronize_recurso',recurso,estado),n,t)
+                else:
+                    gravar = comando == 'grave_em'
+                    if len(grupos) != (4 if gravar else 5):
+                        raise ErroCompilacao(f'Linha {n}: use {comando}(recurso, bytes, posicao, '
+                                             + ('estado).' if gravar else 'quantidade, estado).'))
+                    recurso = recurso_nome(grupos[0],n)
+                    destino = contexto.resolver_caminho(grupos[1],n)
+                    tipo_dado = tipos.get(destino)
+                    if not isinstance(tipo_dado,tuple) or tipo_dado[0] != 'bytes':
+                        raise ErroCompilacao(f'Linha {n}: {comando} exige bytes[N], não texto.')
+                    posicao, _ = expressao_tipada(grupos[2],n,'inteiro')
+                    estado = estado_nome(grupos[-1],n)
+                    if gravar:
+                        adicionar(('grave_em',recurso,destino,posicao,estado),n,t)
+                    else:
+                        quantidade, _ = expressao_tipada(grupos[3],n,'inteiro')
+                        adicionar(('carregue_de',recurso,destino,posicao,quantidade,estado),n,t)
             elif t[0] in ('grave_trecho', 'carregue_trecho') and t[1:2] == ['('] and t[-1:] == [')']:
                 # Separa vírgulas exteriores: argumentos numéricos podem
                 # conter chamadas com múltiplos parâmetros.
@@ -478,6 +578,12 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     adicionar(('crie_lista_dinamica', interno), n, t)
                     i += 1
                     continue
+                if t[2:] == [':', 'arquivo']:
+                    interno = registrar(str(nome), 'arquivo', n)
+                    donos_locais.append(interno)
+                    adicionar(('crie_recurso', interno), n, t)
+                    i += 1
+                    continue
                 if len(t) >= 4 and t[2] == ':' and str(t[3]) in registros:
                     tipo_nome = str(t[3])
                     interno = registrar(str(nome), ('registro', tipo_nome, registros[tipo_nome]), n)
@@ -558,6 +664,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     arvore, inferido = expressao_tipada(t[3:], n)
                 else:
                     raise ErroCompilacao(f"Linha {n}: use 'seja nome = valor' ou 'seja nome: inteiro = valor'.")
+                if inferido == 'arquivo':
+                    raise ErroCompilacao(f'Linha {n}: recursos arquivo nao podem ser copiados; declare seja nome: arquivo.')
                 if isinstance(inferido, tuple) and inferido[0] == 'lista_dinamica':
                     raise ErroCompilacao(f'Linha {n}: lista[] tem dono unico; copiar ou inferir propriedade nao e permitido.')
                 if isinstance(inferido, tuple) and inferido[0] == 'lista_emprestada':
@@ -601,6 +709,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 nome = contexto.resolver(str(t[0]))
                 if nome not in variaveis:
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' não foi declarada.")
+                if tipos[nome] == 'arquivo':
+                    raise ErroCompilacao(f'Linha {n}: recurso arquivo nao pode ser reatribuido ou copiado.')
                 if isinstance(tipos[nome], tuple) and tipos[nome][0] == 'lista_dinamica':
                     raise ErroCompilacao(f'Linha {n}: lista[] possui dono unico e nao admite atribuicao.')
                 if isinstance(tipos[nome], tuple) and tipos[nome][0] == 'lista_emprestada':
@@ -683,6 +793,11 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                              (instrucao[1],))
                 for expressao in expressoes:
                     nomes |= chamadas_expressao(expressao)
+            if tag in ('grave_em', 'carregue_de'):
+                expressoes = ((instrucao[3],) if tag == 'grave_em'
+                             else (instrucao[3], instrucao[4]))
+                for expr in expressoes:
+                    nomes |= chamadas_expressao(expr)
             if tag in ('encerre', 'adicione_byte', 'atribua_byte'):
                 argumentos = ((instrucao[1],) if tag == 'encerre' else
                               (instrucao[2],) if tag == 'adicione_byte' else

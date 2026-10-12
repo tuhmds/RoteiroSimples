@@ -101,6 +101,8 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
         if ((isinstance(a, tuple) and a[0] == 'lista_emprestada') or
                 (isinstance(b, tuple) and b[0] == 'lista_emprestada')):
             raise ErroCompilacao(f'Linha {linha}: emprestimos nao podem ser comparados diretamente.')
+        if a == 'arquivo' or b == 'arquivo':
+            raise ErroCompilacao(f'Linha {linha}: recurso arquivo nao admite comparacao nem copia.')
         if op in ('==', '!='):
             if a != b:
                 raise ErroCompilacao(f'Linha {linha}: comparação {op} exige tipos iguais; recebeu {a} e {b}.')

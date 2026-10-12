@@ -50,6 +50,11 @@ def decidir_estrategia(programa, nivel=1, otimizar=True):
         motivos.append('buffers binários tipados')
     if any(i[0] in ('encerre',) for i in instrucoes):
         motivos.append('saída do processo')
+    if any(t == 'arquivo' for t in tipos.values()):
+        motivos.append('recursos de arquivo')
+    if any(i[0] in ('abra_recurso', 'feche_recurso', 'sincronize_recurso', 'grave_em', 'carregue_de')
+           for i in instrucoes):
+        motivos.append('operacoes com arquivo aberto')
     if any(i[0] in ('grave_arquivo', 'carregue_arquivo',
                     'grave_trecho', 'carregue_trecho') for i in instrucoes):
         motivos.append('arquivos nativos')
