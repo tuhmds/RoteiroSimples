@@ -1,0 +1,35 @@
+tipo Produto {
+    preco: inteiro
+    quantidade: inteiro
+}
+
+funcao novo_produto(valor: inteiro) -> Produto {
+    seja p: Produto
+    p.preco = valor
+    p.quantidade = 4
+    retorne p
+}
+
+funcao valor_total(produto: Produto, observacao: texto[32]) -> inteiro {
+    junte(observacao, "!")
+    retorne produto.preco * produto.quantidade
+}
+
+funcao quadrados() -> lista[3] {
+    seja numeros: lista[3]
+    numeros[0] = 1
+    numeros[1] = 4
+    numeros[2] = 9
+    retorne numeros
+}
+
+inicio {
+    seja p: Produto = novo_produto(25)
+    seja mensagem: texto[32]
+    copie(mensagem, "Olá")
+    escreva("RS 0.25: dados compostos em funções")
+    escreva(valor_total(p, mensagem))
+    escreva(mensagem)
+    seja valores: lista[3] = quadrados()
+    escreva(valores[2])
+}

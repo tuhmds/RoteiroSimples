@@ -45,6 +45,24 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if not campos:
                 raise ErroCompilacao(f'Linha {n}: registro precisa de pelo menos um campo.')
             registros[nome_tipo] = tuple(campos)
+    def ler_tipo(partes, linha):
+        if len(partes) == 1:
+            nome = str(partes[0])
+            if nome in ('inteiro', 'logico') or nome in registros:
+                return nome
+        if len(partes) == 4 and partes[1] == '[' and partes[3] == ']':
+            categoria = str(partes[0])
+            valor = str(partes[2])
+            if categoria in ('lista', 'texto') and valor.isascii() and valor.isdecimal():
+                tamanho = int(valor)
+                if not 1 <= tamanho < 0x0FFF0000:
+                    raise ErroCompilacao(f'Linha {linha}: capacidade fora dos limites de endereçamento.')
+                return ('lista', 'inteiro', tamanho) if categoria == 'lista' else ('texto', tamanho)
+        raise ErroCompilacao(f'Linha {linha}: tipo inválido; use inteiro, logico, registro, lista[N] ou texto[N].')
+
+    def eh_composto(tipo):
+        return isinstance(tipo, tuple) or tipo in registros
+
     definicoes = []
     assinaturas = _assinaturas if _assinaturas is not None else {}
     if _linhas is None:
@@ -56,9 +74,9 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', nome) or nome in ('inicio', 'seja', 'funcao', 'retorne'):
                 raise ErroCompilacao(f'Linha {n}: nome de função inválido.')
             fim_par = cabecalho.index(')', 3)
-            if cabecalho[fim_par+1:] != ['-', '>', 'inteiro', '{'] and cabecalho[fim_par+1:] != ['-', '>', 'logico', '{']:
-                raise ErroCompilacao(f'Linha {n}: use funcao nome(parametro: tipo) -> inteiro ou logico {{.')
-            retorno = str(cabecalho[fim_par+3])
+            if cabecalho[fim_par+1:fim_par+3] != ['-', '>'] or cabecalho[-1] != '{':
+                raise ErroCompilacao(f'Linha {n}: use funcao nome(parametros) -> tipo {{.')
+            retorno = ler_tipo(cabecalho[fim_par+3:-1], n)
             partes = cabecalho[3:fim_par]
             parametros = []
             if partes:
@@ -69,11 +87,11 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                         grupos.append(partes[ultimo:i]); ultimo = i+1
                 grupos.append(partes[ultimo:])
                 for grupo in grupos:
-                    if len(grupo) != 3 or grupo[1] != ':' or (grupo[2] not in ('inteiro', 'logico') and grupo[2] not in registros) or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', grupo[0]):
-                        raise ErroCompilacao(f'Linha {n}: use parametro: inteiro ou parametro: logico.')
+                    if len(grupo) < 3 or grupo[1] != ':' or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', grupo[0]):
+                        raise ErroCompilacao(f'Linha {n}: use parametro: tipo.')
                     if grupo[0] in (x[0] for x in parametros):
                         raise ErroCompilacao(f'Linha {n}: parâmetro duplicado: {grupo[0]}.')
-                    parametros.append((str(grupo[0]), str(grupo[2])))
+                    parametros.append((str(grupo[0]), ler_tipo(grupo[2:], n)))
             if nome in assinaturas or nome in registros:
                 raise ErroCompilacao(f'Linha {n}: função {nome!r} já foi declarada.')
             assinaturas[nome] = (tuple(tipo for _, tipo in parametros), retorno)
@@ -153,11 +171,13 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 if len(t) == 1:
                     raise ErroCompilacao(f'Linha {n}: retorne exige um valor.')
                 valor, _ = expressao_tipada(t[1:], n, _retorno)
+                if eh_composto(_retorno) and valor[0] not in ('var', 'chamada'):
+                    raise ErroCompilacao(f'Linha {n}: retorno composto exige variável ou função do mesmo tipo.')
                 adicionar(('retorne', valor), n, t)
                 i += 1
                 continue
-            if _retorno is not None and t[0] in ('leia', 'copie', 'junte', 'limpe'):
-                raise ErroCompilacao(f'Linha {n}: entrada e buffers dentro de funções serão habilitados após os quadros de memória por chamada.')
+            if _retorno is not None and t[0] == 'leia':
+                raise ErroCompilacao(f'Linha {n}: leitura do teclado dentro de funções ainda não está disponível.')
             if len(t) >= 3 and t[0] == 'se'  and t[-1] == '{':
                 cond, tipo_condicao = expressao_tipada(t[1:-1], n)
                 if tipo_condicao not in ('inteiro', 'logico'):
@@ -264,36 +284,56 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f'Linha {n}: nome de variável inválido.')
                 if contexto.declarado_neste_escopo(str(nome)) or nome in reservadas:
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' duplicada ou reservada.")
-                if len(t) == 4 and t[2] == ':' and str(t[3]) in registros:
+                if len(t) >= 4 and t[2] == ':' and str(t[3]) in registros:
                     tipo_nome = str(t[3])
                     interno = registrar(str(nome), ('registro', tipo_nome, registros[tipo_nome]), n)
-                    adicionar(('crie_registro', interno, tuple(contexto.campos_registro[interno].values())), n, t)
+                    if len(t) == 4:
+                        adicionar(('crie_registro', interno, tuple(contexto.campos_registro[interno].values())), n, t)
+                    elif len(t) >= 6 and t[4] == '=':
+                        arvore, _ = expressao_tipada(t[5:], n, tipo_nome)
+                        if arvore[0] not in ('var', 'chamada'):
+                            raise ErroCompilacao(f'Linha {n}: registro precisa de origem composta.')
+                        adicionar(('copie_composto', interno, arvore), n, t)
+                    else:
+                        raise ErroCompilacao(f'Linha {n}: declaração de registro inválida.')
                     i += 1
                     continue
-                if len(t) == 7 and t[2:4] == [':', 'texto'] and t[4] == '[' and t[6] == ']':
+                if len(t) >= 7 and t[2:4] == [':', 'texto'] and t[4] == '[' and t[6] == ']':
                     literal = t[5]
                     if not literal.isascii() or not literal.isdecimal():
                         raise ErroCompilacao(f'Linha {n}: capacidade do texto precisa ser um inteiro constante.')
                     capacidade = int(literal)
-                    if _retorno is not None:
-                        raise ErroCompilacao(f'Linha {n}: buffers locais em funções ainda não estão disponíveis.')
                     if not 1 <= capacidade < 0x7FFF0000:
                         raise ErroCompilacao(f'Linha {n}: capacidade de texto fora do intervalo do gerador nativo.')
                     interno = registrar(str(nome), ('texto', capacidade), n)
-                    adicionar(('crie_texto', interno, capacidade), n, t)
+                    if len(t) == 7:
+                        adicionar(('crie_texto', interno, capacidade), n, t)
+                    elif len(t) >= 9 and t[7] == '=':
+                        arvore, _ = expressao_tipada(t[8:], n, ('texto', capacidade))
+                        if arvore[0] not in ('var', 'chamada'):
+                            raise ErroCompilacao(f'Linha {n}: cópia de texto exige variável ou função.')
+                        adicionar(('copie_composto', interno, arvore), n, t)
+                    else:
+                        raise ErroCompilacao(f'Linha {n}: declaração de texto inválida.')
                     i += 1
                     continue
-                if len(t) == 7 and t[2:4] == [':', 'lista'] and t[4] == '[' and t[6] == ']':
+                if len(t) >= 7 and t[2:4] == [':', 'lista'] and t[4] == '[' and t[6] == ']':
                     tamanho_literal = t[5]
                     if not tamanho_literal.isascii() or not tamanho_literal.isdecimal():
                         raise ErroCompilacao(f'Linha {n}: tamanho da lista deve ser um inteiro constante.')
                     tamanho = int(tamanho_literal)
-                    if _retorno is not None:
-                        raise ErroCompilacao(f'Linha {n}: listas locais em funções ainda não estão disponíveis.')
                     if not 1 <= tamanho < 0x0FFF0000:
                         raise ErroCompilacao(f'Linha {n}: tamanho de lista fora do intervalo do gerador nativo.')
                     interno = registrar(str(nome), ('lista', 'inteiro', tamanho), n)
-                    adicionar(('crie_lista', interno, tamanho), n, t)
+                    if len(t) == 7:
+                        adicionar(('crie_lista', interno, tamanho), n, t)
+                    elif len(t) >= 9 and t[7] == '=':
+                        arvore, _ = expressao_tipada(t[8:], n, ('lista', 'inteiro', tamanho))
+                        if arvore[0] not in ('var', 'chamada'):
+                            raise ErroCompilacao(f'Linha {n}: cópia de lista exige variável ou função.')
+                        adicionar(('copie_composto', interno, arvore), n, t)
+                    else:
+                        raise ErroCompilacao(f'Linha {n}: declaração de lista inválida.')
                     i += 1
                     continue
                 if len(t) >= 6 and t[2] == ':' and t[4] == '=':
@@ -305,8 +345,14 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     arvore, inferido = expressao_tipada(t[3:], n)
                 else:
                     raise ErroCompilacao(f"Linha {n}: use 'seja nome = valor' ou 'seja nome: inteiro = valor'.")
-                interno = registrar(str(nome), inferido, n)
-                adicionar(('atribua', interno, arvore), n, t)
+                tipo_armazenado = ('registro', inferido, registros[inferido]) if isinstance(inferido, str) and inferido in registros else inferido
+                interno = registrar(str(nome), tipo_armazenado, n)
+                if eh_composto(inferido):
+                    if arvore[0] not in ('var', 'chamada'):
+                        raise ErroCompilacao(f'Linha {n}: cópia composta exige variável ou função.')
+                    adicionar(('copie_composto', interno, arvore), n, t)
+                else:
+                    adicionar(('atribua', interno, arvore), n, t)
             elif len(t) >= 5 and t[1] == '.' and t[3] == '=':
                 nome_base = contexto.resolver(str(t[0]))
                 if nome_base not in contexto.campos_registro or str(t[2]) not in contexto.campos_registro[nome_base]:
@@ -323,8 +369,14 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 nome = contexto.resolver(str(t[0]))
                 if nome not in variaveis:
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' não foi declarada.")
-                arvore, _ = expressao_tipada(t[2:], n, tipos[nome])
-                adicionar(('atribua', nome, arvore), n, t)
+                esperado = tipos[nome][1] if isinstance(tipos[nome], tuple) and tipos[nome][0] == 'registro' else tipos[nome]
+                arvore, _ = expressao_tipada(t[2:], n, esperado)
+                if eh_composto(tipos[nome]):
+                    if arvore[0] not in ('var', 'chamada'):
+                        raise ErroCompilacao(f'Linha {n}: atribuição composta exige variável ou função.')
+                    adicionar(('copie_composto', nome, arvore), n, t)
+                else:
+                    adicionar(('atribua', nome, arvore), n, t)
             else:
                 raise ErroCompilacao(f'Linha {n}, coluna {t[0].origem.coluna}: instrução desconhecida ou incompleta.')
             i += 1
@@ -357,7 +409,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
         for variavel, tipo in parametros:
             if variavel in reservadas:
                 raise ErroCompilacao(f'Linha {n}: parâmetro usa palavra reservada: {variavel}.')
-            tipo_var = ('registro', tipo, registros[tipo]) if tipo in registros else tipo
+            tipo_var = ('registro', tipo, registros[tipo]) if isinstance(tipo, str) and tipo in registros else tipo
             internos.append((ctx.registrar(variavel, tipo_var, n), tipo))
         corpo_funcao = analisar_programa('', _linhas=[(n, ['inicio', '{'])] + corpo,
                                          _contexto=ctx, _assinaturas=assinaturas,

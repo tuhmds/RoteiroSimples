@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.24
+# RoteiroSimples (RS) — versão experimental 0.25
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -10,7 +10,43 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
 
-## Novo na RS 0.24 — registros e recursão controlada
+## Novo na RS 0.25 — dados compostos em funções
+
+A linguagem agora permite passar e devolver **registros, listas de inteiros e buffers UTF-8 por valor**, com cópias independentes entre o chamador e a função.
+
+```text
+tipo Produto {
+    preco: inteiro
+    quantidade: inteiro
+}
+funcao novo_produto(valor: inteiro) -> Produto {
+    seja p: Produto
+    p.preco = valor
+    p.quantidade = 4
+    retorne p
+}
+funcao quadrados() -> lista[3] {
+    seja numeros: lista[3]
+    numeros[0] = 1
+    numeros[1] = 4
+    numeros[2] = 9
+    retorne numeros
+}
+inicio {
+    seja p: Produto = novo_produto(25)
+    seja valores: lista[3] = quadrados()
+    escreva(p.preco * p.quantidade)
+    escreva(valores[2])
+}
+```
+
+**Resultado:** `100` e `9`, cada um em uma linha.
+
+O tamanho da lista e a capacidade do buffer fazem parte do tipo: `texto[16]` não é intercambiável com `texto[32]`. As funções podem usar `copie`, `junte` e `limpe` em seus buffers locais e parâmetros; a leitura `leia` dentro de funções permanece indisponível. O resultado de função que devolve um valor composto precisa de destino explícito; armazene-o em variável antes de passá-lo a outra função. Registros aninhados e listas dinâmicas ainda não foram implementados.
+
+**Exemplo executável:** [`exemplos/funcoes_compostas.rts`](exemplos/funcoes_compostas.rts). Veja a [especificação da RS 0.25](docs/FUNCOES_COMPOSTAS_RS_0_25.md). Mantivemos os níveis históricos de `-O 0` a `-O 8`; não adicionamos outro nível.
+
+## Histórico: RS 0.24 — registros e recursão controlada
 
 Esta atualização prioriza **fundamentos de linguagem**, não outro nível de otimização.
 Agora o programador pode declarar um tipo composto por campos `inteiro` e `logico`,
@@ -52,7 +88,7 @@ inicio {
 ```
 
 **Saída esperada:** `100` e `120`, um em cada linha. Arquivo completo:
-[`exemplos/registros_recursao.rts`](exemplos/registros_recursao.rts).
+[`exemplos/funcoes_compostas.rts`](exemplos/registros_recursao.rts).
 
 ### Regras dos registros e funções
 
@@ -73,10 +109,9 @@ inicio {
   análises avançadas de atribuição única e otimização de memória ainda não são
   aplicadas a programas que usam esses novos recursos.
 
-### Limitações que continuam presentes
+### Limitações históricas da RS 0.24 (superadas parcialmente na 0.25)
 
-Ainda não há **retorno de registros inteiros**, registros aninhados, campos do tipo
-texto ou lista, passagem de listas e buffers às funções, empréstimos de referências,
+Na RS 0.24 ainda não havia retorno de registros inteiros nem passagem de listas e buffers às funções. Esses dois recursos foram adicionados na RS 0.25. Ainda não há registros aninhados, campos do tipo texto ou lista, empréstimos de referências,
 alocação dinâmica, ponteiros brutos ou funções que recebam textos. O controle de pilha
 não substitui um sistema completo de segurança de memória nem uma auditoria do código
 nativo. Não se promete segurança para aplicações de produção.

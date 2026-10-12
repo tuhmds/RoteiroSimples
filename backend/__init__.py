@@ -11,7 +11,20 @@ def compilar(programa, alvo, otimizar=True, nivel=1):
     # Funções e variáveis locais de blocos usam o backend conservador.
     # Os níveis -O existentes permanecem aceitos, sem aplicar análises
     # que ainda não modelam chamadas ou tempos de vida dos novos escopos.
-    if getattr(programa, 'funcoes', None) or getattr(programa, 'registros', None) or getattr(programa, 'escopos_locais', False):
+    def contem_copia_composta(instrucoes):
+        for instrucao in instrucoes:
+            if instrucao[0] == 'copie_composto':
+                return True
+            if instrucao[0] == 'se' and (contem_copia_composta(instrucao[2]) or contem_copia_composta(instrucao[3])):
+                return True
+            if instrucao[0] == 'enquanto' and contem_copia_composta(instrucao[2]):
+                return True
+            if instrucao[0] == 'para' and contem_copia_composta(instrucao[6]):
+                return True
+        return False
+
+    if (getattr(programa, 'funcoes', None) or getattr(programa, 'registros', None)
+            or getattr(programa, 'escopos_locais', False) or contem_copia_composta(programa.instrucoes)):
         gerador, mensagens = montar_codigo(programa, alvo == 'windows')
         return montar_pe(gerador, mensagens) if alvo == 'windows' else montar_elf(gerador, mensagens)
     ir = construir_ir(programa, otimizar=otimizar, nivel=(nivel if nivel >= 7 else min(nivel, 3)))

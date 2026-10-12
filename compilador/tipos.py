@@ -30,8 +30,8 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
         tipo = tipos[expr[1]]
         if isinstance(tipo, tuple) and tipo[0] == 'registro':
             return tipo[1]
-        if isinstance(tipo, tuple):
-            raise ErroCompilacao(f'Linha {linha}: {tipo[0]} {expr[1]!r} não é um valor numérico.')
+        # Listas e textos são valores compostos; o contexto da operação
+        # decide se podem ser usados (não participam da aritmética).
         return tipo
     if categoria == 'tamanho_texto':
         if not isinstance(tipos.get(expr[1]), tuple) or tipos[expr[1]][0] != 'texto':

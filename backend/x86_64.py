@@ -139,7 +139,57 @@ def _total_slots(programa):
                 for tipo in (getattr(programa, 'tipos', {}).get(nome, 'inteiro'),)), default=0)
 
 
-def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0):
+def _palavras_tipo(tipo, registros):
+    """Quantidade de palavras de oito bytes em um valor completo."""
+    if isinstance(tipo, str) and tipo in registros:
+        return len(registros[tipo])
+    if isinstance(tipo, tuple) and tipo[0] == 'registro':
+        return len(tipo[2])
+    if isinstance(tipo, tuple) and tipo[0] == 'lista':
+        return tipo[2]
+    if isinstance(tipo, tuple) and tipo[0] == 'texto':
+        return 1 + (tipo[1] + 7) // 8
+    return 1
+
+
+def _composto(tipo, registros):
+    return (isinstance(tipo, str) and tipo in registros) or (
+        isinstance(tipo, tuple) and tipo[0] in ('registro', 'lista', 'texto'))
+
+
+def _copiar_palavras(g, origem, destino, quantidade):
+    """Copia valores completos sem extrapolar os quadros de pilha locais."""
+    if origem == destino:
+        return
+    numero = g.proxima_condicao
+    g.proxima_condicao += 1
+    rotulo = f'copiar_composto_{numero}'
+    g.bytes(b'\x4C\x8D\x95' + struct.pack('<i', origem))  # lea r10,[rbp+origem]
+    g.bytes(b'\x4C\x8D\x9D' + struct.pack('<i', destino)) # lea r11,[rbp+destino]
+    g.bytes(b'\xB9' + struct.pack('<I', quantidade))           # mov ecx, quantidade
+    g.marcar(rotulo)
+    g.bytes(b'\x49\x8B\x02\x49\x89\x03')      # mov rax,[r10]; mov [r11],rax
+    g.bytes(b'\x49\x83\xEA\x08\x49\x83\xEB\x08')  # sub ponteiros,8
+    g.bytes(b'\xFF\xC9')
+    g.salto(rotulo, 'jnz')
+
+
+def _copiar_para_retorno(g, origem, quantidade):
+    """O chamador fornece endereço de destino na palavra oculta de retorno."""
+    numero = g.proxima_condicao
+    g.proxima_condicao += 1
+    rotulo = f'retornar_composto_{numero}'
+    g.bytes(b'\x4C\x8D\x95' + struct.pack('<i', origem))
+    g.bytes(b'\x4C\x8B\x5D\x18')   # mov r11,[rbp+24]
+    g.bytes(b'\xB9' + struct.pack('<I', quantidade)) # mov ecx,count
+    g.marcar(rotulo)
+    g.bytes(b'\x49\x8B\x02\x49\x89\x03')
+    g.bytes(b'\x49\x83\xEA\x08\x49\x83\xEB\x08')
+    g.bytes(b'\xFF\xC9')
+    g.salto(rotulo, 'jnz')
+
+
+def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, destino_composto=None):
     tipo = expr[0]
     if tipo in ('numero', 'logico'):
         carregar_numero(g, expr[1])
@@ -147,40 +197,56 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0):
         nome, argumentos = expr[1], expr[2]
         if nome not in getattr(g, 'funcoes', {}):
             raise ValueError(f'Função sem rótulo nativo: {nome}.')
-        # Convenção privada RS: argumentos empilhados da esquerda para a direita.
-        # Pad antes dos argumentos mantém RSP alinhado em 16 bytes na chamada.
-        # Parâmetros de registros são copiados por valor, campo a campo.
-        # Uma última palavra oculta carrega a utilização de pilha acumulada
-        # para que chamadas recursivas não saltem a página de guarda.
+        # Convenção interna RS: argumentos completos empilhados por valor.
+        # Para retornos compostos, o chamador oferece um endereço privado.
         assinatura = g.funcoes[nome].parametros
-        palavras = sum(len(g.registros[t]) if t in g.registros else 1
-                       for _, t in assinatura)
-        ajustar = (pilha_extra + palavras + 1) % 2
+        retorno = g.funcoes[nome].retorno
+        composto_retorno = _composto(retorno, g.registros)
+        if composto_retorno and destino_composto is None:
+            raise ValueError(f'Retorno composto de {nome} precisa de destino explícito.')
+        palavras = sum(_palavras_tipo(t, g.registros) for _, t in assinatura)
+        ocultas = 1 + int(composto_retorno)  # orçamento de pilha e destino opcional
+        ajustar = (pilha_extra + palavras + ocultas) % 2
         if ajustar:
             g.bytes(b'\x48\x83\xEC\x08')
         empilhados = 0
         for argumento, (_, tipo_parametro) in zip(argumentos, assinatura):
-            if tipo_parametro in g.registros:
-                nome_base = argumento[1]
-                for campo, _ in g.registros[tipo_parametro]:
-                    interno = g.campos_atual[nome_base][campo]
-                    offset = deslocamento_variavel(variaveis, interno, windows)
-                    g.bytes(b'\x48\x8B\x85' + struct.pack('<i', offset))
-                    g.bytes(b'\x50')
-                    empilhados += 1
+            quantidade = _palavras_tipo(tipo_parametro, g.registros)
+            if _composto(tipo_parametro, g.registros):
+                if argumento[0] != 'var':
+                    raise ValueError('Passe retorno composto primeiro para variável local antes da chamada.')
+                origem = argumento[1]
+                offset = deslocamento_variavel(variaveis, origem, windows)
+                # A ordem da pilha acompanha os campos/palavras do valor.
+                numero = g.proxima_condicao
+                g.proxima_condicao += 1
+                rotulo = f'empilhar_valor_{numero}'
+                g.bytes(b'\x4C\x8D\x95' + struct.pack('<i', offset))
+                g.bytes(b'\xB9' + struct.pack('<I', quantidade))
+                g.marcar(rotulo)
+                g.bytes(b'\x49\x8B\x02\x50') # mov rax,[r10]; push rax
+                g.bytes(b'\x49\x83\xEA\x08\xFF\xC9')
+                g.salto(rotulo, 'jnz')
             else:
                 expressao(g, argumento, variaveis, windows, registradores,
                          pilha_extra + ajustar + empilhados)
                 g.bytes(b'\x50')
-                empilhados += 1
+            empilhados += quantidade
+        if composto_retorno:
+            if destino_composto == '__rs_retorno_externo':
+                g.bytes(b'\x48\x8B\x45\x18') # carrega ponteiro do chamador anterior
+            else:
+                destino = deslocamento_variavel(variaveis, destino_composto, windows)
+                g.bytes(b'\x48\x8D\x85' + struct.pack('<i', destino))
+            g.bytes(b'\x50')
         if '__rs_uso_pilha' in variaveis:
             offset = deslocamento_variavel(variaveis, '__rs_uso_pilha', windows)
             g.bytes(b'\x48\x8B\x85' + struct.pack('<i', offset))
         else:
             carregar_numero(g, 0)
-        g.bytes(b'\x50')  # palavra oculta de utilização de pilha
+        g.bytes(b'\x50')  # consumo de pilha acumulado
         g.chamada(f'funcao_{nome}')
-        limpar = 8 * (palavras + 1 + ajustar)
+        limpar = 8 * (palavras + ocultas + ajustar)
         if limpar:
             if limpar < 128:
                 g.bytes(b'\x48\x83\xC4' + struct.pack('<B', limpar))
@@ -797,6 +863,17 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                     carregar_numero(g, 0)
                     offset = deslocamento_variavel(variaveis, campo, windows)
                     g.bytes(b'\x48\x89\x85' + struct.pack('<i', offset))
+            elif op[0] == 'copie_composto':
+                destino, origem = op[1], op[2]
+                if origem[0] == 'chamada':
+                    expressao(g, origem, variaveis, windows, destino_composto=destino)
+                else:
+                    if origem[0] != 'var':
+                        raise ValueError('Cópia de composto exige valor de variável.')
+                    quantidade = _palavras_tipo(tipos[destino], g.registros)
+                    _copiar_palavras(
+                        g, deslocamento_variavel(variaveis, origem[1], windows),
+                        deslocamento_variavel(variaveis, destino, windows), quantidade)
             elif op[0] == 'atribua':
                 expressao(g, op[2], variaveis, windows)
                 offset = deslocamento_variavel(variaveis, op[1], windows)
@@ -865,7 +942,18 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             elif op[0] == 'retorne':
                 if funcao_atual is None:
                     raise ValueError('Retorno fora de função (erro interno).')
-                expressao(g, op[1], variaveis, windows)
+                if _composto(g.funcoes[funcao_atual].retorno, g.registros):
+                    if op[1][0] == 'chamada':
+                        expressao(g, op[1], variaveis, windows,
+                                 destino_composto='__rs_retorno_externo')
+                    elif op[1][0] == 'var':
+                        _copiar_para_retorno(g,
+                            deslocamento_variavel(variaveis, op[1][1], windows),
+                            _palavras_tipo(g.funcoes[funcao_atual].retorno, g.registros))
+                    else:
+                        raise ValueError('Retorno composto exige variável ou chamada.')
+                else:
+                    expressao(g, op[1], variaveis, windows)
                 g.salto(f'funcao_fim_{funcao_atual}')
             elif op[0] == 'pare':
                 if laco is None:
@@ -918,17 +1006,25 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 g.salto('erro_recursao_limite', 'ja')
         reservar_pilha(g, n_frame)
         g.bytes(b'\x48\x89\x85' + struct.pack('<i', deslocamento_variavel(variaveis, '__rs_uso_pilha', windows)))
-        total_palavras = sum(len(g.registros[t]) if t in g.registros else 1
-                             for _, t in funcao.parametros)
+        total_palavras = sum(_palavras_tipo(t, g.registros) for _, t in funcao.parametros)
+        base_argumentos = 32 if _composto(funcao.retorno, g.registros) else 24
         indice_palavra = 0
         for interno, tipo in funcao.parametros:
-            destinos = (list(funcao.programa.campos_registro[interno].values())
-                        if tipo in g.registros else [interno])
-            for destino in destinos:
-                deslocamento_origem = 24 + 8 * (total_palavras - indice_palavra - 1)
-                g.bytes(b'\x48\x8B\x85' + struct.pack('<i', deslocamento_origem))
-                g.bytes(b'\x48\x89\x85' + struct.pack('<i', deslocamento_variavel(variaveis, destino, windows)))
-                indice_palavra += 1
+            quantidade = _palavras_tipo(tipo, g.registros)
+            origem = base_argumentos + 8*(total_palavras - indice_palavra - 1)
+            destino = deslocamento_variavel(variaveis, interno, windows)
+            numero = g.proxima_condicao
+            g.proxima_condicao += 1
+            rotulo = f'receber_parametro_{numero}'
+            g.bytes(b'\x4C\x8D\x95' + struct.pack('<i', origem))
+            g.bytes(b'\x4C\x8D\x9D' + struct.pack('<i', destino))
+            g.bytes(b'\xB9' + struct.pack('<I', quantidade))
+            g.marcar(rotulo)
+            g.bytes(b'\x49\x8B\x02\x49\x89\x03')
+            g.bytes(b'\x49\x83\xEA\x08\x49\x83\xEB\x08')
+            g.bytes(b'\xFF\xC9')
+            g.salto(rotulo, 'jnz')
+            indice_palavra += quantidade
         emitir_bloco(funcao.programa.instrucoes)
         g.marcar(f'funcao_fim_{nome}')
         if windows:
