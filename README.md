@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.41.1
+# RoteiroSimples (RS) — versão experimental 0.41.2
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,26 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.41.2 — Prólogos nativos e metadados de exceções Windows
+
+O gerador PE32+ emite agora seções reais `.pdata` e `.xdata` com
+intervalos `RUNTIME_FUNCTION` e informações `UNWIND_INFO` para a entrada
+principal e funções com quadros fixos elegíveis. As descrições verificam
+os bytes do prólogo, os salvamentos de `RBP`/`RBX` e a reserva de pilha.
+
+```text
+python compilar.py exemplos/funcoes.rts --alvo windows -O 8
+```
+
+**Cobertura parcial:** quadros com sondagem por várias páginas, rotinas
+auxiliares e alguns usos de registradores ainda precisam de auditoria.
+Esses trechos não recebem descrições fictícias. A opção
+`HIGH_ENTROPY_VA` permanece desligada; `DYNAMIC_BASE` e
+`NX_COMPAT` continuam ativos. A RS ainda não oferece proteção
+completa de exceções nem garantia de conformidade ABI em todo o código.
+
+[Detalhes técnicos, testes e restrições](docs/DESENROLAMENTO_WINDOWS_RS_0_41_2.md).
 
 ## RS 0.41.1 — Isolamento de dados ELF e diagnóstico Windows
 
