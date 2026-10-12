@@ -121,7 +121,8 @@ class TestesProtecoesExecutaveisRS041(unittest.TestCase):
                 self.assertEqual(pe['maquina'], 0x8664)
                 self.assertEqual(pe['quantidade'], 4)
                 self.assertEqual(pe['caracteristicas'] & 1, 0)
-                self.assertEqual(pe['protecoes'] & 0x160, 0x160)
+                self.assertEqual(pe['protecoes'] & 0x140, 0x140)
+                self.assertEqual(pe['protecoes'] & 0x20, 0)  # alta entropia ainda não liberada
                 self.assertEqual(pe['base'], 0x140000000)
                 self.assertEqual(set(pe['secoes']),
                                  {'.text', '.idata', '.rdata', '.reloc'})

@@ -120,9 +120,11 @@ def montar_pe(g, mensagens):
     struct.pack_into('<I', opt, 56,
                      alinhar(base_relocacoes + len(realocacoes), 0x1000))
     struct.pack_into('<I', opt, 60, tamanho_cabecalho)
-    # HIGH_ENTROPY_VA | DYNAMIC_BASE | NX_COMPAT: cada proteção
-    # corresponde a um layout efetivamente compatível com ela.
-    struct.pack_into('<HH', opt, 68, 3, 0x160)
+    # DYNAMIC_BASE | NX_COMPAT: realocação DIR64 é efetiva e validada.
+    # HIGH_ENTROPY_VA permanece DESLIGADO: os testes de execução de
+    # programas com recursos identificaram falhas nessa configuração.
+    # Habilitar somente após verificar o ABI e os endereços nativos.
+    struct.pack_into('<HH', opt, 68, 3, 0x140)
     struct.pack_into('<QQQQ', opt, 72, 0x100000, 0x1000, 0x100000, 0x1000)
     struct.pack_into('<II', opt, 104, 0, 16)
     struct.pack_into('<II', opt, 112 + 8, base_importacoes, 40)
