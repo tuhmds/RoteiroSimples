@@ -34,11 +34,27 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             campos = []
             while linhas and linhas[0][1] != ['}']:
                 n_campo, t = linhas.pop(0)
-                if len(t) != 3 or t[1] != ':' or t[2] not in ('inteiro', 'logico') or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', t[0]):
-                    raise ErroCompilacao(f'Linha {n_campo}: campo exige nome: inteiro ou nome: logico.')
+                if (len(t) < 3 or t[1] != ':' or
+                        not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', t[0])):
+                    raise ErroCompilacao(f'Linha {n_campo}: declare campo: tipo.')
+                parte_tipo = t[2:]
+                if len(parte_tipo) == 1:
+                    tipo_campo = str(parte_tipo[0])
+                    if tipo_campo not in ('inteiro', 'logico') and tipo_campo not in registros:
+                        raise ErroCompilacao(f'Linha {n_campo}: tipo de campo desconhecido: {tipo_campo}.')
+                elif (len(parte_tipo) == 4 and parte_tipo[0] in ('lista', 'texto')
+                      and parte_tipo[1] == '[' and parte_tipo[-1] == ']'
+                      and parte_tipo[2].isascii() and parte_tipo[2].isdecimal()):
+                    capacidade = int(parte_tipo[2])
+                    if not 1 <= capacidade < 0x0FFF0000:
+                        raise ErroCompilacao(f'Linha {n_campo}: tamanho de campo fora do intervalo do gerador.')
+                    tipo_campo = (('lista', 'inteiro', capacidade) if parte_tipo[0] == 'lista'
+                                  else ('texto', capacidade))
+                else:
+                    raise ErroCompilacao(f'Linha {n_campo}: tipo de campo inválido.')
                 if t[0] in (c for c, _ in campos):
                     raise ErroCompilacao(f'Linha {n_campo}: campo {t[0]!r} duplicado.')
-                campos.append((str(t[0]), str(t[2])))
+                campos.append((str(t[0]), tipo_campo))
             if not linhas:
                 raise ErroCompilacao(f'Linha {n}: registro {nome_tipo!r} sem fechamento.')
             linhas.pop(0)
@@ -114,31 +130,27 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     reservadas = {'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'capacidade', 'copie', 'junte', 'limpe', 'funcao', 'retorne', 'tipo'}
 
     def indice_lista(partes, linha):
-        if len(partes) < 4 or partes[1] != '[' or partes[-1] != ']':
+        if '[' not in partes or partes[-1] != ']':
             raise ErroCompilacao(f'Linha {linha}: use lista[indice].')
-        nome = contexto.resolver(str(partes[0]))
+        posicao = partes.index('[')
+        nome = contexto.resolver_caminho(partes[:posicao], linha)
         tipo = tipos.get(nome)
         if not isinstance(tipo, tuple) or tipo[0] != 'lista':
-            raise ErroCompilacao(f'Linha {linha}: {nome!r} não é uma lista declarada.')
-        indice, _ = expressao_tipada(partes[2:-1], linha, 'inteiro')
+            raise ErroCompilacao(f'Linha {linha}: caminho não aponta para uma lista.')
+        indice, _ = expressao_tipada(partes[posicao+1:-1], linha, 'inteiro')
         return nome, indice, tipo[2]
 
     def texto_destino(partes, linha):
-        if len(partes) != 1:
-            raise ErroCompilacao(f'Linha {linha}: informe um único nome de buffer.')
-        nome = contexto.resolver(str(partes[0]))
+        nome = contexto.resolver_caminho(partes, linha)
         tipo = tipos.get(nome)
         if not isinstance(tipo, tuple) or tipo[0] != 'texto':
-            raise ErroCompilacao(f'Linha {linha}: {nome!r} precisa ser um buffer de texto declarado.')
+            raise ErroCompilacao(f'Linha {linha}: caminho não aponta para um buffer de texto.')
         return nome, tipo[1]
 
     def texto_origem(partes, linha):
-        if len(partes) != 1:
-            raise ErroCompilacao(f'Linha {linha}: origem deve ser um texto literal ou outro buffer.')
-        valor = partes[0]
-        if valor.startswith('"'):
+        if len(partes) == 1 and partes[0].startswith('"'):
             try:
-                conteudo = json.loads(valor)
+                conteudo = json.loads(partes[0])
                 bruto = conteudo.encode('utf-8')
             except (ValueError, UnicodeError) as exc:
                 raise ErroCompilacao(f'Linha {linha}: literal de texto inválido.') from exc
@@ -253,8 +265,10 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f'Linha {n}: use leia(inteiro), leia(lista[indice]) ou leia(buffer).')
             elif t[:2] == ['escreva', '('] and t[-1] == ')':
                 expr = t[2:-1]
-                if len(expr) == 1 and isinstance(tipos.get(contexto.resolver(str(expr[0]))), tuple) and tipos[contexto.resolver(str(expr[0]))][0] == 'texto':
-                    adicionar(('imprima_texto', contexto.resolver(str(expr[0]))), n, t)
+                if expr and len(expr) % 2 == 1 and all(expr[k] == '.' for k in range(1, len(expr), 2)) and (
+                    isinstance(tipos.get(contexto.resolver_caminho(expr, n)), tuple) and
+                    tipos[contexto.resolver_caminho(expr, n)][0] == 'texto'):
+                    adicionar(('imprima_texto', contexto.resolver_caminho(expr, n)), n, t)
                 elif len(expr) == 1 and expr[0].startswith('"'):
                     try:
                         valor = json.loads(expr[0])
@@ -353,13 +367,20 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     adicionar(('copie_composto', interno, arvore), n, t)
                 else:
                     adicionar(('atribua', interno, arvore), n, t)
-            elif len(t) >= 5 and t[1] == '.' and t[3] == '=':
-                nome_base = contexto.resolver(str(t[0]))
-                if nome_base not in contexto.campos_registro or str(t[2]) not in contexto.campos_registro[nome_base]:
-                    raise ErroCompilacao(f'Linha {n}: campo de registro desconhecido.')
-                campo = contexto.campos_registro[nome_base][str(t[2])]
-                valor, _ = expressao_tipada(t[4:], n, tipos[campo])
-                adicionar(('atribua', campo, valor), n, t)
+            elif (len(t) >= 5 and t[1] == '.' and '=' in t and
+                  '[' not in t[:t.index('=')]):
+                igual = t.index('=')
+                campo = contexto.resolver_caminho(t[:igual], n)
+                tipo_destino = tipos[campo]
+                esperado = (tipo_destino[1] if isinstance(tipo_destino, tuple) and
+                            tipo_destino[0] == 'registro' else tipo_destino)
+                valor, _ = expressao_tipada(t[igual+1:], n, esperado)
+                if eh_composto(tipo_destino):
+                    if valor[0] not in ('var', 'chamada'):
+                        raise ErroCompilacao(f'Linha {n}: campo composto exige variável ou função.')
+                    adicionar(('copie_composto', campo, valor), n, t)
+                else:
+                    adicionar(('atribua', campo, valor), n, t)
             elif len(t) >= 5 and '[' in t and ']' in t and '=' in t and t.index('[') < t.index(']') < t.index('='):
                 igual = t.index('=')
                 nome, indice, tamanho = indice_lista(t[:igual], n)
@@ -422,6 +443,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
         if not isinstance(expr, tuple):
             return set()
         tag = expr[0]
+        if tag == 'temporario_composto':
+            return chamadas_expressao(expr[2])
         if tag == 'chamada':
             nomes = {expr[1]}
             for argumento in expr[2]:
@@ -439,8 +462,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
         nomes = set()
         for instrucao in bloco:
             tag = instrucao[0]
-            if tag in ('atribua', 'atribua_indice', 'imprima_num', 'retorne'):
-                expressoes = ((instrucao[2],) if tag == 'atribua' else
+            if tag in ('atribua', 'copie_composto', 'atribua_indice', 'imprima_num', 'retorne'):
+                expressoes = ((instrucao[2],) if tag in ('atribua', 'copie_composto') else
                              (instrucao[2], instrucao[3]) if tag == 'atribua_indice' else
                              (instrucao[1],))
                 for expressao in expressoes:

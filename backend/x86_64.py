@@ -142,9 +142,9 @@ def _total_slots(programa):
 def _palavras_tipo(tipo, registros):
     """Quantidade de palavras de oito bytes em um valor completo."""
     if isinstance(tipo, str) and tipo in registros:
-        return len(registros[tipo])
+        return sum(_palavras_tipo(t, registros) for _, t in registros[tipo])
     if isinstance(tipo, tuple) and tipo[0] == 'registro':
-        return len(tipo[2])
+        return sum(_palavras_tipo(t, registros) for _, t in tipo[2])
     if isinstance(tipo, tuple) and tipo[0] == 'lista':
         return tipo[2]
     if isinstance(tipo, tuple) and tipo[0] == 'texto':
@@ -213,9 +213,15 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
         for argumento, (_, tipo_parametro) in zip(argumentos, assinatura):
             quantidade = _palavras_tipo(tipo_parametro, g.registros)
             if _composto(tipo_parametro, g.registros):
-                if argumento[0] != 'var':
-                    raise ValueError('Passe retorno composto primeiro para variável local antes da chamada.')
-                origem = argumento[1]
+                if argumento[0] == 'temporario_composto':
+                    expressao(g, argumento[2], variaveis, windows, registradores,
+                             pilha_extra + ajustar + empilhados,
+                             destino_composto=argumento[1])
+                    origem = argumento[1]
+                elif argumento[0] == 'var':
+                    origem = argumento[1]
+                else:
+                    raise ValueError('Argumento composto exige variável ou chamada válida.')
                 offset = deslocamento_variavel(variaveis, origem, windows)
                 # A ordem da pilha acompanha os campos/palavras do valor.
                 numero = g.proxima_condicao
@@ -859,10 +865,30 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 offset = deslocamento_variavel(variaveis, nome, windows)
                 g.bytes(b'\x48\x89\x84\xCD' + struct.pack('<i', offset))  # store RAX
             elif op[0] == 'crie_registro':
-                for campo in op[2]:
-                    carregar_numero(g, 0)
-                    offset = deslocamento_variavel(variaveis, campo, windows)
-                    g.bytes(b'\x48\x89\x85' + struct.pack('<i', offset))
+                # Registros históricos de campos simples preservam sua emissão.
+                tipo_registro = tipos[op[1]]
+                tem_campos_compostos = any(_composto(t, g.registros) for _, t in tipo_registro[2])
+                if not tem_campos_compostos:
+                    for campo in op[2]:
+                        carregar_numero(g, 0)
+                        offset = deslocamento_variavel(variaveis, campo, windows)
+                        g.bytes(b'\x48\x89\x85' + struct.pack('<i', offset))
+                else:
+                    quantidade = _palavras_tipo(tipo_registro, g.registros)
+                    inicio = deslocamento_variavel(variaveis, op[1], windows)
+                    g.bytes(b'\x31\xC0')
+                    if quantidade < 64:
+                        for posicao in range(quantidade):
+                            g.bytes(b'\x48\x89\x85' + struct.pack('<i', inicio - 8 * posicao))
+                    else:
+                        numero = g.proxima_condicao
+                        g.proxima_condicao += 1
+                        rotulo = f'zerar_registro_{numero}'
+                        g.bytes(b'\x48\x8D\xBD' + struct.pack('<i', inicio))
+                        g.bytes(b'\xB9' + struct.pack('<I', quantidade))
+                        g.marcar(rotulo)
+                        g.bytes(b'\x48\x89\x07\x48\x83\xEF\x08\xFF\xC9')
+                        g.salto(rotulo, 'jnz')
             elif op[0] == 'copie_composto':
                 destino, origem = op[1], op[2]
                 if origem[0] == 'chamada':

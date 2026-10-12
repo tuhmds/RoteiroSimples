@@ -1,0 +1,25 @@
+tipo Endereco {
+    numero: inteiro
+    rua: texto[24]
+}
+tipo Cliente {
+    endereco: Endereco
+    notas: lista[3]
+}
+funcao criar_cliente(numero: inteiro) -> Cliente {
+    seja cliente: Cliente
+    cliente.endereco.numero = numero
+    copie(cliente.endereco.rua, "Rua Mineira")
+    cliente.notas[0] = 12
+    cliente.notas[1] = 18
+    retorne cliente
+}
+funcao calcular(cliente: Cliente) -> inteiro {
+    retorne cliente.endereco.numero + cliente.notas[0] + cliente.notas[1]
+}
+inicio {
+    escreva("RS 0.26: registros aninhados")
+    escreva(calcular(criar_cliente(70)))
+    seja pessoa: Cliente = criar_cliente(70)
+    escreva(pessoa.endereco.rua)
+}
