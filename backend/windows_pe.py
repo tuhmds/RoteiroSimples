@@ -1,4 +1,4 @@
-"""Escrita do formato PE32+ Windows, sem linker externo."""
+"""Escrita nativa PE32+ com ASLR, tabela DIR64 e pilha NX no Windows."""
 import struct
 from compilador.erros import ErroCompilacao
 from .base import alinhar
@@ -33,6 +33,17 @@ def construir_importacoes(base_rva, nomes):
 
 def montar_pe(g, mensagens):
     base_codigo = 0x1000
+    base_preferida = 0x140000000
+
+    # O endereço de entrada agora aponta para um salto indireto real.
+    # MOVABS RAX,va_entrada; JMP RAX. A constante de 64 bits RECEBE
+    # realocação DIR64 do carregador, permitindo ASLR de fato.
+    # O alinhamento impede a constante de atravessar páginas de 4 KiB.
+    g.bytes(b'\x90' * ((16 - len(g.codigo) % 16) % 16))
+    entrada_trampolim = base_codigo + len(g.codigo)
+    g.bytes(b'\x48\xB8' + struct.pack('<Q', base_preferida + base_codigo)
+            + b'\xFF\xE0')
+    deslocamento_absoluto = entrada_trampolim + 2
     base_importacoes = alinhar(base_codigo + len(g.codigo), 0x1000)
     nomes = ['GetStdHandle', 'SetConsoleOutputCP', 'WriteFile', 'ExitProcess']
     if any(label in g.rotulos for label in ('ler_inteiro', 'ler_buffer_texto')):
@@ -69,37 +80,54 @@ def montar_pe(g, mensagens):
         enderecos[f'mensagem_{i}'] = base_dados + len(dados)
         dados += msg.encode('utf-8')
     g.finalizar(base_codigo, enderecos)
+
+    # IMAGE_REL_BASED_DIR64 = 10; o endereço absoluto na entrada será
+    # ajustado pelo delta de base. ABSOLUTE=0 é somente preenchimento.
+    base_relocacoes = alinhar(base_dados + max(1, len(dados)), 0x1000)
+    pagina_relocada = deslocamento_absoluto & ~0xFFF
+    item_relocacao = (10 << 12) | (deslocamento_absoluto & 0xFFF)
+    realocacoes = struct.pack(
+        '<IIHH', pagina_relocada, 12, item_relocacao, 0,
+    )
     secoes = [(b'.text', bytes(g.codigo), base_codigo, 0x60000020),
               (b'.idata', bytes(importacoes), base_importacoes, 0xC0000040),
-              (b'.rdata', bytes(dados), base_dados, 0x40000040)]
+              (b'.rdata', bytes(dados), base_dados, 0x40000040),
+              (b'.reloc', realocacoes, base_relocacoes, 0x42000040)]
     descritores = []
-    off = 0x200
+    tamanho_cabecalho = alinhar(0x98 + 0xF0 + len(secoes) * 40, 0x200)
+    off = tamanho_cabecalho
     for nome, conteudo, virtual, flags in secoes:
         tamanho = alinhar(len(conteudo), 0x200)
         descritores.append((nome, conteudo, virtual, flags, off, tamanho))
         off += tamanho
-    cabecalho = bytearray(0x200)
+    cabecalho = bytearray(tamanho_cabecalho)
     cabecalho[:2] = b'MZ'
     struct.pack_into('<I', cabecalho, 0x3C, 0x80)
     cabecalho[0x80:0x84] = b'PE\x00\x00'
-    struct.pack_into('<HHIIIHH', cabecalho, 0x84, 0x8664, 3, 0, 0, 0, 0xF0, 0x0022)
+    struct.pack_into('<HHIIIHH', cabecalho, 0x84, 0x8664,
+                     len(secoes), 0, 0, 0, 0xF0, 0x0022)
     opt = bytearray(0xF0)
     struct.pack_into('<H', opt, 0, 0x20B)
     struct.pack_into('<I', opt, 4, descritores[0][5])
-    struct.pack_into('<I', opt, 8, descritores[1][5] + descritores[2][5])
-    struct.pack_into('<I', opt, 16, base_codigo)
+    struct.pack_into('<I', opt, 8, sum(item[5] for item in descritores[1:]))
+    struct.pack_into('<I', opt, 16, entrada_trampolim)
     struct.pack_into('<I', opt, 20, base_codigo)
-    struct.pack_into('<Q', opt, 24, 0x140000000)
+    struct.pack_into('<Q', opt, 24, base_preferida)
     struct.pack_into('<I', opt, 32, 0x1000)
     struct.pack_into('<I', opt, 36, 0x200)
     struct.pack_into('<HHHH', opt, 40, 6, 0, 0, 0)
     struct.pack_into('<HH', opt, 48, 6, 0)
-    struct.pack_into('<I', opt, 56, alinhar(base_dados + max(1, len(dados)), 0x1000))
-    struct.pack_into('<I', opt, 60, 0x200)
-    struct.pack_into('<HH', opt, 68, 3, 0x100)
+    struct.pack_into('<I', opt, 56,
+                     alinhar(base_relocacoes + len(realocacoes), 0x1000))
+    struct.pack_into('<I', opt, 60, tamanho_cabecalho)
+    # HIGH_ENTROPY_VA | DYNAMIC_BASE | NX_COMPAT: cada proteção
+    # corresponde a um layout efetivamente compatível com ela.
+    struct.pack_into('<HH', opt, 68, 3, 0x160)
     struct.pack_into('<QQQQ', opt, 72, 0x100000, 0x1000, 0x100000, 0x1000)
     struct.pack_into('<II', opt, 104, 0, 16)
     struct.pack_into('<II', opt, 112 + 8, base_importacoes, 40)
+    struct.pack_into('<II', opt, 112 + 8 * 5,
+                     base_relocacoes, len(realocacoes))
     struct.pack_into('<II', opt, 112 + 8 * 12, base_importacoes + inicio_iat, tamanho_iat)
     cabecalho[0x98:0x98 + 0xF0] = opt
     pos = 0x98 + 0xF0
