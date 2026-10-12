@@ -92,7 +92,7 @@ class Expressao:
                     return NoExpressao(('tamanho_texto', nome), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'bytes':
                     return NoExpressao(('tamanho_bytes', nome), getattr(token, 'origem', None))
-                raise ErroCompilacao(f'Linha {self.linha}: tamanho() exige lista ou texto.')
+                raise ErroCompilacao(f'Linha {self.linha}: tamanho() exige lista, texto ou bytes.')
             if token == 'capacidade' and self.olhar() == '(': 
                 self.consumir('(')
                 nome = self.consumir()

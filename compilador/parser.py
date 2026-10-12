@@ -94,7 +94,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 if not 1 <= tamanho < 0x0FFF0000:
                     raise ErroCompilacao(f'Linha {linha}: capacidade fora dos limites de endereçamento.')
                 return ('lista', 'inteiro', tamanho) if categoria == 'lista' else (categoria, tamanho)
-        raise ErroCompilacao(f'Linha {linha}: tipo inválido; use inteiro, logico, registro, lista[N] ou texto[N].')
+        raise ErroCompilacao(f'Linha {linha}: tipo inválido; use inteiro, logico, registro, lista[N], texto[N] ou bytes[N].')
 
     def eh_composto(tipo):
         return isinstance(tipo, tuple) or tipo in registros

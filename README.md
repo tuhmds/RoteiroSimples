@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.36
+# RoteiroSimples (RS) — versão experimental 0.37
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,41 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.37 — bytes seguros, persistência binária e saída de processo
+
+A RS agora possui **`bytes[N]`**, um tipo de buffer binário separado
+de `texto[N]`, com comprimento dinâmico e capacidade fixa verificada:
+
+```text
+inicio {
+    seja dados: bytes[10]
+    adicione_byte(dados, 82)
+    adicione_byte(dados, 83)
+    dados[1] = 255
+    escreva(dados[1])
+    escreva(tamanho(dados))
+    encerre(0)
+}
+```
+
+- `adicione_byte(destino, valor)`: anexa um inteiro na faixa 0 a 255,
+  recusando ultrapassar a capacidade.
+- `dados[indice]`: somente índices menores que `tamanho(dados)`
+  podem ser lidos ou sobrescritos; sobrescrever não aumenta o tamanho.
+- `limpe(dados)`: redefine o comprimento a zero (não apaga
+  necessariamente todos os bytes da memória).
+- `carregue_trecho` e `grave_trecho`: agora aceitam `bytes[N]` além
+  dos buffers `texto[N]` legados; não convertem em UTF-8.
+- `encerre(codigo)`: devolve ao sistema um código entre 0 e 255.
+  Valores fora desse intervalo são rejeitados durante a execução.
+
+O projeto continua experimental. A RS **não garante gravação atômica,
+durabilidade após desligamento nem isolamento de transações**; também não
+possui ainda drivers PostgreSQL, SQLite ou MariaDB.
+
+Veja a [especificação RS 0.37](docs/BYTES_E_SAIDA_RS_0_37.md) e
+[o exemplo de cabeçalho binário](exemplos/aplicacoes/criar_cabecalho_binario.rts).
 
 ## RS 0.36 — consolidação e aplicações de referência
 
@@ -540,7 +575,7 @@ nenhum nível foi criado na RS 0.29. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes até a RS 0.35
+## Recursos presentes até a RS 0.37
 
 | Recurso | Situação |
 |---|---|
@@ -564,6 +599,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Listas dinâmicas tipadas para inteiros, lógicos e registros | Implementado na 0.33 |
 | Leitura e gravação de arquivos inteiros | Implementado na 0.34 |
 | Leitura e gravação binária por posição, com estado de erro recuperável | Implementado na 0.35 |
+| Tipo `bytes[N]`, limites binários e `encerre(codigo)` | Implementado na 0.37 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
 | Tipos reais/decimais, textos dinâmicos, empréstimos mutáveis, FFI e durabilidade de arquivos | Ainda não |
@@ -583,7 +619,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**RS 0.36 (planejamento):** tipo `byte` e armazenamento binário explícito, identificadores de arquivos com ciclo de vida seguro e estados de erro tipados. Depois: sincronização durável (`fsync` e `FlushFileBuffers`), operações atômicas, travamento e interface para bibliotecas externas. Esses fundamentos antecedem o motor de banco de dados Dados RS.
+**RS 0.38 (planejamento):** identificadores de arquivo seguros, tratamento de erros tipados, sincronização durável (`fsync` e `FlushFileBuffers`) e políticas de acesso concorrente. O tipo `bytes[N]` foi introduzido na RS 0.37. Continuam pendentes a alocação dinâmica de bytes, operações atômicas, travamento e interface para bibliotecas externas; esses fundamentos antecedem o motor Dados RS.
 
 O projeto ainda é experimental, não pronto para produção. Não estamos acrescentando níveis de otimização.
 

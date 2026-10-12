@@ -237,6 +237,18 @@ class TestesBytesRS037(unittest.TestCase):
             r = _executar(_compilar(pasta, 'copia', fonte), pasta)
             self.assertEqual((r.returncode,r.stdout),(0,'99\n0\n2\n7\n'),r.stderr)
 
+    def test_exemplo_cabecalho_binario_e_saida_sistema(self):
+        fonte = (RAIZ/'exemplos'/'aplicacoes'/'criar_cabecalho_binario.rts').read_text(
+            encoding='utf-8')
+        with tempfile.TemporaryDirectory() as pasta:
+            for nivel in range(9):
+                with self.subTest(nivel=nivel):
+                    r = _executar(_compilar(pasta, f'cabecalho_{nivel}', fonte, nivel), pasta)
+                    self.assertEqual((r.returncode, r.stdout),
+                                     (0, 'Quantidade recuperada:\n100\n'), r.stderr)
+                    self.assertEqual((Path(pasta)/'cabecalho_teste.rsd').read_bytes(),
+                                     b'RSDB\x01\x64\x00\x00\x00')
+
     def test_rejeicoes_de_tipo_separacao_de_texto_e_bytes(self):
         invalidos=[
             '''inicio { 
