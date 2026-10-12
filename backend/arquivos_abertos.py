@@ -1,0 +1,297 @@
+"""Recursos de arquivo nativos com propriedade local e erro recuperável.
+
+Handle fechado = -1. Não há cópia/transferência de propriedade no RS 0.38.
+Rotinas recebem argumentos em registradores da convenção interna RS:
+  abrir(path:RDI, modo:RSI) -> handle ou -1
+  fechar(handle:RDI) -> 0 ou -4
+  sincronizar(handle:RDI) -> 0 ou -6
+  transferir(handle:RDI, dados:RSI, tamanho:RDX, posicao:RCX)
+     -> bytes ou -2/-3.
+"""
+import struct
+
+
+def _emitir(g, hexa):
+    g.bytes(bytes.fromhex(hexa))
+
+
+def _deslocamento(variaveis, nome, windows):
+    return -(16 + 8 * variaveis[nome]) if windows else -(8 + 8 * variaveis[nome])
+
+
+def _ler_recurso(g, variaveis, nome, windows):
+    g.bytes(b'\x48\x8B\xBD' + struct.pack('<i', _deslocamento(variaveis,nome,windows)))
+
+
+def _guardar_estado(g, variaveis, nome, windows):
+    g.bytes(b'\x48\x89\x85' + struct.pack('<i', _deslocamento(variaveis,nome,windows)))
+
+
+def _invalido(g, rotulo):
+    _emitir(g, '48 83 FF FF')  # cmp rdi,-1
+    g.salto(rotulo, 'je')
+
+
+def emitir_auto_fechar(g, variaveis, nome, windows):
+    """Fecha de forma idempotente e detecta falhas também no caminho implícito."""
+    ident = g.proxima_condicao
+    g.proxima_condicao += 1
+    fim = f'recurso_fim_auto_{ident}'
+    _ler_recurso(g, variaveis, nome, windows)
+    _invalido(g, fim)
+    g.chamada('rs_fechar_recurso')
+    _emitir(g, '48 85 C0')
+    g.salto('erro_fechamento_implicito', 'jnz')
+    _emitir(g, '48 C7 C0 FF FF FF FF')
+    _guardar_estado(g, variaveis, nome, windows)
+    g.marcar(fim)
+
+
+def emitir_comando(g, op, variaveis, tipos, windows, mensagens, endereco_buffer, expressao):
+    comando = op[0]
+    recurso = op[1] if comando != 'abra_recurso' else op[2]
+    nome_estado = op[-1]
+    ident = g.proxima_condicao
+    g.proxima_condicao += 1
+    invalido = f'recurso_invalido_{ident}'
+    finalizar = f'recurso_final_{ident}'
+    carregamento = comando == 'carregue_de'
+
+    if comando == 'abra_recurso':
+        _, caminho, _, modo, _ = op
+        indice = len(mensagens)
+        mensagens[indice] = caminho + '\x00'
+        _ler_recurso(g, variaveis, recurso, windows)
+        _emitir(g, '48 83 FF FF')
+        ja_aberto = f'recurso_ja_aberto_{ident}'
+        g.salto(ja_aberto, 'jne')
+        g.relativo(b'\x48\x8D\x3D', f'mensagem_{indice}')
+        _emitir(g, 'BE ' + struct.pack('<I', modo).hex(' '))
+        g.chamada('rs_abrir_recurso')
+        _emitir(g, '48 83 F8 FF')
+        falha = f'recurso_falha_abertura_{ident}'
+        g.salto(falha, 'je')
+        _guardar_estado(g, variaveis, recurso, windows)
+        _emitir(g, '31 C0')  # 0 = sucesso
+        g.salto(finalizar)
+        g.marcar(falha)
+        _emitir(g, '48 C7 C0 FF FF FF FF')
+        g.salto(finalizar)
+        g.marcar(ja_aberto)
+        _emitir(g, '48 C7 C0 FB FF FF FF')  # -5, ativo
+        g.salto(finalizar)
+    else:
+        _ler_recurso(g, variaveis, recurso, windows)
+        _invalido(g, invalido)
+        if comando == 'feche_recurso':
+            g.chamada('rs_fechar_recurso')
+            _emitir(g, '50')  # conserva resultado
+            _emitir(g, '48 C7 C0 FF FF FF FF')  # marca fechado, inclusive falha
+            _guardar_estado(g, variaveis, recurso, windows)
+            _emitir(g, '58')
+        elif comando == 'sincronize_recurso':
+            g.chamada('rs_sincronizar_recurso')
+        else:
+            nome_buffer = op[2]
+            dados, comprimento, capacidade = endereco_buffer(
+                variaveis, nome_buffer, tipos, windows)
+            expressao(g, op[3], variaveis, windows)
+            _emitir(g, '50')  # salva a posição
+            if carregamento:
+                expressao(g, op[4], variaveis, windows, pilha_extra=1)
+            else:
+                g.bytes(b'\x48\x8B\x85' + struct.pack('<i', comprimento))
+            _emitir(g, '50 5A 59')  # RDX = tamanho, RCX = posicao
+            if carregamento:
+                _emitir(g, '48 85 D2')
+                g.salto(invalido, 'js')
+                g.bytes(b'\x48\x81\xFA' + struct.pack('<I', capacidade))
+                g.salto(invalido, 'ja')
+            _ler_recurso(g, variaveis, recurso, windows)
+            g.bytes(b'\x48\x8D\xB5' + struct.pack('<i', dados))
+            g.chamada('rs_recurso_ler' if carregamento else 'rs_recurso_gravar')
+        g.salto(finalizar)
+        g.marcar(invalido)
+        _emitir(g, '48 C7 C0 FD FF FF FF')  # -3, fechado/arg inválido
+    g.marcar(finalizar)
+    _guardar_estado(g, variaveis, nome_estado, windows)
+    if carregamento:
+        erro = f'recurso_leitura_erro_{ident}'
+        fim = f'recurso_leitura_fim_{ident}'
+        _emitir(g, '48 85 C0')
+        g.salto(erro, 'js')
+        g.bytes(b'\x48\x89\x85' + struct.pack('<i', comprimento))
+        g.salto(fim)
+        g.marcar(erro)
+        _emitir(g, '31 C0')
+        g.bytes(b'\x48\x89\x85' + struct.pack('<i', comprimento))
+        g.marcar(fim)
+
+
+def _rotina_abrir(g, windows):
+    g.marcar('rs_abrir_recurso')
+    _emitir(g, '55 48 89 E5 48 83 EC 40')
+    _emitir(g, '48 89 7D F8 48 89 75 F0')
+    if windows:
+        ler = 'rs_abrir_modo_leitura'
+        novo = 'rs_abrir_modo_novo'
+        fazer = 'rs_abrir_executar'
+        _emitir(g, '48 83 7D F0 00')
+        g.salto(ler, 'je')
+        _emitir(g, 'BA 00 00 00 C0')  # GENERIC_READ | GENERIC_WRITE
+        _emitir(g, '41 B9 04 00 00 00')  # OPEN_ALWAYS
+        _emitir(g, '48 83 7D F0 02')
+        g.salto(novo, 'je')
+        g.salto(fazer)
+        g.marcar(novo)
+        _emitir(g, '41 B9 01 00 00 00') # CREATE_NEW
+        g.salto(fazer)
+        g.marcar(ler)
+        _emitir(g, 'BA 00 00 00 80') # GENERIC_READ
+        _emitir(g, '41 B9 03 00 00 00') # OPEN_EXISTING
+        g.marcar(fazer)
+        # CreateFileA(path,access,share=0,security=0,disposition,attributes,template)
+        # R9 armazena disposition temporariamente, antes de zerar R9 para security
+        _emitir(g, '44 89 4D E8')
+        _emitir(g, '48 8B 4D F8 45 31 C0 45 31 C9 48 83 EC 40')
+        _emitir(g, '8B 45 E8 89 44 24 20')
+        _emitir(g, 'C7 44 24 28 80 00 00 00')
+        _emitir(g, '48 C7 44 24 30 00 00 00 00')
+        g.relativo(b'\xFF\x15', 'CreateFileA')
+        _emitir(g, '48 83 C4 40')
+        _emitir(g, '48 83 F8 FF')
+        fim = 'rs_abrir_fim'
+        g.salto(fim, 'jne')
+        g.marcar(fim)
+    else:
+        _emitir(g, 'B8 01 01 00 00 48 C7 C7 9C FF FF FF')
+        _emitir(g, '48 8B 75 F8')
+        leitura='rs_abrir_linux_leitura'
+        novo='rs_abrir_linux_novo'
+        chamar='rs_abrir_linux_chamar'
+        _emitir(g, '48 83 7D F0 00')
+        g.salto(leitura, 'je')
+        _emitir(g, 'BA 42 00 02 00') # O_RDWR | O_CREAT | O_NOFOLLOW
+        _emitir(g, '48 83 7D F0 02')
+        g.salto(novo, 'je')
+        g.salto(chamar)
+        g.marcar(novo)
+        _emitir(g, 'BA C2 00 02 00') # + O_EXCL
+        g.salto(chamar)
+        g.marcar(leitura)
+        _emitir(g, 'BA 00 00 02 00') # O_RDONLY | O_NOFOLLOW
+        g.marcar(chamar)
+        _emitir(g, '41 BA 80 01 00 00 0F 05 48 85 C0')
+        ok='rs_abrir_linux_ok'
+        g.salto(ok, 'jns')
+        _emitir(g, '48 C7 C0 FF FF FF FF')
+        g.marcar(ok)
+    _emitir(g, '48 89 EC 5D C3')
+
+
+def _rotina_fechar(g, windows):
+    g.marcar('rs_fechar_recurso')
+    if windows:
+        _emitir(g, '48 89 F9 48 83 EC 28')
+        g.relativo(b'\xFF\x15', 'CloseHandle')
+        _emitir(g, '48 83 C4 28 85 C0')
+        falha='rs_fechar_falha'
+        g.salto(falha, 'jz')
+        _emitir(g, '31 C0 C3')
+        g.marcar(falha)
+        _emitir(g, '48 C7 C0 FC FF FF FF C3')
+    else:
+        _emitir(g, 'B8 03 00 00 00 0F 05 48 85 C0')
+        falha='rs_fechar_falha'
+        g.salto(falha, 'js')
+        _emitir(g, '31 C0 C3')
+        g.marcar(falha)
+        _emitir(g, '48 C7 C0 FC FF FF FF C3')
+
+
+def _rotina_sincronizar(g, windows):
+    g.marcar('rs_sincronizar_recurso')
+    if windows:
+        _emitir(g, '48 89 F9 48 83 EC 28')
+        g.relativo(b'\xFF\x15', 'FlushFileBuffers')
+        _emitir(g, '48 83 C4 28 85 C0')
+        falha='rs_sincronizar_falha'
+        g.salto(falha, 'jz')
+        _emitir(g, '31 C0 C3')
+        g.marcar(falha)
+        _emitir(g, '48 C7 C0 FA FF FF FF C3')
+    else:
+        _emitir(g, 'B8 4A 00 00 00 0F 05 48 85 C0')
+        falha='rs_sincronizar_falha'
+        g.salto(falha, 'js')
+        _emitir(g, '31 C0 C3')
+        g.marcar(falha)
+        _emitir(g, '48 C7 C0 FA FF FF FF C3')
+
+
+def _rotina_transferir(g, windows, gravar):
+    nome = 'rs_recurso_gravar' if gravar else 'rs_recurso_ler'
+    loop = nome+'_volta'
+    termino=nome+'_termino'
+    erro=nome+'_erro'
+    invalido=nome+'_invalido'
+    fim=nome+'_fim'
+    g.marcar(nome)
+    _emitir(g, '55 48 89 E5 48 83 EC 60')
+    _emitir(g, '48 89 7D F8 48 89 75 F0 48 89 55 E8 48 89 4D E0')
+    _emitir(g, '48 C7 45 D0 00 00 00 00')
+    _emitir(g, '48 83 7D E0 00')
+    g.salto(invalido, 'js')
+    _emitir(g, '48 83 7D E8 00')
+    g.salto(invalido, 'js')
+    _emitir(g, '48 8B 45 E0 48 03 45 E8')
+    g.salto(invalido, 'jo')
+    if windows:
+        _emitir(g, '48 8B 4D F8 48 8B 55 E0 45 31 C0 45 31 C9')
+        _emitir(g, '48 83 EC 20')
+        g.relativo(b'\xFF\x15', 'SetFilePointerEx')
+        _emitir(g, '48 83 C4 20 85 C0')
+        g.salto(invalido, 'jz')
+    g.marcar(loop)
+    _emitir(g, '48 8B 45 D0 48 3B 45 E8')
+    g.salto(termino, 'je')
+    if windows:
+        _emitir(g, '48 8B 4D F8 48 8B 55 F0 48 03 55 D0')
+        _emitir(g, '4C 8B 45 E8 4C 2B 45 D0 4C 8D 4D C8')
+        _emitir(g, '48 83 EC 30')
+        _emitir(g, '48 C7 44 24 20 00 00 00 00')
+        g.relativo(b'\xFF\x15', 'WriteFile' if gravar else 'ReadFile')
+        _emitir(g, '48 83 C4 30 85 C0')
+        g.salto(erro, 'jz')
+        _emitir(g, '8B 45 C8')
+    else:
+        _emitir(g, 'B8 12 00 00 00' if gravar else 'B8 11 00 00 00')
+        _emitir(g, '48 8B 7D F8 48 8B 75 F0 48 03 75 D0')
+        _emitir(g, '48 8B 55 E8 48 2B 55 D0')
+        _emitir(g, '4C 8B 55 E0 4C 03 55 D0 0F 05')
+        _emitir(g, '48 83 F8 FC') # EINTR
+        g.salto(loop, 'je')
+        _emitir(g, '48 85 C0')
+        g.salto(erro, 'js')
+    _emitir(g, '48 85 C0')
+    g.salto(erro if gravar else termino, 'jz')
+    _emitir(g, '48 01 45 D0')
+    g.salto(loop)
+    g.marcar(termino)
+    _emitir(g, '48 8B 45 D0')
+    g.salto(fim)
+    g.marcar(erro)
+    _emitir(g, '48 C7 C0 FE FF FF FF')
+    g.salto(fim)
+    g.marcar(invalido)
+    _emitir(g, '48 C7 C0 FD FF FF FF')
+    g.marcar(fim)
+    _emitir(g, '48 89 EC 5D C3')
+
+
+def emitir_rotinas(g, windows):
+    _rotina_abrir(g, windows)
+    _rotina_fechar(g, windows)
+    _rotina_sincronizar(g, windows)
+    _rotina_transferir(g, windows, gravar=True)
+    _rotina_transferir(g, windows, gravar=False)
