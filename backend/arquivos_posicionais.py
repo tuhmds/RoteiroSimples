@@ -6,6 +6,7 @@ Retorno: quantidade transferida >=0; -1 abrir; -2 transferência;
 """
 import struct
 from . import politica_caminhos
+from .desenrolamento_windows import registrar_quadro_auxiliar
 
 
 def bytes_nativos(g, trecho):
@@ -196,4 +197,8 @@ def _rotina(g, windows, gravar):
 
 def emitir_rotinas(g, windows):
     _rotina(g, windows, gravar=True)
+    if windows:
+        registrar_quadro_auxiliar(g, 'rs_trecho_gravar')
     _rotina(g, windows, gravar=False)
+    if windows:
+        registrar_quadro_auxiliar(g, 'rs_trecho_carregar')

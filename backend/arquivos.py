@@ -6,6 +6,7 @@ Erros encerram o processo com diagnóstico; nunca há truncamento silencioso.
 """
 import struct
 from . import politica_caminhos
+from .desenrolamento_windows import registrar_quadro_auxiliar
 
 
 def _emitir(g, hexadecimais):
@@ -195,4 +196,8 @@ def _rotina(g, windows, gravar):
 
 def emitir_rotinas(g, windows):
     _rotina(g, windows, True)
+    if windows:
+        registrar_quadro_auxiliar(g, 'rs_arquivo_gravar')
     _rotina(g, windows, False)
+    if windows:
+        registrar_quadro_auxiliar(g, 'rs_arquivo_carregar')

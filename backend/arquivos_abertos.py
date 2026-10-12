@@ -10,6 +10,7 @@ Rotinas recebem argumentos em registradores da convenção interna RS:
 """
 import struct
 from . import politica_caminhos
+from .desenrolamento_windows import registrar_quadro_auxiliar
 
 
 def _emitir(g, hexa):
@@ -445,9 +446,17 @@ def _rotina_transferir(g, windows, gravar):
 
 def emitir_rotinas(g, windows):
     _rotina_caminho_verificado(g, windows)
+    if windows:
+        registrar_quadro_auxiliar(g, 'rs_abrir_caminho_verificado')
     _rotina_abrir(g, windows)
+    if windows:
+        registrar_quadro_auxiliar(g, 'rs_abrir_recurso')
     _rotina_fechar(g, windows)
     _rotina_sincronizar(g, windows)
     _rotina_bloquear(g, windows)
     _rotina_transferir(g, windows, gravar=True)
+    if windows:
+        registrar_quadro_auxiliar(g, 'rs_recurso_gravar')
     _rotina_transferir(g, windows, gravar=False)
+    if windows:
+        registrar_quadro_auxiliar(g, 'rs_recurso_ler')

@@ -7,6 +7,7 @@ A memória cresce geometricamente e é devolvida ao sistema operacional.
 """
 import struct
 from compilador.disposicao_tipos import palavras_tipo
+from .desenrolamento_windows import registrar_quadro_auxiliar
 
 TIPO_LISTA_DINAMICA = ('lista_dinamica', 'inteiro')
 
@@ -290,6 +291,9 @@ def emitir_rotinas(g, windows):
     g.marcar(fim)
     g.bytes(b'\x48\x89\xEC\x5D\xC3')
 
+    if windows:
+        registrar_quadro_auxiliar(g, 'rs_lista_liberar_descritor')
+
     g.marcar('rs_lista_mover_descritor')
     # RDI=destino, RSI=origem. Verifica antes de liberar o destino.
     g.bytes(b'\x55\x48\x89\xE5\x48\x83\xEC\x20')
@@ -305,6 +309,9 @@ def emitir_rotinas(g, windows):
     g.bytes(b'\x31\xC0\x48\x89\x06\x48\x89\x46\xF0')
     g.bytes(b'\x48\xC7\x46\xF8\xFF\xFF\xFF\xFF')
     g.bytes(b'\x48\x89\xEC\x5D\xC3')
+
+    if windows:
+        registrar_quadro_auxiliar(g, 'rs_lista_mover_descritor')
 
     g.marcar('rs_lista_acrescentar')
     # RDI=descritor, RSI=ponteiro fonte, RDX=palavras por elemento.
@@ -372,3 +379,5 @@ def emitir_rotinas(g, windows):
     g.bytes(b'\x4C\x8B\x55\xF8')
     g.bytes(b'\x49\xFF\x42\xF8')
     g.bytes(b'\x48\x89\xEC\x5D\xC3')
+    if windows:
+        registrar_quadro_auxiliar(g, 'rs_lista_acrescentar')

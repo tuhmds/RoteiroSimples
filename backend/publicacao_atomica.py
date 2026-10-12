@@ -6,6 +6,7 @@ Linux: renameat + fsync de '.'; Windows: MoveFileExA(REPLACE|WRITE_THROUGH).
 O chamador deve fechar arquivos e sincronizar o provisório ANTES da troca.
 """
 import struct
+from .desenrolamento_windows import registrar_quadro_auxiliar
 
 
 def _em(g, texto):
@@ -88,3 +89,5 @@ def emitir_rotina(g, windows, mensagens):
     _em(g, '48 C7 C0 F7 FF FF FF') # -9
     g.marcar(fim)
     _em(g, '48 89 EC 5D C3')
+    if windows:
+        registrar_quadro_auxiliar(g, 'rs_publicar_arquivo')
