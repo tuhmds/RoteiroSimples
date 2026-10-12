@@ -1,6 +1,48 @@
-# RoteiroSimples (RS) — versão experimental 0.20
+# RoteiroSimples (RS) — versão experimental 0.21
 
 Linguagem experimental em português brasileiro, com compilador em Python 3.10+ que **gera diretamente instruções de máquina x86-64**, em executáveis ELF64 (Linux) e PE32+ (Windows). Os programas gerados não dependem do Python para executar. **Não usar em produção.**
+
+## Novo na RS 0.21 — primeira otimizacao real guiada pela Memory SSA
+
+O novo nível **`-O 7`** usa as versões de memória da RS 0.20 para otimizar
+acessos a **listas locais de inteiros com índice literal comprovadamente válido**:
+
+- **Encaminhamento de valores:** `a[0] = 10; escreva(a[0])` vira uma leitura
+  direta da constante `10` no código nativo. Elementos nunca escritos começam
+  com `0`, conforme a regra de inicialização de listas.
+- **Escritas redundantes:** `a[0] = 10; a[0] = 10` mantém apenas uma escrita.
+- **Dependências verificadas:** a substituição exige a versão correta da
+  região na Memory SSA. Uma escrita com índice dinâmico, `leia(a[i])`, decisão
+  ou laço invalida o conhecimento conservador conforme necessário.
+- **Erros preservados:** índices inválidos continuam falhando. Divisões por
+  zero e operações que podem sofrer estouro **nunca são eliminadas** por essa
+  otimização. Textos, I/O e efeitos de outras regiões não são reordenados.
+
+As transformações **não** implementam aliasing, referências, otimização global
+por blocos nem o backend SSA com listas. A geração nativa das listas continua
+com as verificações de capacidade e de índice da RS 0.17. Os níveis anteriores
+`-O 0..6` permanecem inalterados.
+
+Exemplo:
+
+```text
+inicio {
+    seja valores: lista[4]
+    valores[0] = 10
+    valores[1] = 20
+    valores[1] = 20
+    escreva(valores[0] + valores[1])
+}
+```
+
+Para experimentar no Windows:
+
+```powershell
+py -3 compilar.py exemplos\memoria_otimizada.rts --alvo windows -O 7 --mostrar-ir -o roteiro_windows.exe
+.\roteiro_windows.exe
+```
+
+Veja [otimização segura de memória RS 0.21](docs/OTIMIZACAO_MEMORIA_RS_0_21.md).
 
 ## Novo na RS 0.20 — Memory SSA por objeto e efeito
 

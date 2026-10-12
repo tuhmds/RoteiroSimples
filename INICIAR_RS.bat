@@ -5,10 +5,10 @@ cd /d "%~dp0"
 :MENU
 cls
 echo ==============================================
-echo         RoteiroSimples RS 0.20
+echo         RoteiroSimples RS 0.21
 echo ==============================================
 echo.
-echo  [1] Compilar e executar exemplo de entrada bufferizada (-O 6)
+echo  [1] Compilar e executar exemplo de memoria otimizada (-O 7)
 echo  [2] Editar o exemplo no Bloco de Notas
 echo  [3] Rodar testes automatizados
  echo  [4] Executar o ultimo .exe gerado
@@ -20,9 +20,11 @@ echo  [3] Rodar testes automatizados
  echo  [A] Benchmark de velocidade -O 3, -O 4, -O 5 e -O 6
 echo  [B] Mostrar efeitos de memoria e E/S
 echo  [C] Mostrar Memory SSA e salvar memoria.json
+echo  [D] Mostrar a IR com otimizacao Memory SSA (-O 7)
 echo  [0] Sair
  echo.
-choice /c 1234567890ABC /n /m "Escolha uma opcao: "
+choice /c 1234567890ABCD /n /m "Escolha uma opcao: "
+if errorlevel 14 goto OTIMIZACAO_MEMORIA
 if errorlevel 13 goto MEMORY_SSA
 if errorlevel 12 goto EFEITOS
 if errorlevel 11 goto BENCHMARK
@@ -40,7 +42,7 @@ if errorlevel 1 goto COMPILAR
 call "%~dp0COMPILAR_WINDOWS.bat"
 goto MENU
 :EDITAR
-notepad "%~dp0exemplos\entrada_bufferizada.rts"
+notepad "%~dp0exemplos\memoria_otimizada.rts"
 goto MENU
 :TESTES
 py -3 -m unittest discover -s testes -v
@@ -93,6 +95,11 @@ goto MENU
 :EFEITOS
 py -3 compilar.py exemplos\entrada_bufferizada.rts --alvo windows -O 6 --mostrar-efeitos --salvar-efeitos efeitos.json -o roteiro_windows.exe
 if errorlevel 1 echo Falha ao mostrar efeitos da IR.
+pause
+goto MENU
+:OTIMIZACAO_MEMORIA
+py -3 compilar.py exemplos\memoria_otimizada.rts --alvo windows -O 7 --mostrar-ir -o roteiro_windows.exe
+if errorlevel 1 echo Falha ao mostrar IR otimizada.
 pause
 goto MENU
 :MEMORY_SSA

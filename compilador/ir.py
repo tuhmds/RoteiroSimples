@@ -69,6 +69,10 @@ def construir_ir(programa, otimizar=True, nivel=1):
         if nivel >= 3:
             from .ssa_otimizador import otimizar_com_ssa
             ir = otimizar_com_ssa(ir)
+    if otimizar and nivel >= 7 and any(isinstance(t, tuple) and t[0] == 'lista'
+                                       for t in programa.tipos.values()):
+        from .otimizador_memoria import otimizar_acessos_memoria
+        ir = otimizar_acessos_memoria(ir)
     return ir
 
 

@@ -1,0 +1,12 @@
+inicio {
+    seja valores: lista[4]
+    seja mensagem: texto[32]
+
+    valores[0] = 10
+    valores[1] = 20
+    valores[1] = 20
+    copie(mensagem, "RS 0.21 - Memory SSA")
+    escreva(mensagem)
+    escreva(valores[0] + valores[1])
+    escreva(valores[2])
+}

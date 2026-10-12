@@ -60,3 +60,10 @@ A IR tipada e o CFG agora permitem modelar versões de memória por objeto local
 `phi` em junções e retroarestas e encadeamento de E/S e falhas. Veja
 [Memory SSA da RS 0.20](MEMORY_SSA_RS_0_20.md). Não há alteração do backend
 nativo nem ativação de otimizações de memória baseadas nessa análise.
+
+## RS 0.21 — otimizacao de memoria ativa
+
+O nivel `-O 7` utiliza Memory SSA para encaminhar leituras de elementos
+com indices literais validos e eliminar escritas iguais comprovadamente
+redundantes. Nao cruza juncoes de controle, nao remove efeitos que possam
+falhar e nao habilita referencias. Detalhes: [OTIMIZACAO_MEMORIA_RS_0_21.md](OTIMIZACAO_MEMORIA_RS_0_21.md).

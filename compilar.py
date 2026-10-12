@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.20: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.21: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import re
@@ -15,7 +15,7 @@ def main(argv=None):
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--alvo', choices=['windows', 'linux'], default='windows')
     parser.add_argument('-o', '--saida', type=Path, help='arquivo executável de saída')
-    parser.add_argument('-O', '--otimizacao', choices=['0', '1', '2', '3', '4', '5', '6'], default='1', help='otimização (0 = sem, 1 = constantes, 2 = propagação local, 3 = SSA, 4 = SSA nativa, 5 = layout, 6 = coalescencia e saltos curtos)' )
+    parser.add_argument('-O', '--otimizacao', choices=['0', '1', '2', '3', '4', '5', '6', '7'], default='1', help='otimização (0 = sem, 1 = constantes, 2 = propagação local, 3 = SSA, 4 = SSA nativa, 5 = layout, 6 = coalescencia e saltos curtos, 7 = Memory SSA segura)' )
     parser.add_argument('--mostrar-ir', action='store_true', help='mostra a IR tipada antes de gerar código')
     parser.add_argument('--mostrar-efeitos', action='store_true', help='exibe leituras/escritas de memoria, E/S e falhas por instrucao')
     parser.add_argument('--mostrar-memory-ssa', action='store_true', help='exibe versoes de memoria, dependencias e nos phi')
