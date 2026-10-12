@@ -1,0 +1,56 @@
+// Biblioteca Padrão RS 0.29 — estatística inteira para lista[5].
+// Resultados inteiros usam truncamento em divisões. Operações verificam transbordamento.
+
+publico funcao soma_cinco(valores: lista[5]) -> inteiro {
+    seja soma = 0
+    seja i = 0
+    enquanto i < 5 {
+        soma = soma + valores[i]
+        i = i + 1
+    }
+    retorne soma
+}
+
+publico funcao media_cinco(valores: lista[5]) -> inteiro {
+    retorne soma_cinco(valores) / 5
+}
+
+publico funcao minimo_cinco(valores: lista[5]) -> inteiro {
+    seja minimo = valores[0]
+    seja i = 1
+    enquanto i < 5 {
+        se valores[i] < minimo {
+            minimo = valores[i]
+        }
+        i = i + 1
+    }
+    retorne minimo
+}
+
+publico funcao maximo_cinco(valores: lista[5]) -> inteiro {
+    seja maximo = valores[0]
+    seja i = 1
+    enquanto i < 5 {
+        se valores[i] > maximo {
+            maximo = valores[i]
+        }
+        i = i + 1
+    }
+    retorne maximo
+}
+
+publico funcao amplitude_cinco(valores: lista[5]) -> inteiro {
+    retorne maximo_cinco(valores) - minimo_cinco(valores)
+}
+
+publico funcao contar_acima_cinco(valores: lista[5], limite: inteiro) -> inteiro {
+    seja quantidade = 0
+    seja i = 0
+    enquanto i < 5 {
+        se valores[i] > limite {
+            quantidade = quantidade + 1
+        }
+        i = i + 1
+    }
+    retorne quantidade
+}

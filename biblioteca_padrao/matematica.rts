@@ -1,0 +1,128 @@
+// Biblioteca Padrão RS 0.29 — matemática inteira.
+// Erros de transbordamento continuam sendo detectados pelo executável nativo.
+
+publico funcao potencia_natural(base: inteiro, expoente: inteiro) -> inteiro {
+    // Expoentes negativos não produzem inteiro; devolve 0 como indicador.
+    se expoente < 0 {
+        retorne 0
+    }
+    seja resultado = 1
+    seja i = 0
+    enquanto i < expoente {
+        resultado = resultado * base
+        i = i + 1
+    }
+    retorne resultado
+}
+
+publico funcao fatorial(n: inteiro) -> inteiro {
+    // Apenas 0..20 cabe no intervalo do inteiro de 64 bits.
+    se n < 0 {
+        retorne -1
+    }
+    se n > 20 {
+        retorne -1
+    }
+    seja resultado = 1
+    seja indice = 2
+    enquanto indice <= n {
+        resultado = resultado * indice
+        indice = indice + 1
+    }
+    retorne resultado
+}
+
+publico funcao fibonacci(n: inteiro) -> inteiro {
+    // Fibonacci de 0 a 92 cabe no inteiro de 64 bits.
+    se n < 0 {
+        retorne -1
+    }
+    se n > 92 {
+        retorne -1
+    }
+    se n == 0 {
+        retorne 0
+    }
+    seja anterior = 0
+    seja atual = 1
+    seja indice = 1
+    enquanto indice < n {
+        seja seguinte = anterior + atual
+        anterior = atual
+        atual = seguinte
+        indice = indice + 1
+    }
+    retorne atual
+}
+
+publico funcao mdc(a: inteiro, b: inteiro) -> inteiro {
+    // Argumentos não negativos; negativos resultam em -1.
+    se a < 0 {
+        retorne -1
+    }
+    se b < 0 {
+        retorne -1
+    }
+    enquanto b != 0 {
+        seja resto = a % b
+        a = b
+        b = resto
+    }
+    retorne a
+}
+
+publico funcao mmc(a: inteiro, b: inteiro) -> inteiro {
+    se a < 0 {
+        retorne -1
+    }
+    se b < 0 {
+        retorne -1
+    }
+    se a == 0 {
+        retorne 0
+    }
+    se b == 0 {
+        retorne 0
+    }
+    seja divisor = mdc(a, b)
+    retorne (a / divisor) * b
+}
+
+publico funcao eh_primo(n: inteiro) -> logico {
+    se n < 2 {
+        retorne falso
+    }
+    seja divisor = 2
+    // Usa n / divisor para não estourar ao calcular divisor*divisor.
+    enquanto divisor <= n / divisor {
+        se n % divisor == 0 {
+            retorne falso
+        }
+        divisor = divisor + 1
+    }
+    retorne verdadeiro
+}
+
+publico funcao soma_digitos(n: inteiro) -> inteiro {
+    se n < 0 {
+        retorne -1
+    }
+    seja soma = 0
+    enquanto n > 0 {
+        soma = soma + n % 10
+        n = n / 10
+    }
+    retorne soma
+}
+
+publico funcao quantidade_digitos(n: inteiro) -> inteiro {
+    se n == 0 {
+        retorne 1
+    }
+    seja quantidade = 0
+    enquanto n != 0 {
+        quantidade = quantidade + 1
+        n = n / 10
+    }
+    retorne quantidade
+}

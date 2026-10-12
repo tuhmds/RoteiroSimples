@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.28
+# RoteiroSimples (RS) — versão experimental 0.29
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -10,7 +10,41 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
 
-## Novo na RS 0.28 — espaços de nomes e visibilidade
+## Novo na RS 0.29 — Biblioteca Padrão escrita em RoteiroSimples
+
+A primeira Biblioteca Padrão oficial está em **`biblioteca_padrao/`**, com **30 funções reais** implementadas em arquivos `.rts`, organizadas em quatro módulos: `numeros` (9), `matematica` (8), `estatistica` (6) e `listas` (7).
+
+```text
+importe "padrao/numeros.rts" como numeros
+importe "padrao/matematica.rts" como matematica
+importe "padrao/estatistica.rts" como estatistica
+importe "padrao/listas.rts" como listas
+
+inicio {
+    seja valores: lista[5]
+    valores[0] = 8
+    valores[1] = 3
+    valores[2] = 8
+    valores[3] = -2
+    valores[4] = 5
+
+    escreva(numeros.absoluto(-25))
+    escreva(matematica.fatorial(5))
+    escreva(estatistica.media_cinco(valores))
+    seja ordenados: lista[5] = listas.ordenar_cinco(valores)
+    escreva(ordenados[0])
+}
+```
+
+**Resultado:** `25`, `120`, `4` e `-2`, cada um em uma linha.
+
+`padrao/` é um prefixo especial: o compilador localiza sua biblioteca instalada, mesmo quando o programa do usuário está em outra pasta. Os módulos são resolvidos na compilação, incorporados ao executável nativo e não precisam existir ao lado do programa executável. Importações próprias ainda são relativas ao projeto e mantêm a proteção contra fuga de diretórios.
+
+**Escopo honesto:** estatística e listas trabalham, por ora, com `lista[5]`; não temos listas dinâmicas ou tipos genéricos. Os resultados são inteiros de 64 bits, com verificações de transbordamento. `fatorial` só atende 0 a 20 e devolve `-1` fora dessa faixa; expoente negativo de `potencia_natural` devolve `0`, como convenção provisória. Essas regras e as demais pré-condições estão no [manual completo da Biblioteca Padrão](docs/BIBLIOTECA_PADRAO_RS_0_29.md).
+
+**Exemplo executável:** [`exemplos/biblioteca_padrao.rts`](exemplos/biblioteca_padrao.rts). Os níveis existentes de `-O 0` a `-O 8` foram mantidos, sem criar outro. A Biblioteca Padrão é escrita na linguagem RS; o Python continua necessário apenas para executar o compilador de desenvolvimento.
+
+## Histórico: RS 0.28 — espaços de nomes e visibilidade
 
 Podemos usar funções e tipos com nomes iguais em módulos diferentes, graças à importação com apelido:
 
@@ -253,7 +287,7 @@ nenhum nível foi criado na RS 0.26. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes até a RS 0.28
+## Recursos presentes até a RS 0.29
 
 | Recurso | Situação |
 |---|---|
@@ -269,6 +303,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Registros aninhados, campos de listas e texto | Implementado na 0.26 |
 | Importação de módulos e resolução de dependências | Implementado na 0.27 |
 | Espaços de nomes com apelidos e visibilidade pública/privada | Implementado na 0.28 |
+| Biblioteca Padrão RS escrita em .rts, 30 funções em quatro módulos | Implementado na 0.29 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
 | Tipos reais/decimais, dados dinâmicos, referências e empréstimos | Ainda não |
@@ -278,7 +313,8 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 - `compilador/`: léxico, análise sintática, escopos, tipos, representação intermediária
   e análises de fluxo.
 - `backend/`: emissão direta de instruções x86-64 e geração de PE/ELF.
-- `bibliotecas/`: operações matemáticas atualmente suportadas.
+- `biblioteca_padrao/`: 30 funções oficiais em módulos `.rts` (números, matemática, estatística e listas).
+- `bibliotecas/`: compatibilidade com antigas operações matemáticas internas.
 - `exemplos/`: programas `.rts`, inclusive a demonstração nova.
 - `testes/`: verificações estáticas, execução dos executáveis e regressões.
 - `docs/`: notas da arquitetura e [histórico do README até a RS 0.23](docs/HISTORICO_README_ATE_RS_0_23.md).
@@ -286,6 +322,6 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**RS 0.29 (planejamento):** organização da interface pública dos módulos, testes de compilação incremental e biblioteca padrão mais ampla. Em seguida, ampliar tipos numéricos, memória dinâmica e referências seguras, sem acrescentar níveis de otimização antes de amadurecer a linguagem.
+**RS 0.30 (planejamento):** resultados tipados e erros de domínio explícitos; depois, tamanhos de lista paramétricos e dados dinâmicos com segurança de memória. Não vamos acrescentar níveis de otimização enquanto esses fundamentos estiverem pendentes.
 
 Ainda não foi escolhida uma licença para publicação do código.

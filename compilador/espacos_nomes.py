@@ -7,6 +7,7 @@ import re
 from .erros import ErroCompilacao
 from .lexico import tokens
 from .modulos import FontesReunidas, OrigemLinha
+from .importacoes_padrao import resolver_importacao
 
 IDENTIFICADOR = re.compile(r'[A-Za-z_][A-Za-z_0-9]*\Z')
 PREFIXO_INTERNO = 'SimboloInternoRS_'
@@ -99,11 +100,10 @@ def carregar_com_espacos(principal):
                     if (not isinstance(nome, str) or not nome or '\\' in nome or
                             Path(nome).is_absolute() or Path(nome).suffix.lower() != '.rts'):
                         erro(origem, 'importação exige caminho relativo terminado em .rts.')
-                    destino = (caminho.parent / nome).resolve()
-                    if not destino.is_relative_to(raiz):
-                        erro(origem, 'importação não pode sair da pasta do projeto.')
-                    if not destino.is_file():
-                        erro(origem, f'módulo não encontrado: {nome}.')
+                    try:
+                        destino = resolver_importacao(nome, caminho, raiz)
+                    except ErroCompilacao as excecao:
+                        erro(origem, str(excecao))
                     importacoes.append(Importacao(destino, apelido, origem))
                     indice += 1
                     continue

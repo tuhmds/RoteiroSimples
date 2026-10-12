@@ -6,6 +6,7 @@ import re
 
 from .erros import ErroCompilacao
 from .lexico import tokens
+from .importacoes_padrao import resolver_importacao
 
 
 @dataclass(frozen=True)
@@ -75,11 +76,10 @@ def carregar_fontes(principal):
                     relativo = Path(nome)
                     if relativo.is_absolute() or relativo.suffix.lower() != '.rts':
                         erro(origem, 'importação exige caminho relativo terminado em .rts.')
-                    destino = (caminho.parent / relativo).resolve()
-                    if not destino.is_relative_to(raiz):
-                        erro(origem, 'importação não pode sair da pasta do projeto.')
-                    if not destino.is_file():
-                        erro(origem, f'módulo não encontrado: {nome}.')
+                    try:
+                        destino = resolver_importacao(nome, caminho, raiz)
+                    except ErroCompilacao as excecao:
+                        erro(origem, str(excecao))
                     dependencias.append(destino)
                     possui_importacoes = True
                     i += 1
@@ -196,9 +196,11 @@ def _requer_espacos_nomes(principal):
                     except (ValueError, UnicodeError):
                         continue
                     if isinstance(nome, str):
-                        proximo = (caminho.parent / nome).resolve()
-                        if proximo.is_relative_to(raiz) and proximo.is_file():
-                            pendentes.append(proximo)
+                        try:
+                            proximo = resolver_importacao(nome, caminho, raiz)
+                        except ErroCompilacao:
+                            continue
+                        pendentes.append(proximo)
     return False
 
 

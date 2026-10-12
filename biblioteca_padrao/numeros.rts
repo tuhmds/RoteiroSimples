@@ -1,0 +1,63 @@
+// Biblioteca Padrão RS 0.29 — operações com inteiros de 64 bits.
+// Os cálculos seguem as verificações nativas de transbordamento da RS.
+
+publico funcao menor(a: inteiro, b: inteiro) -> inteiro {
+    se a < b {
+        retorne a
+    }
+    retorne b
+}
+
+publico funcao maior(a: inteiro, b: inteiro) -> inteiro {
+    se a > b {
+        retorne a
+    }
+    retorne b
+}
+
+publico funcao absoluto(valor: inteiro) -> inteiro {
+    se valor < 0 {
+        retorne -valor
+    }
+    retorne valor
+}
+
+publico funcao sinal(valor: inteiro) -> inteiro {
+    se valor > 0 {
+        retorne 1
+    }
+    se valor < 0 {
+        retorne -1
+    }
+    retorne 0
+}
+
+publico funcao limitar(valor: inteiro, inferior: inteiro, superior: inteiro) -> inteiro {
+    // Precondição: inferior <= superior.
+    se valor < inferior {
+        retorne inferior
+    }
+    se valor > superior {
+        retorne superior
+    }
+    retorne valor
+}
+
+publico funcao eh_par(valor: inteiro) -> logico {
+    retorne valor % 2 == 0
+}
+
+publico funcao eh_impar(valor: inteiro) -> logico {
+    retorne valor % 2 != 0
+}
+
+publico funcao quadrado(valor: inteiro) -> inteiro {
+    retorne valor * valor
+}
+
+publico funcao multiplo_de(valor: inteiro, divisor: inteiro) -> logico {
+    se divisor == 0 {
+        retorne falso
+    }
+    retorne valor % divisor == 0
+}

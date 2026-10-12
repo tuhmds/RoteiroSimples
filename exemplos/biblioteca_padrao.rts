@@ -1,0 +1,25 @@
+importe "padrao/numeros.rts" como numeros
+importe "padrao/matematica.rts" como matematica
+importe "padrao/estatistica.rts" como estatistica
+importe "padrao/listas.rts" como listas
+
+inicio {
+    seja valores: lista[5]
+    valores[0] = 8
+    valores[1] = 3
+    valores[2] = 8
+    valores[3] = -2
+    valores[4] = 5
+
+    escreva("RS 0.29: Biblioteca Padrao")
+    escreva(numeros.absoluto(-25))
+    escreva(matematica.fatorial(5))
+    escreva(matematica.mdc(84, 30))
+    escreva(estatistica.soma_cinco(valores))
+    escreva(estatistica.media_cinco(valores))
+    escreva(listas.contar_cinco(valores, 8))
+    seja ordenados: lista[5] = listas.ordenar_cinco(valores)
+    escreva(ordenados[0])
+    escreva(ordenados[4])
+    escreva(valores[0])
+}

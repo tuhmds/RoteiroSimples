@@ -1,0 +1,80 @@
+// Biblioteca Padrão RS 0.29 — listas de cinco inteiros.
+// Os parâmetros são copiados por valor. Não existe alias com o chamador.
+
+publico funcao buscar_cinco(valores: lista[5], procurado: inteiro) -> inteiro {
+    seja i = 0
+    enquanto i < 5 {
+        se valores[i] == procurado {
+            retorne i
+        }
+        i = i + 1
+    }
+    retorne -1
+}
+
+publico funcao contar_cinco(valores: lista[5], procurado: inteiro) -> inteiro {
+    seja quantidade = 0
+    seja i = 0
+    enquanto i < 5 {
+        se valores[i] == procurado {
+            quantidade = quantidade + 1
+        }
+        i = i + 1
+    }
+    retorne quantidade
+}
+
+publico funcao contem_cinco(valores: lista[5], procurado: inteiro) -> logico {
+    retorne buscar_cinco(valores, procurado) != -1
+}
+
+publico funcao crescente_cinco(valores: lista[5]) -> logico {
+    seja i = 1
+    enquanto i < 5 {
+        se valores[i] < valores[i - 1] {
+            retorne falso
+        }
+        i = i + 1
+    }
+    retorne verdadeiro
+}
+
+publico funcao inverter_cinco(valores: lista[5]) -> lista[5] {
+    seja invertidos: lista[5]
+    seja i = 0
+    enquanto i < 5 {
+        invertidos[4 - i] = valores[i]
+        i = i + 1
+    }
+    retorne invertidos
+}
+
+publico funcao ordenar_cinco(valores: lista[5]) -> lista[5] {
+    seja ordenados: lista[5] = valores
+    seja i = 0
+    enquanto i < 5 {
+        seja j = i + 1
+        enquanto j < 5 {
+            se ordenados[j] < ordenados[i] {
+                seja temporario = ordenados[i]
+                ordenados[i] = ordenados[j]
+                ordenados[j] = temporario
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    retorne ordenados
+}
+
+publico funcao substituir_cinco(valores: lista[5], antigo: inteiro, novo: inteiro) -> lista[5] {
+    seja resultado: lista[5] = valores
+    seja i = 0
+    enquanto i < 5 {
+        se resultado[i] == antigo {
+            resultado[i] = novo
+        }
+        i = i + 1
+    }
+    retorne resultado
+}

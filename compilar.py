@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.28: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.29: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import re
