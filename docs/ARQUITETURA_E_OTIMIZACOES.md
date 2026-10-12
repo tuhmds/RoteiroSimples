@@ -1,8 +1,10 @@
-# Arquitetura, memória e otimizações — RS 0.6
+# Arquitetura, memória e otimizações — RS 0.7
 
 A RS é experimental. Esta página distingue **implementado** de **proposto**.
 
 ## Implementado
+
+- Tipos `inteiro` e `logico` e checagem estática de expressões, operações e atribuições na RS 0.7. Cada variável local ainda ocupa 8 bytes na pilha. Limite provisório de 256 slots por programa enquanto não existe sondagem de pilha do Windows.
 
 - Gerador direto de instruções AMD64 e executáveis PE32+ (Windows) e ELF64 (Linux).
 - Inteiros de 64 bits em slots fixos de 8 bytes na pilha. `deslocamento_variavel` centraliza os endereços.
@@ -37,3 +39,7 @@ A RS é experimental. Esta página distingue **implementado** de **proposto**.
 **Medições necessárias:** tempo de compilação, tempo de execução (múltiplas rodadas), tamanho dos binários e número de chamadas ao SO. Menos bytes não garante execução mais rápida. Não mover ou remover E/S, erros de divisão por zero nem verificações de overflow.
 
 **Limites atuais:** não há IR tipada, decimais, leitura de texto, referências, ponteiros, heap, listas ou proteção completa de memória. Não utilizar para produção.
+
+## Atualização RS 0.7
+
+A verificação estática impede atribuições incompatíveis, mas **não prova a segurança geral da memória**. Ainda precisamos de tipos compostos, propriedade de referências, análise de tempo de vida e avaliação do custo de cada verificação. Veja [especificação de tipos e memória](TIPOS_E_MEMORIA_RS_0_7.md).

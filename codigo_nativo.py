@@ -97,7 +97,7 @@ def deslocamento_variavel(variaveis, nome, windows):
 
 def expressao(g, expr, variaveis, windows):
     tipo = expr[0]
-    if tipo == 'numero':
+    if tipo in ('numero', 'logico'):
         carregar_numero(g, expr[1])
     elif tipo == 'var':
         offset = deslocamento_variavel(variaveis, expr[1], windows)
@@ -497,7 +497,7 @@ def montar_pe(g, mensagens):
         enderecos[f'mensagem_{i}'] = base_dados + len(dados)
         dados += msg.encode('utf-8')
     if max(len(g.codigo), len(importacoes), len(dados)) > 0x1000:
-        raise ErroCompilacao('Programa grande demais para as seções fixas da versão 0.6 (4 KiB).')
+        raise ErroCompilacao('Programa grande demais para as seções fixas da versão 0.7 (4 KiB).')
     g.finalizar(base_codigo, enderecos)
     secoes = [(b'.text', bytes(g.codigo), base_codigo, 0x60000020),
               (b'.idata', bytes(importacoes), base_importacoes, 0xC0000040),

@@ -1,8 +1,35 @@
-# RoteiroSimples (RS) — versão experimental 0.6
+# RoteiroSimples (RS) — versão experimental 0.7
 
 **RoteiroSimples** é um projeto experimental de linguagem de programação em português brasileiro. O compilador de desenvolvimento está escrito em Python 3.10+ e gera instruções x86-64 diretamente para executáveis Windows (PE32+) e Linux (ELF64), sem passar por C, Rust ou LLVM. Os programas gerados não precisam de Python para executar.
 
 > Estado do projeto: protótipo educacional. Ainda não é seguro para sistemas de produção.
+
+## Novo na RS 0.7: tipos de dados e controle básico da pilha
+
+As palavras reservadas continuam **sem acentos**, como `inicio`, `senao`, `inteiro` e `logico`.
+
+```text
+inicio {
+    seja idade: inteiro = 17
+    seja ativo: logico = verdadeiro
+    seja maior = idade >= 18
+    escreva(maior)
+    se ativo {
+        escreva("Está habilitado!")
+    }
+}
+```
+
+- `inteiro` representa números com sinal de 64 bits. `logico` representa `verdadeiro` ou `falso`.
+- Pode escrever `seja valor: inteiro = 42` ou deixar a linguagem inferir, como em `seja valor = 42`.
+- Comparações inferem `logico`, e o compilador proíbe misturar booleanos e inteiros em expressões incompatíveis. `leia` aceita apenas variáveis `inteiro`.
+- Para preservar compatibilidade, `se` e `enquanto` continuam aceitando valores inteiros (zero equivale a falso).
+- `escreva(logico)` atualmente imprime `1` ou `0`. Os textos entre aspas continuam aceitando UTF-8 normalmente.
+- Cada variável local ocupa 8 bytes na pilha. Impusemos limite provisório de **256 variáveis** até implementar sondagem de pilha (especialmente no Windows).
+- Não há ponteiros, heap, listas ou gerenciamento dinâmico de memória. A checagem de tipos é um **primeiro passo**, não uma garantia geral de segurança.
+- O compilador rejeita literais inteiros positivos fora do intervalo, mas operações em tempo de execução ainda podem transbordar sem diagnóstico.
+
+**Exemplo novo:** `exemplos/tipos.rts`. Veja [tipos e memória da RS 0.7](docs/TIPOS_E_MEMORIA_RS_0_7.md) para os detalhes e limitações.
 
 ## Padrão da RS 0.5: sintaxe sem acentos
 
@@ -55,7 +82,7 @@ inicio {
 1. Baixe ou clone este repositório.
 2. Instale Python 3 e confirme que `py -3 --version` funciona no PowerShell.
 3. Dê dois cliques em **`INICIAR_RS.bat`**. O menu permanece disponível para você escolher as próximas operações.
-4. Escolha **1** para compilar e executar `exemplos/entrada.rts`, **2** para editar no Bloco de Notas, **3** para executar os testes ou **4** para executar o último programa compilado.
+4. Escolha **1** para compilar e executar `exemplos/tipos.rts`, **2** para editar no Bloco de Notas, **3** para executar os testes ou **4** para executar o último programa compilado.
 5. Escolha **0** para sair.
 
 **Importante:** `TESTAR_WINDOWS.bat` apenas executa um programa já compilado. Quando aparecer "pressione qualquer tecla", apertar uma tecla **encerra a janela**, não inicia uma nova etapa. Use `INICIAR_RS.bat` para trabalhar com o projeto.
@@ -64,7 +91,7 @@ inicio {
 
 O laço `enquanto` repete um bloco enquanto a condição for diferente de zero. `pare` interrompe o laço mais interno e `continue` passa para a próxima iteração do laço mais interno.
 
-Arquivo `exemplos/entrada.rts`: 
+Arquivo `exemplos/tipos.rts`: 
 
 ```text
 inicio {
@@ -91,14 +118,14 @@ Laços podem ser aninhados e conter decisões `se`/`senao`. `pare` e `continue` 
 Windows, no PowerShell aberto na pasta do projeto:
 
 ```powershell
-py -3 compilar.py exemplos\entrada.rts --alvo windows -o roteiro_windows.exe
+py -3 compilar.py exemplos\tipos.rts --alvo windows -o roteiro_windows.exe
 .\roteiro_windows.exe
 ```
 
 Linux x86-64:
 
 ```bash
-python3 compilar.py exemplos/entrada.rts --alvo linux -o roteiro_linux
+python3 compilar.py exemplos/tipos.rts --alvo linux -o roteiro_linux
 ./roteiro_linux
 ```
 

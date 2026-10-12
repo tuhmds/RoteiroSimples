@@ -1,0 +1,19 @@
+inicio {
+    seja idade: inteiro = 17
+    seja habilitado: logico = verdadeiro
+    seja maior = idade >= 18
+    escreva("RS 0.7 - tipos e verificacao estatica")
+    escreva("Maior de idade? (1=sim, 0=nao)")
+    escreva(maior)
+    se habilitado {
+        escreva("Habilitado")
+    }
+    escreva("Digite uma nova idade:")
+    leia(idade)
+    maior = idade >= 18
+    se maior {
+        escreva("Maior de idade")
+    } senao {
+        escreva("Menor de idade")
+    }
+}
