@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.32: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.36: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import re
@@ -9,6 +9,7 @@ from compilador.erros import ErroCompilacao
 from compilador.parser import analisar_programa
 from compilador.modulos import carregar_fontes, apresentar_erro
 from backend import compilar
+from compilador.estrategia import decidir_estrategia, descrever_estrategia
 
 
 def main(argv=None):
@@ -17,9 +18,10 @@ def main(argv=None):
     for canal in (sys.stdout, sys.stderr):
         if canal is not None and hasattr(canal, 'reconfigure'):
             canal.reconfigure(encoding='utf-8')
-    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.32')
+    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.36')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--mostrar-modulos', action='store_true', help='lista os módulos e a ordem de importação')
+    parser.add_argument('--mostrar-estrategia', action='store_true', help='explica quais otimizações serão aplicadas de fato')
     parser.add_argument('--alvo', choices=['windows', 'linux'], default='windows')
     parser.add_argument('-o', '--saida', type=Path, help='arquivo executável de saída')
     parser.add_argument('-O', '--otimizacao', choices=['0', '1', '2', '3', '4', '5', '6', '7', '8'], default='1', help='otimização (0 = sem, 1 = constantes, 2 = propagação local, 3 = SSA, 4 = SSA nativa, 5 = layout, 6 = coalescencia e saltos curtos, 7 = memoria versionada local, 8 = propagacao entre blocos)' )
@@ -63,6 +65,8 @@ def main(argv=None):
             from compilador.ast import formatar_ast
             print(formatar_ast(programa))
         nivel = int(op.otimizacao)
+        if op.mostrar_estrategia:
+            print(descrever_estrategia(decidir_estrategia(programa, nivel, otimizar=nivel > 0)))
         tem_listas = any(isinstance(t, tuple) and t[0] in ('lista', 'texto') for t in programa.tipos.values())
         if tem_listas and (op.mostrar_cfg or op.salvar_cfg or op.mostrar_fluxo
                 or op.salvar_fluxo or op.mostrar_ssa or op.salvar_ssa
