@@ -722,5 +722,63 @@ class TestesListasDinamicas(unittest.TestCase):
                 with self.assertRaises(ErroCompilacao):
                     analisar_programa(caso)
 
+
+    def test_rs033_registro_campos_multiplas_palavras_e_reuso(self):
+        fonte = """tipo Local {
+            numero: inteiro
+            bairro: texto[24]
+            codigos: lista[3]
+        }
+        inicio {
+            seja destino: lista[Local]
+            seja origem: lista[Local]
+            seja registro: Local
+            para i de 1 ate 14 {
+                registro.numero = i * 100
+                copie(registro.bairro, "Ipatinga")
+                registro.codigos[0] = i
+                registro.codigos[1] = i * 2
+                registro.codigos[2] = i * 3
+                adicione(origem, registro)
+            }
+            registro.numero = 777
+            adicione(destino, registro)
+            mova(destino, origem)
+            seja copia: Local = destino[13]
+            escreva(copia.numero)
+            escreva(copia.codigos[0])
+            escreva(copia.codigos[2])
+            escreva(tamanho(destino))
+            remova_ultimo(destino)
+            escreva(tamanho(destino))
+        }"""
+        r=executar(fonte)
+        self.assertEqual((r.returncode,r.stdout),
+                         (0,'1400\n14\n42\n14\n13\n'),r.stderr)
+
+    def test_rs033_registro_valor_independente_e_limites(self):
+        fonte = """tipo Medida {
+            altura: inteiro
+            peso: inteiro
+        }
+        inicio {
+            seja registro: Medida
+            registro.altura = 170
+            registro.peso = 65
+            seja pessoas: lista[Medida]
+            adicione(pessoas, registro)
+            registro.altura = 180
+            seja salvo: Medida = pessoas[0]
+            salvo.peso = 99
+            escreva(salvo.altura)
+            escreva(salvo.peso)
+            seja novamente: Medida = pessoas[0]
+            escreva(novamente.altura)
+            escreva(novamente.peso)
+        }"""
+        r=executar(fonte)
+        self.assertEqual((r.returncode,r.stdout),(0,'170\n99\n170\n65\n'),r.stderr)
+
+
 if __name__ == '__main__':
     unittest.main()

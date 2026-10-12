@@ -1,0 +1,38 @@
+// RS 0.33 — exemplo: registrar entregas e consultar sem copiar lista.
+tipo Entrega {
+    codigo: inteiro
+    distancia_km: inteiro
+    concluida: logico
+}
+
+funcao contar_concluidas(entregas: emprestimo[lista[Entrega]]) -> inteiro {
+    seja total = 0
+    para posicao de 0 ate tamanho(entregas) - 1 {
+        seja atual: Entrega = entregas[posicao]
+        se atual.concluida {
+            total = total + 1
+        }
+    }
+    retorne total
+}
+
+inicio {
+    seja registro: Entrega
+    seja entregas: lista[Entrega]
+
+    registro.codigo = 101
+    registro.distancia_km = 3
+    registro.concluida = verdadeiro
+    adicione(entregas, registro)
+
+    registro.codigo = 102
+    registro.distancia_km = 5
+    registro.concluida = falso
+    adicione(entregas, registro)
+
+    escreva(tamanho(entregas))
+    escreva(contar_concluidas(empreste(entregas)))
+
+    seja primeira: Entrega = entregas[0]
+    escreva(primeira.codigo)
+}

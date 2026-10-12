@@ -80,7 +80,9 @@ de um registro produz uma cópia independente. Ainda não é possível
 editar campos diretamente como `lista[indice].campo`. Textos dinâmicos
 e tipos arbitrários compostos permanecem em planejamento.
 A RS permanece experimental. Leia
-[`docs/PROPRIEDADE_E_ESCOPOS_RS_0_33.md`](docs/PROPRIEDADE_E_ESCOPOS_RS_0_33.md).
+[`docs/PROPRIEDADE_E_ESCOPOS_RS_0_33.md`](docs/PROPRIEDADE_E_ESCOPOS_RS_0_33.md)
+e o [guia de listas tipadas](docs/LISTAS_TIPADAS_RS_0_33.md), com o
+[exemplo de entregas](exemplos/entregas_tipadas.rts).
 
 ## Histórico: RS 0.32 — listas dinâmicas e propriedade exclusiva
 
