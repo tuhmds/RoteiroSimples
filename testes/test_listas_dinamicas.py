@@ -381,46 +381,64 @@ class TestesListasDinamicas(unittest.TestCase):
                 adicione(dados, 10)
                 retorne 0
             }
-            inicio { escreva(1) }""",
+            inicio {
+                escreva(1)
+            }""",
             """funcao f(dados: emprestimo[lista]) -> inteiro {
                 remova_ultimo(dados)
                 retorne 0
             }
-            inicio { escreva(1) }""",
+            inicio {
+                escreva(1)
+            }""",
             """funcao f(dados: emprestimo[lista]) -> inteiro {
                 libere(dados)
                 retorne 0
             }
-            inicio { escreva(1) }""",
+            inicio {
+                escreva(1)
+            }""",
             """funcao f(dados: emprestimo[lista]) -> inteiro {
                 mova(dados, dados)
                 retorne 0
             }
-            inicio { escreva(1) }""",
+            inicio {
+                escreva(1)
+            }""",
             """funcao f(dados: emprestimo[lista]) -> inteiro {
                 leia(dados[0])
                 retorne 0
             }
-            inicio { escreva(1) }""",
+            inicio {
+                escreva(1)
+            }""",
             """funcao f(dados: emprestimo[lista]) -> inteiro {
                 dados[0] = 8
                 retorne 0
             }
-            inicio { escreva(1) }""",
+            inicio {
+                escreva(1)
+            }""",
             """funcao f(dados: emprestimo[lista]) -> inteiro {
                 seja ref = dados
                 retorne 0
             }
-            inicio { escreva(1) }""",
+            inicio {
+                escreva(1)
+            }""",
             """funcao f(dados: emprestimo[lista]) -> inteiro {
                 dados = dados
                 retorne 0
             }
-            inicio { escreva(1) }""",
+            inicio {
+                escreva(1)
+            }""",
             """funcao f(dados: emprestimo[lista]) -> emprestimo[lista] {
                 retorne dados
             }
-            inicio { escreva(1) }""",
+            inicio {
+                escreva(1)
+            }""",
             """inicio {
                 seja numeros: lista[]
                 seja alias = empreste(numeros)
@@ -454,6 +472,47 @@ class TestesListasDinamicas(unittest.TestCase):
         }"""
         r = executar(fonte)
         self.assertEqual((r.returncode, r.stdout), (0, '21\n'), r.stderr)
+
+
+    def test_rs033_emprestimo_vazio_e_dois_argumentos_de_leitura(self):
+        fonte = """funcao combinado(a: emprestimo[lista], b: emprestimo[lista]) -> inteiro {
+            retorne tamanho(a) * 100 + tamanho(b) + b[0]
+        }
+        inicio {
+            seja vazia: lista[]
+            seja preenchida: lista[]
+            adicione(preenchida, 19)
+            escreva(combinado(empreste(vazia), empreste(preenchida)))
+            escreva(tamanho(vazia))
+            escreva(preenchida[0])
+        }"""
+        resultado = executar(fonte)
+        self.assertEqual((resultado.returncode, resultado.stdout),
+                         (0, '20\n0\n19\n'), resultado.stderr)
+
+    def test_rs033_emprestimo_nao_pode_escapar_de_funcao(self):
+        fonte = """funcao obter(entrada: emprestimo[lista]) -> emprestimo[lista] {
+            retorne entrada
+        }
+        inicio {
+            seja valores: lista[]
+            adicione(valores, 8)
+            escreva(8)
+        }"""
+        with self.assertRaisesRegex(ErroCompilacao, 'nao pode ser retornado'):
+            analisar_programa(fonte)
+
+    def test_rs033_emprestimo_nao_pode_ser_guardado_apos_escopo(self):
+        fonte = """funcao obter(entrada: emprestimo[lista]) -> inteiro {
+            seja referencia = entrada
+            retorne 0
+        }
+        inicio {
+            seja dados: lista[]
+            escreva(obter(empreste(dados)))
+        }"""
+        with self.assertRaisesRegex(ErroCompilacao, 'nao pode ser armazenado'):
+            analisar_programa(fonte)
 
 if __name__ == '__main__':
     unittest.main()

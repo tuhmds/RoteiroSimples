@@ -19,9 +19,10 @@ com retorno antecipado. A propriedade externa aos laços é preservada.
 
 Uma origem após movimento não permite acesso, inclusão ou liberação,
 exceto como destino de outra transferência. Os elementos são inteiros
-de 64 bits, e não há empréstimos, referências públicas, transferência
-para parâmetros e retornos, listas genéricas ou estruturas compostas
-de propriedade. O tipo de origem é verificado estaticamente, mas seu
+de 64 bits. Há empréstimos imutáveis apenas em parâmetros, com
+verificação de tempo de vida; não há empréstimos mutáveis, referências
+armazenáveis, transferência de propriedade por parâmetros e retornos,
+listas dinâmicas genéricas nem estruturas compostas de propriedade. O tipo de origem é verificado estaticamente, mas seu
 estado após movimentação é conferido em execução.
 
 Falhas fatais não fazem o desenrolamento das estruturas antes de encerrar
