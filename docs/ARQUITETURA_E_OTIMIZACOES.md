@@ -49,3 +49,7 @@ Nao ativar otimizacoes de divisao por zero, overflow ou reordenacao de efeitos d
 - Usar programas representativos: soma de muitos inteiros, lacos aninhados, processamento de entradas, listas, estruturas e carga de arquivos (conforme implementados).
 - Comparar mesma maquina, sistema, compilador e entrada; repetir medidas para evitar ruido.
 - Os numeros de velocidade nao foram medidos nesta etapa; tamanho menor **nao significa automaticamente** programa mais rapido.
+
+## Atualização RS 0.12 — SSA construída e validada
+
+A nova etapa `compilador/ssa.py` usa fronteiras de dominância, vivacidade e renomeação para construir nós `phi` completos. O verificador checa definições únicas e dominância dos operandos, inclusive nas retroarestas dos laços. **A SSA ainda não alimenta o backend de geração nativa**. Consulte `docs/SSA_RS_0_12.md`.

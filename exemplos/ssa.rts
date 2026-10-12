@@ -1,0 +1,19 @@
+inicio {
+    seja pontos: inteiro = 0
+    seja rodadas: inteiro = 0
+    enquanto rodadas < 4 {
+        rodadas = rodadas + 1
+        se rodadas == 2 {
+            continue
+        }
+        se rodadas == 4 {
+            pare
+        }
+        pontos = pontos + rodadas
+    }
+    escreva("RS 0.12 - SSA e fluxo de dados")
+    escreva("Pontos:")
+    escreva(pontos)
+    escreva("Rodadas:")
+    escreva(rodadas)
+}

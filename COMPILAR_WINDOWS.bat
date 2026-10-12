@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
-echo === RoteiroSimples RS 0.11 - compilar e executar ===
+echo === RoteiroSimples RS 0.12 - compilar e executar ===
 echo.
 where py >nul 2>nul
 if errorlevel 1 (

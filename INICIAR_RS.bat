@@ -5,7 +5,7 @@ cd /d "%~dp0"
 :MENU
 cls
 echo ==============================================
-echo         RoteiroSimples RS 0.11
+echo         RoteiroSimples RS 0.12
 echo ==============================================
 echo.
 echo  [1] Compilar e executar exemplo de fluxo de dados
@@ -14,10 +14,12 @@ echo  [3] Rodar testes automatizados
  echo  [4] Executar o ultimo .exe gerado
  echo  [5] Mostrar AST e CFG e gerar fluxo.dot
  echo  [6] Mostrar fluxo de dados e salvar analise.json
+ echo  [7] Mostrar SSA e gerar ssa.json
  echo  [0] Sair
  echo.
-choice /c 1234560 /n /m "Escolha uma opcao: "
-if errorlevel 7 goto FIM
+choice /c 12345670 /n /m "Escolha uma opcao: "
+if errorlevel 8 goto FIM
+if errorlevel 7 goto SSA
 if errorlevel 6 goto DADOS
 if errorlevel 5 goto GRAFO
 if errorlevel 4 goto EXECUTAR
@@ -55,6 +57,12 @@ goto MENU
 :DADOS
 py -3 compilar.py exemplos\fluxo_dados.rts --alvo windows -O 2 --mostrar-fluxo --salvar-fluxo analise.json -o roteiro_windows.exe
 if errorlevel 1 echo Falha na analise de fluxo.
+pause
+goto MENU
+:SSA
+py -3 compilar.py exemplos\ssa.rts --alvo windows -O 2 --mostrar-ssa --salvar-ssa ssa.json -o roteiro_windows.exe
+if errorlevel 1 echo Falha ao gerar a SSA.
+echo.
 pause
 goto MENU
 :FIM

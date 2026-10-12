@@ -9,3 +9,6 @@ roteiro_linux
 # Saidas temporarias do analisador de fluxo
 fluxo.dot
 fluxo.png
+
+# Dump da SSA (opcional)
+ssa.json

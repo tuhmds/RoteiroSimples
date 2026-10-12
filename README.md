@@ -1,6 +1,23 @@
-# RoteiroSimples (RS) — versão experimental 0.11
+# RoteiroSimples (RS) — versão experimental 0.12
 
 Linguagem experimental em português brasileiro, com compilador em Python 3.10+ que **gera diretamente instruções de máquina x86-64**, em executáveis ELF64 (Linux) e PE32+ (Windows). Os programas gerados não dependem do Python para executar. **Não usar em produção.**
+
+## RS 0.12 — Conversão para SSA tipada (modo de análise)
+
+A RS 0.12 introduz uma representação **SSA (Static Single Assignment)** construída sobre o CFG da RS 0.10 e sobre os dominadores e a vivacidade da RS 0.11. Cada definição recebe uma versão própria (`pontos@0`, `pontos@1`), e **nós `phi` completos** registram qual versão vem de cada predecessor, inclusive em retroarestas de `enquanto` e `para`.
+
+**Importante:** a SSA é construída, renomeada e validada por dominância, mas ainda **não é usada pelo backend nativo**. `-O 0`, `-O 1` e `-O 2` continuam produzindo os mesmos executáveis da RS 0.11 para os programas existentes. Não alegamos aceleração nesta etapa.
+
+### Experimente no Windows
+
+```powershell
+py -3 compilar.py exemplos\ssa.rts --alvo windows -O 2 --mostrar-ssa --salvar-ssa ssa.json -o roteiro_windows.exe
+.\roteiro_windows.exe
+```
+
+O menu `INICIAR_RS.bat` agora inclui a **opção 7** para mostrar a SSA e salvar `ssa.json`. O arquivo JSON contém definições únicas, operadores e expressões renomeadas, `phi` por predecessor e as fronteiras de dominância. Os arquivos `.rts` continuam com comandos e identificadores **sem acentos**.
+
+Consulte [a especificação de SSA](docs/SSA_RS_0_12.md). As próximas etapas serão baixar a SSA para código nativo, fazer eliminação de código morto segura e desenvolver alocação de registradores, com testes de equivalência.
 
 ## RS 0.11 — Fluxo de dados, vivacidade e otimização local O2
 
@@ -191,4 +208,4 @@ Não temos ainda números decimais, entrada de textos, funções definidas pelo 
 - `exemplos/otimizacao.rts`: exemplo da RS 0.8; `tipos.rts` e demais exemplos preservados.
 - `docs/ARQUITETURA_E_OTIMIZACOES.md`: arquitetura e próximos passos.
 
-**Próxima prioridade:** construção de SSA real com junções `phi` e renomeação de variáveis, seguida por testes rigorosos de equivalência e experimentos de alocação de registradores. Buffers de entrada, tipos compostos e segurança de memória continuam pendentes. Licença ainda não definida.
+**Próxima prioridade após a RS 0.12:** baixar os nós `phi` em cópias nas arestas, testar equivalência e experimentar alocação de registradores. Buffers de entrada, tipos compostos e segurança de memória continuam pendentes. Licença ainda não definida.
