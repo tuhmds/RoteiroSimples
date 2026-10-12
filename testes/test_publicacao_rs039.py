@@ -131,7 +131,18 @@ class TestesRS039(unittest.TestCase):
         fonte = (RAIZ/'exemplos'/'aplicacoes'/'publicar_banco_rs039.rts').read_text(
             encoding='utf-8')
         with tempfile.TemporaryDirectory() as pasta:
-            programa = construir(pasta,'publicacao_real',fonte)
+            # Este exemplo importa modulo da biblioteca padrao; usar a
+            # compilacao completa da CLI, que resolve as importacoes.
+            origem = Path(pasta)/'publicacao_real.rts'
+            origem.write_text(fonte, encoding='utf-8')
+            programa = Path(pasta)/('publicacao_real.exe' if alvo() == 'windows'
+                                    else 'publicacao_real')
+            saida = subprocess.run([
+                sys.executable, str(RAIZ/'compilar.py'), str(origem),
+                '--alvo', alvo(), '-O', '8', '-o', str(programa)],
+                capture_output=True, text=True, encoding='utf-8',
+                errors='replace', timeout=45)
+            self.assertEqual(saida.returncode,0,saida.stderr+saida.stdout)
             (Path(pasta)/'banco.rsd').write_bytes(b'VERSAO_ANTIGA_COM_MUITOS_BYTES')
             for passagem in range(2):
                 with self.subTest(passagem=passagem):
