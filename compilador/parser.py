@@ -6,7 +6,7 @@ from .erros import ErroCompilacao
 from .lexico import tokens
 from .semantica import ContextoSemantico
 
-def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _retorno=None):
+def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _retorno=None, _registros=None):
     linhas = (_linhas if _linhas is not None else
              [(n, tokens(l, n)) for n, l in enumerate(fonte.splitlines(), 1)])
     linhas = [(n, t) for n, t in linhas if t]
@@ -22,6 +22,29 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
         else:
             normalizadas.append((n, t))
     linhas = normalizadas
+    registros = (_registros if _registros is not None else {})
+    if _linhas is None:
+        while linhas and linhas[0][1] and linhas[0][1][0] == 'tipo':
+            n, cab = linhas.pop(0)
+            if len(cab) != 3 or cab[2] != '{' or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', cab[1]):
+                raise ErroCompilacao(f'Linha {n}: use tipo Nome {{.')
+            nome_tipo = str(cab[1])
+            if nome_tipo in registros or nome_tipo in ('inteiro', 'logico', 'texto', 'lista', 'seja', 'se', 'senao', 'inicio', 'funcao', 'retorne', 'para', 'enquanto', 'tipo', 'leia', 'escreva') or nome_tipo.startswith('__rs_'):
+                raise ErroCompilacao(f'Linha {n}: nome de tipo duplicado ou reservado.')
+            campos = []
+            while linhas and linhas[0][1] != ['}']:
+                n_campo, t = linhas.pop(0)
+                if len(t) != 3 or t[1] != ':' or t[2] not in ('inteiro', 'logico') or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', t[0]):
+                    raise ErroCompilacao(f'Linha {n_campo}: campo exige nome: inteiro ou nome: logico.')
+                if t[0] in (c for c, _ in campos):
+                    raise ErroCompilacao(f'Linha {n_campo}: campo {t[0]!r} duplicado.')
+                campos.append((str(t[0]), str(t[2])))
+            if not linhas:
+                raise ErroCompilacao(f'Linha {n}: registro {nome_tipo!r} sem fechamento.')
+            linhas.pop(0)
+            if not campos:
+                raise ErroCompilacao(f'Linha {n}: registro precisa de pelo menos um campo.')
+            registros[nome_tipo] = tuple(campos)
     definicoes = []
     assinaturas = _assinaturas if _assinaturas is not None else {}
     if _linhas is None:
@@ -46,12 +69,12 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                         grupos.append(partes[ultimo:i]); ultimo = i+1
                 grupos.append(partes[ultimo:])
                 for grupo in grupos:
-                    if len(grupo) != 3 or grupo[1] != ':' or grupo[2] not in ('inteiro', 'logico') or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', grupo[0]):
+                    if len(grupo) != 3 or grupo[1] != ':' or (grupo[2] not in ('inteiro', 'logico') and grupo[2] not in registros) or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', grupo[0]):
                         raise ErroCompilacao(f'Linha {n}: use parametro: inteiro ou parametro: logico.')
                     if grupo[0] in (x[0] for x in parametros):
                         raise ErroCompilacao(f'Linha {n}: parâmetro duplicado: {grupo[0]}.')
                     parametros.append((str(grupo[0]), str(grupo[2])))
-            if nome in assinaturas:
+            if nome in assinaturas or nome in registros:
                 raise ErroCompilacao(f'Linha {n}: função {nome!r} já foi declarada.')
             assinaturas[nome] = (tuple(tipo for _, tipo in parametros), retorno)
             nivel = 1
@@ -67,10 +90,10 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     if not linhas or linhas[0][1] != ['inicio', '{']:
         raise ErroCompilacao("O programa deve começar com 'inicio {' (após as definições de função).")
     normalizadas = linhas[1:]
-    contexto = _contexto or ContextoSemantico(importa, assinaturas)
+    contexto = _contexto or ContextoSemantico(importa, assinaturas, registros)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'capacidade', 'copie', 'junte', 'limpe', 'funcao', 'retorne'}
+    reservadas = {'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'capacidade', 'copie', 'junte', 'limpe', 'funcao', 'retorne', 'tipo'}
 
     def indice_lista(partes, linha):
         if len(partes) < 4 or partes[1] != '[' or partes[-1] != ']':
@@ -136,7 +159,9 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if _retorno is not None and t[0] in ('leia', 'copie', 'junte', 'limpe'):
                 raise ErroCompilacao(f'Linha {n}: entrada e buffers dentro de funções serão habilitados após os quadros de memória por chamada.')
             if len(t) >= 3 and t[0] == 'se'  and t[-1] == '{':
-                cond, _ = expressao_tipada(t[1:-1], n)
+                cond, tipo_condicao = expressao_tipada(t[1:-1], n)
+                if tipo_condicao not in ('inteiro', 'logico'):
+                    raise ErroCompilacao(f'Linha {n}: condição exige inteiro ou logico.')
                 verdadeiro, i = bloco(i+1, profundidade+1, em_laco)
                 falso = []
                 if i < len(normalizadas) and normalizadas[i][1] == ['senao', '{']:
@@ -144,7 +169,9 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 adicionar(('se', cond, verdadeiro, falso), n, t)
                 continue
             if len(t) >= 3 and t[0] == 'enquanto' and t[-1] == '{':
-                cond, _ = expressao_tipada(t[1:-1], n)
+                cond, tipo_condicao = expressao_tipada(t[1:-1], n)
+                if tipo_condicao not in ('inteiro', 'logico'):
+                    raise ErroCompilacao(f'Linha {n}: condição exige inteiro ou logico.')
                 corpo, i = bloco(i+1, profundidade+1, True)
                 adicionar(('enquanto', cond, corpo), n, t)
                 continue
@@ -215,7 +242,9 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                         raise ErroCompilacao(f'Linha {n}: texto inválido.') from exc
                     adicionar(('texto', valor + '\n'), n, t)
                 else:
-                    arvore, _ = expressao_tipada(expr, n)
+                    arvore, tipo_impresso = expressao_tipada(expr, n)
+                    if tipo_impresso not in ('inteiro', 'logico'):
+                        raise ErroCompilacao(f'Linha {n}: escreva exige número, lógico ou buffer de texto.')
                     adicionar(('imprima_num', arvore), n, t)
             elif t[0] in ('copie', 'junte') and len(t) >= 6 and t[1] == '(' and t[-1] == ')':
                 if t.count(',') != 1:
@@ -235,6 +264,12 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f'Linha {n}: nome de variável inválido.')
                 if contexto.declarado_neste_escopo(str(nome)) or nome in reservadas:
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' duplicada ou reservada.")
+                if len(t) == 4 and t[2] == ':' and str(t[3]) in registros:
+                    tipo_nome = str(t[3])
+                    interno = registrar(str(nome), ('registro', tipo_nome, registros[tipo_nome]), n)
+                    adicionar(('crie_registro', interno, tuple(contexto.campos_registro[interno].values())), n, t)
+                    i += 1
+                    continue
                 if len(t) == 7 and t[2:4] == [':', 'texto'] and t[4] == '[' and t[6] == ']':
                     literal = t[5]
                     if not literal.isascii() or not literal.isdecimal():
@@ -272,6 +307,13 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f"Linha {n}: use 'seja nome = valor' ou 'seja nome: inteiro = valor'.")
                 interno = registrar(str(nome), inferido, n)
                 adicionar(('atribua', interno, arvore), n, t)
+            elif len(t) >= 5 and t[1] == '.' and t[3] == '=':
+                nome_base = contexto.resolver(str(t[0]))
+                if nome_base not in contexto.campos_registro or str(t[2]) not in contexto.campos_registro[nome_base]:
+                    raise ErroCompilacao(f'Linha {n}: campo de registro desconhecido.')
+                campo = contexto.campos_registro[nome_base][str(t[2])]
+                valor, _ = expressao_tipada(t[4:], n, tipos[campo])
+                adicionar(('atribua', campo, valor), n, t)
             elif len(t) >= 5 and '[' in t and ']' in t and '=' in t and t.index('[') < t.index(']') < t.index('='):
                 igual = t.index('=')
                 nome, indice, tamanho = indice_lista(t[:igual], n)
@@ -295,7 +337,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     if not instrucoes:
         raise ErroCompilacao('Escreva pelo menos uma instrução dentro de inicio.')
     programa = Programa(instrucoes, variaveis, importa, tipos,
-                        escopos_locais=contexto.usou_locais)
+                        escopos_locais=contexto.usou_locais, registros=registros,
+                        campos_registro=contexto.campos_registro)
     if _retorno is not None:
         def retorna_em_todos_caminhos(bloco):
             for instrucao in bloco:
@@ -309,15 +352,16 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             raise ErroCompilacao(f'Linha {normalizadas[0][0]}: função deve retornar um valor em todos os caminhos.')
         return programa
     for nome, parametros, retorno, n, corpo in definicoes:
-        ctx = ContextoSemantico(importa, assinaturas)
+        ctx = ContextoSemantico(importa, assinaturas, registros)
         internos = []
         for variavel, tipo in parametros:
             if variavel in reservadas:
                 raise ErroCompilacao(f'Linha {n}: parâmetro usa palavra reservada: {variavel}.')
-            internos.append((ctx.registrar(variavel, tipo, n), tipo))
+            tipo_var = ('registro', tipo, registros[tipo]) if tipo in registros else tipo
+            internos.append((ctx.registrar(variavel, tipo_var, n), tipo))
         corpo_funcao = analisar_programa('', _linhas=[(n, ['inicio', '{'])] + corpo,
                                          _contexto=ctx, _assinaturas=assinaturas,
-                                         _retorno=retorno)
+                                         _retorno=retorno, _registros=registros)
         programa.funcoes[nome] = Funcao(nome, tuple(internos), retorno, corpo_funcao)
     # Chamadas recursivas serão introduzidas com controle explícito de
     # profundidade e sondagem dos quadros em cada chamada. Nesta etapa,
@@ -361,17 +405,17 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
 
     dependencias = {nome: chamadas_bloco(funcao.programa.instrucoes)
                     for nome, funcao in programa.funcoes.items()}
-    visitados, ativos = set(), set()
-    def verificar_ciclos(nome):
-        if nome in ativos:
-            raise ErroCompilacao(f'Função {nome!r}: recursão ainda indisponível nesta versão.')
-        if nome in visitados:
-            return
-        ativos.add(nome)
-        for destino in dependencias[nome]:
-            verificar_ciclos(destino)
-        ativos.remove(nome)
-        visitados.add(nome)
+    # Detecta ciclos diretos e indiretos e habilita proteção de pilha
+    # somente nas funções realmente recursivas.
     for nome in dependencias:
-        verificar_ciclos(nome)
+        pendentes = list(dependencias[nome])
+        visitados = set()
+        while pendentes:
+            atual = pendentes.pop()
+            if atual == nome:
+                programa.funcoes[nome].recursiva = True
+                break
+            if atual not in visitados:
+                visitados.add(atual)
+                pendentes.extend(dependencias.get(atual, ()))
     return programa

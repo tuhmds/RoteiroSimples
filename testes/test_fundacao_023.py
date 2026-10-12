@@ -172,15 +172,16 @@ class TestesFundacao(unittest.TestCase):
         }'''
         self.executar(fonte, '22\n')
 
-    def test_recursao_proibida_enquanto_nao_houver_limite(self):
+    def test_recursao_reconhecida_e_limitada(self):
         fonte = 'funcao f(n: inteiro) -> inteiro {\n retorne f(n)\n}\ninicio {\n escreva(f(1))\n}'
-        with self.assertRaisesRegex(ErroCompilacao, 'recursão'):
-            analisar_programa(fonte)
+        programa = analisar_programa(fonte)
+        self.assertTrue(programa.funcoes['f'].recursiva)
         fonte2 = ('funcao f(n: inteiro) -> inteiro {\n retorne g(n)\n}\n'
                   'funcao g(n: inteiro) -> inteiro {\n retorne f(n)\n}\n'
                   'inicio {\n escreva(1)\n}')
-        with self.assertRaisesRegex(ErroCompilacao, 'recursão'):
-            analisar_programa(fonte2)
+        programa2 = analisar_programa(fonte2)
+        self.assertTrue(programa2.funcoes['f'].recursiva)
+        self.assertTrue(programa2.funcoes['g'].recursiva)
 
     def test_mais_de_256_locais_e_pilha_sondada(self):
         fonte = ('inicio {\n' + '\n'.join(f'seja v{i} = {i}' for i in range(900))

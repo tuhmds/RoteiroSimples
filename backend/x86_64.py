@@ -149,15 +149,38 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0):
             raise ValueError(f'Função sem rótulo nativo: {nome}.')
         # Convenção privada RS: argumentos empilhados da esquerda para a direita.
         # Pad antes dos argumentos mantém RSP alinhado em 16 bytes na chamada.
-        ajustar = (pilha_extra + len(argumentos)) % 2
+        # Parâmetros de registros são copiados por valor, campo a campo.
+        # Uma última palavra oculta carrega a utilização de pilha acumulada
+        # para que chamadas recursivas não saltem a página de guarda.
+        assinatura = g.funcoes[nome].parametros
+        palavras = sum(len(g.registros[t]) if t in g.registros else 1
+                       for _, t in assinatura)
+        ajustar = (pilha_extra + palavras + 1) % 2
         if ajustar:
-            g.bytes(b'\x48\x83\xEC\x08')  # sub rsp,8
-        for i, argumento in enumerate(argumentos):
-            expressao(g, argumento, variaveis, windows, registradores,
-                     pilha_extra + ajustar + i)
-            g.bytes(b'\x50')  # push rax
+            g.bytes(b'\x48\x83\xEC\x08')
+        empilhados = 0
+        for argumento, (_, tipo_parametro) in zip(argumentos, assinatura):
+            if tipo_parametro in g.registros:
+                nome_base = argumento[1]
+                for campo, _ in g.registros[tipo_parametro]:
+                    interno = g.campos_atual[nome_base][campo]
+                    offset = deslocamento_variavel(variaveis, interno, windows)
+                    g.bytes(b'\x48\x8B\x85' + struct.pack('<i', offset))
+                    g.bytes(b'\x50')
+                    empilhados += 1
+            else:
+                expressao(g, argumento, variaveis, windows, registradores,
+                         pilha_extra + ajustar + empilhados)
+                g.bytes(b'\x50')
+                empilhados += 1
+        if '__rs_uso_pilha' in variaveis:
+            offset = deslocamento_variavel(variaveis, '__rs_uso_pilha', windows)
+            g.bytes(b'\x48\x8B\x85' + struct.pack('<i', offset))
+        else:
+            carregar_numero(g, 0)
+        g.bytes(b'\x50')  # palavra oculta de utilização de pilha
         g.chamada(f'funcao_{nome}')
-        limpar = 8 * (len(argumentos) + ajustar)
+        limpar = 8 * (palavras + 1 + ajustar)
         if limpar:
             if limpar < 128:
                 g.bytes(b'\x48\x83\xC4' + struct.pack('<B', limpar))
@@ -652,6 +675,8 @@ def reservar_pilha(g, bytes_reservados):
 def montar_codigo(programa, windows, emissor_alternativo=None):
     g = Gerador()
     g.funcoes = getattr(programa, 'funcoes', {})
+    g.registros = getattr(programa, 'registros', {})
+    g.campos_atual = getattr(programa, 'campos_registro', {})
     funcao_atual = None
     variaveis = programa.variaveis
     mensagens = {}
@@ -767,6 +792,11 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 g.bytes(b'\x48\x83\xC4\x08\x59')  # restaura índice negativo em RCX
                 offset = deslocamento_variavel(variaveis, nome, windows)
                 g.bytes(b'\x48\x89\x84\xCD' + struct.pack('<i', offset))  # store RAX
+            elif op[0] == 'crie_registro':
+                for campo in op[2]:
+                    carregar_numero(g, 0)
+                    offset = deslocamento_variavel(variaveis, campo, windows)
+                    g.bytes(b'\x48\x89\x85' + struct.pack('<i', offset))
             elif op[0] == 'atribua':
                 expressao(g, op[2], variaveis, windows)
                 offset = deslocamento_variavel(variaveis, op[1], windows)
@@ -862,23 +892,43 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     # genuínas, sem expansão textual das funções (inclusive chamadas aninhadas).
     for nome, funcao in g.funcoes.items():
         funcao_atual = nome
-        variaveis = funcao.programa.variaveis
+        variaveis = dict(funcao.programa.variaveis)
         tipos = funcao.programa.tipos
+        g.campos_atual = funcao.programa.campos_registro
         n_slots = _total_slots(funcao.programa)
+        variaveis['__rs_uso_pilha'] = n_slots
         g.marcar(f'funcao_{nome}')
         if windows:
-            n_frame = ((n_slots*8 + 0x38 + 15)//16)*16+8
+            n_frame = (((n_slots+1)*8 + 0x38 + 15)//16)*16+8
             g.bytes(b'\x55\x48\x89\xE5\x53')
-            reservar_pilha(g, n_frame)
         else:
-            n_frame = alinhar(n_slots*8, 16)
+            n_frame = alinhar((n_slots+1)*8, 16)
             g.bytes(b'\x55\x48\x89\xE5')
-            if n_frame:
-                reservar_pilha(g, n_frame)
-        total_args = len(funcao.parametros)
-        for pos, (interno, _tipo) in enumerate(funcao.parametros):
-            g.bytes(b'\x48\x8B\x85' + struct.pack('<i', 16 + 8*(total_args-pos-1)))
-            g.bytes(b'\x48\x89\x85' + struct.pack('<i', deslocamento_variavel(variaveis, interno, windows)))
+        # A profundidade é limitada por bytes acumulados de quadros; o
+        # controle ocorre ANTES de reservar a pilha da chamada atual.
+        g.bytes(b'\x48\x8B\x45\x10')  # mov rax,[rbp+16]
+        custo = n_frame + 128  # margem conservadora para CALL, argumentos e temporários
+        if custo > 0x7FFFFFFF:
+            g.salto('erro_recursao_limite')
+        else:
+            g.bytes(b'\x48\x05' + struct.pack('<I', custo))
+            g.salto('erro_recursao_limite', 'jo')
+            if funcao.recursiva:
+                g.bytes(b'\x48\x3D' + struct.pack('<I', 1024 * 1024))
+                g.salto('erro_recursao_limite', 'ja')
+        reservar_pilha(g, n_frame)
+        g.bytes(b'\x48\x89\x85' + struct.pack('<i', deslocamento_variavel(variaveis, '__rs_uso_pilha', windows)))
+        total_palavras = sum(len(g.registros[t]) if t in g.registros else 1
+                             for _, t in funcao.parametros)
+        indice_palavra = 0
+        for interno, tipo in funcao.parametros:
+            destinos = (list(funcao.programa.campos_registro[interno].values())
+                        if tipo in g.registros else [interno])
+            for destino in destinos:
+                deslocamento_origem = 24 + 8 * (total_palavras - indice_palavra - 1)
+                g.bytes(b'\x48\x8B\x85' + struct.pack('<i', deslocamento_origem))
+                g.bytes(b'\x48\x89\x85' + struct.pack('<i', deslocamento_variavel(variaveis, destino, windows)))
+                indice_palavra += 1
         emitir_bloco(funcao.programa.instrucoes)
         g.marcar(f'funcao_fim_{nome}')
         if windows:
@@ -887,6 +937,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             g.bytes(b'\x48\x89\xEC\x5D\xC3')
     funcao_atual = None
     variaveis = programa.variaveis
+    g.campos_atual = getattr(programa, 'campos_registro', {})
     tipos = getattr(programa, 'tipos', {})
     imprime_inteiro(g, windows)
     if tem_leitura:
@@ -915,6 +966,19 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             g.relativo(b'\xFF\x15', 'ExitProcess')
         else:
             escreve_literal(g, indice, msg, False, 'erro')
+            g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+    if getattr(programa, 'funcoes', {}):
+        indice = len(mensagens)
+        msg = 'Erro: limite seguro de pilha em chamada recursiva.\n'
+        mensagens[indice] = msg
+        g.marcar('erro_recursao_limite')
+        if windows:
+            g.bytes(b'\x48\x83\xE4\xF0')
+        escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
+        if windows:
+            g.bytes(b'\xB9\x01\x00\x00\x00')
+            g.relativo(b'\xFF\x15', 'ExitProcess')
+        else:
             g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
     if any(isinstance(t, tuple) and t[0] == 'lista' for t in getattr(programa, 'tipos', {}).values()):
         indice = len(mensagens)

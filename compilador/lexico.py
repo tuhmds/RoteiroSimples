@@ -3,7 +3,7 @@ import re
 from .erros import ErroCompilacao
 from .ast import PosicaoFonte
 
-REGEX = re.compile(r'\s+|"(?:\\.|[^"\\])*"|\d+|[^\W\d]\w*|==|!=|<=|>=|[()+*/%=,;{}<>!:\[\]-]|.', re.UNICODE)
+REGEX = re.compile(r'\s+|"(?:\\.|[^"\\])*"|\d+|[^\W\d]\w*|==|!=|<=|>=|[()+*/%=,;{}<>!:\[\].-]|.', re.UNICODE)
 
 class Token(str):
     """Token com localização 1-based; comparável a str normal."""
@@ -36,7 +36,7 @@ def tokens(linha, numero):
             )
         if valor.startswith('//'):
             break
-        if len(valor) == 1 and valor not in '+-*/%=,;{}()<>!:[]' and not (valor.isdecimal() or valor.isalpha()):
+        if len(valor) == 1 and valor not in '+-*/%=,;{}()<>!:[].' and not (valor.isdecimal() or valor.isalpha()):
             raise ErroCompilacao(f"Linha {numero}, coluna {achado.start()+1}: caractere inválido: {valor!r}.")
         encontrados.append(Token(valor, numero, achado.start()+1))
     return encontrados

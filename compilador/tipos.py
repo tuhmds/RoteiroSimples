@@ -28,6 +28,8 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
         return retorno
     if categoria == 'var':
         tipo = tipos[expr[1]]
+        if isinstance(tipo, tuple) and tipo[0] == 'registro':
+            return tipo[1]
         if isinstance(tipo, tuple):
             raise ErroCompilacao(f'Linha {linha}: {tipo[0]} {expr[1]!r} não é um valor numérico.')
         return tipo

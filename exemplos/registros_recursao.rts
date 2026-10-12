@@ -1,0 +1,28 @@
+tipo Pedido {
+    preco: inteiro
+    quantidade: inteiro
+    ativo: logico
+}
+funcao calcular(pedido: Pedido) -> inteiro {
+    se pedido.ativo {
+        retorne pedido.preco * pedido.quantidade
+    } senao {
+        retorne 0
+    }
+}
+funcao fatorial(n: inteiro) -> inteiro {
+    se n <= 1 {
+        retorne 1
+    } senao {
+        retorne n * fatorial(n - 1)
+    }
+}
+inicio {
+    seja pedido: Pedido
+    pedido.preco = 25
+    pedido.quantidade = 4
+    pedido.ativo = verdadeiro
+    escreva(calcular(pedido))
+    escreva(fatorial(5))
+    escreva(pedido.preco)
+}

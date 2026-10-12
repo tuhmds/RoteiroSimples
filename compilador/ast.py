@@ -34,6 +34,8 @@ class Programa:
     tipos: dict  # metadados estáticos; armazenamento de 8 bytes por variável
     funcoes: dict = field(default_factory=dict)
     escopos_locais: bool = False
+    registros: dict = field(default_factory=dict)
+    campos_registro: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -42,6 +44,7 @@ class Funcao:
     parametros: tuple  # ((nome_interno, tipo), ...)
     retorno: str
     programa: Programa
+    recursiva: bool = False
 
 
 def formatar_ast(programa):
