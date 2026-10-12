@@ -15,6 +15,7 @@ from compilador.cfg import construir_cfg
 from compilador.ssa import construir_ssa
 from compilador.ssa_baixamento import planejar_copias_phi, formatar_copias_phi
 from backend import compilar
+from tamanho_codigo import tamanho_codigo_elf
 
 
 def executar(programa, nivel, entrada=''):
@@ -60,9 +61,13 @@ class TestesSSA013(unittest.TestCase):
                              for i in ir3.instrucoes))
         for alvo in ('linux', 'windows'):
             with self.subTest(alvo=alvo):
-                self.assertLess(len(compilar(programa, alvo, True, 3)),
-                                len(compilar(programa, alvo, True, 2)) if alvo == 'linux'
-                                else len(compilar(programa, alvo, True, 2)) + 1)
+                novo = compilar(programa, alvo, True, 3)
+                anterior = compilar(programa, alvo, True, 2)
+                if alvo == 'linux':
+                    self.assertLess(tamanho_codigo_elf(novo),
+                                    tamanho_codigo_elf(anterior))
+                else:
+                    self.assertLess(len(novo), len(anterior) + 1)
         if sys.platform in ('linux', 'win32'):
             self.assertEqual(executar(programa, 3)[1], '7\n')
 
