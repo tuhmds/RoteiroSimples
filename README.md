@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.41
+# RoteiroSimples (RS) — versão experimental 0.41.1
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,22 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.41.1 — Isolamento de dados ELF e diagnóstico Windows
+
+No Linux, as mensagens constantes passaram a ocupar uma região
+`PT_LOAD` com leitura permitida e **execução proibida**, separada do
+código `r-xp`. Testes verificam as permissões reais em
+`/proc/<pid>/maps` e executam programas de `-O 0` a `-O 8`.
+
+No Windows, `DYNAMIC_BASE` e `NX_COMPAT` continuam ativos. A investigação
+da alta entropia localizou uma escrita por ponteiro inválido durante
+uma chamada do sistema para fechar arquivo. Ainda não identificamos
+a origem exata da incompatibilidade; `HIGH_ENTROPY_VA` permanece
+**desligado**. Também não fingimos suporte a `.pdata`/`.xdata`
+sem metadados de desenrolamento corretos.
+
+[Relatório, limites e critérios de segurança](docs/MEMORIA_EXECUTAVEIS_RS_0_41_1.md).
 
 ## RS 0.41 — Proteção do carregamento ELF e PE
 
