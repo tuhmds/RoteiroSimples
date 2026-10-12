@@ -1,7 +1,7 @@
 """Emissão nativa de instruções AMD64, leitura/escrita e saltos."""
 import struct
 from compilador.erros import ErroCompilacao
-from . import listas_dinamicas, arquivos, arquivos_posicionais
+from . import listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros
 from .base import Emissor, alinhar
 
 class Gerador(Emissor):
@@ -150,14 +150,14 @@ def _palavras_tipo(tipo, registros):
         return sum(_palavras_tipo(t, registros) for _, t in tipo[2])
     if isinstance(tipo, tuple) and tipo[0] == 'lista':
         return tipo[2]
-    if isinstance(tipo, tuple) and tipo[0] == 'texto':
+    if isinstance(tipo, tuple) and tipo[0] in ('texto', 'bytes'):
         return 1 + (tipo[1] + 7) // 8
     return 1
 
 
 def _composto(tipo, registros):
     return (isinstance(tipo, str) and tipo in registros) or (
-        isinstance(tipo, tuple) and tipo[0] in ('registro', 'lista', 'texto'))
+        isinstance(tipo, tuple) and tipo[0] in ('registro', 'lista', 'texto', 'bytes'))
 
 
 def _copiar_palavras(g, origem, destino, quantidade):
@@ -275,9 +275,13 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
         listas_dinamicas.quantidade(g, variaveis, expr[1], windows, capacidade=True)
     elif tipo == 'indice_lista_dinamica':
         listas_dinamicas.ler_indice(g, variaveis, expr[1], expr[2], windows, expressao)
-    elif tipo == 'tamanho_texto':
+    elif tipo in ('tamanho_texto', 'tamanho_bytes'):
         offset = deslocamento_variavel(variaveis, expr[1], windows)
         g.bytes(b'\x48\x8B\x85' + struct.pack('<i', offset))
+    elif tipo == 'indice_bytes':
+        bytes_seguros.ler(g, expr[1], expr[2], variaveis, g.tipos_atual,
+                          windows, expressao, deslocamento_variavel,
+                          pilha_extra=pilha_extra)
     elif tipo == 'indice':
         nome, indice, tamanho = expr[1:]
         _checar_indice(g, indice, tamanho, variaveis, windows, pilha_extra)
@@ -785,6 +789,14 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         for f in g.funcoes.values() for t in f.programa.tipos.values())
     tem_listas = tem_dinamicas or any(isinstance(t, tuple) and t[0] == 'lista' for t in tipos.values())
     tem_textos = any(isinstance(t, tuple) and t[0] == 'texto' for t in tipos.values())
+    tem_bytes = any(isinstance(t, tuple) and t[0] == 'bytes'
+                    for t in tipos.values()) or any(
+        isinstance(t, tuple) and t[0] == 'bytes'
+        for f in g.funcoes.values() for t in f.programa.tipos.values())
+    tem_encerre = any(op[0] == 'encerre' for op in percorrer_instrucoes(programa.instrucoes)) or any(
+        op[0] == 'encerre' for f in g.funcoes.values()
+        for op in percorrer_instrucoes(f.programa.instrucoes))
+    g.tipos_atual = tipos
     tem_leitura_texto = any(op[0] == 'leia_texto' for op in percorrer_instrucoes(programa.instrucoes))
     slots = _total_slots(programa)
     memoria_cache = ((256 if windows else TAMANHO_CACHE_ENTRADA) + 16) if tem_leitura else 0
@@ -826,7 +838,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 n = len(mensagens)
                 mensagens[n] = op[1]
                 escreve_literal(g, n, op[1], windows)
-            elif op[0] == 'crie_texto':
+            elif op[0] in ('crie_texto', 'crie_bytes'):
                 nome, capacidade = op[1:]
                 dados, comprimento, _ = _endereco_buffer(variaveis, nome, tipos, windows)
                 g.bytes(b'\x31\xC0')
@@ -846,9 +858,15 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             elif op[0] == 'modifique_texto':
                 _, modo, nome, origem = op
                 _copiar_para_buffer(g, nome, origem, modo=='junte', variaveis, tipos, windows, mensagens)
-            elif op[0] == 'limpe_texto':
+            elif op[0] in ('limpe_texto', 'limpe_bytes'):
                 comprimento = deslocamento_variavel(variaveis, op[1], windows)
                 g.bytes(b'\x31\xC0\x48\x89\x85' + struct.pack('<i', comprimento))
+            elif op[0] == 'adicione_byte':
+                bytes_seguros.acrescentar(g, op[1], op[2], variaveis, tipos,
+                    windows, expressao, deslocamento_variavel)
+            elif op[0] == 'atribua_byte':
+                bytes_seguros.substituir(g, op[1], op[2], op[3], variaveis, tipos,
+                    windows, expressao, deslocamento_variavel)
             elif op[0] == 'imprima_texto':
                 _imprimir_buffer(g, op[1], variaveis, tipos, windows)
                 msg_indice = len(mensagens)
@@ -1060,6 +1078,17 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 else:
                     expressao(g, op[1], variaveis, windows)
                 g.salto(f'funcao_fim_{funcao_atual}')
+            elif op[0] == 'encerre':
+                expressao(g, op[1], variaveis, windows)
+                g.bytes(b'\x48\x85\xC0')
+                g.salto('erro_codigo_saida', 'js')
+                g.bytes(b'\x48\x3D\xFF\x00\x00\x00')
+                g.salto('erro_codigo_saida', 'ja')
+                if windows:
+                    g.bytes(b'\x48\x89\xC1\x48\x83\xE4\xF0')
+                    g.relativo(b'\xFF\x15', 'ExitProcess')
+                else:
+                    g.bytes(b'\x48\x89\xC7\xB8\x3C\x00\x00\x00\x0F\x05')
             elif op[0] == 'pare':
                 if laco is None:
                     raise ValueError('Uso de pare fora de um laço (erro interno).')
@@ -1090,6 +1119,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         variaveis = dict(funcao.programa.variaveis)
         tipos = funcao.programa.tipos
         g.campos_atual = funcao.programa.campos_registro
+        g.tipos_atual = tipos
         n_slots = _total_slots(funcao.programa)
         variaveis['__rs_uso_pilha'] = n_slots
         g.marcar(f'funcao_{nome}')
@@ -1147,6 +1177,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     variaveis = programa.variaveis
     g.campos_atual = getattr(programa, 'campos_registro', {})
     tipos = getattr(programa, 'tipos', {})
+    g.tipos_atual = tipos
     if tem_dinamicas:
         listas_dinamicas.emitir_rotinas(g, windows)
     if tem_arquivos:
@@ -1255,6 +1286,35 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 g.relativo(b'\xFF\x15', 'ExitProcess')
             else:
                 g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+    if tem_bytes:
+        for nome, mensagem in (
+            ('erro_indice_bytes', 'Erro: indice fora dos bytes validos.\n'),
+            ('erro_valor_byte', 'Erro: byte deve estar entre 0 e 255.\n'),
+            ('erro_bytes_capacidade', 'Erro: capacidade do buffer binario excedida.\n')):
+            indice = len(mensagens)
+            mensagens[indice] = mensagem
+            g.marcar(nome)
+            if windows:
+                g.bytes(b'\x48\x83\xE4\xF0')
+            escreve_literal(g, indice, mensagem, windows, 'saida' if windows else 'erro')
+            if windows:
+                g.bytes(b'\xB9\x01\x00\x00\x00')
+                g.relativo(b'\xFF\x15', 'ExitProcess')
+            else:
+                g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+    if tem_encerre:
+        indice = len(mensagens)
+        mensagem = 'Erro: codigo de saida deve estar entre 0 e 255.\n'
+        mensagens[indice] = mensagem
+        g.marcar('erro_codigo_saida')
+        if windows:
+            g.bytes(b'\x48\x83\xE4\xF0')
+        escreve_literal(g, indice, mensagem, windows, 'saida' if windows else 'erro')
+        if windows:
+            g.bytes(b'\xB9\x01\x00\x00\x00')
+            g.relativo(b'\xFF\x15', 'ExitProcess')
+        else:
+            g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
     if tem_arquivos:
         for nome, mensagem in (
                 ('erro_arquivo_abrir', 'Erro: nao foi possivel abrir o arquivo.\n'),
