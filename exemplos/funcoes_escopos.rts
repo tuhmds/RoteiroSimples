@@ -1,0 +1,20 @@
+funcao calcular_total(preco: inteiro, quantidade: inteiro) -> inteiro {
+    seja total = preco * quantidade
+    retorne total
+}
+
+funcao maior_de_idade(idade: inteiro) -> logico {
+    retorne idade >= 18
+}
+
+inicio {
+    seja preco = 25
+    escreva("RS 0.23 - Funções e escopos")
+    escreva(calcular_total(preco, 4))
+    se maior_de_idade(20) {
+        seja aviso: texto[48]
+        copie(aviso, "Maior de idade")
+        escreva(aviso)
+    }
+    escreva(preco)
+}

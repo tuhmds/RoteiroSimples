@@ -121,9 +121,9 @@ def deslocamento_variavel(variaveis, nome, windows):
     return -(16 + indice*8) if windows else -(8 + indice*8)
 
 
-def _checar_indice(g, expr_indice, tamanho, variaveis, windows):
+def _checar_indice(g, expr_indice, tamanho, variaveis, windows, pilha_extra=0):
     # Sempre valida o índice ANTES do deslocamento, inclusive para negativos.
-    expressao(g, expr_indice, variaveis, windows)
+    expressao(g, expr_indice, variaveis, windows, pilha_extra=pilha_extra)
     g.bytes(b'\x48\x85\xC0')  # test rax,rax
     g.salto('erro_indice_lista', 'js')
     g.bytes(b'\x48\x3D' + struct.pack('<I', tamanho))  # cmp rax, tamanho
@@ -139,16 +139,36 @@ def _total_slots(programa):
                 for tipo in (getattr(programa, 'tipos', {}).get(nome, 'inteiro'),)), default=0)
 
 
-def expressao(g, expr, variaveis, windows, registradores=None):
+def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0):
     tipo = expr[0]
     if tipo in ('numero', 'logico'):
         carregar_numero(g, expr[1])
+    elif tipo == 'chamada':
+        nome, argumentos = expr[1], expr[2]
+        if nome not in getattr(g, 'funcoes', {}):
+            raise ValueError(f'Função sem rótulo nativo: {nome}.')
+        # Convenção privada RS: argumentos empilhados da esquerda para a direita.
+        # Pad antes dos argumentos mantém RSP alinhado em 16 bytes na chamada.
+        ajustar = (pilha_extra + len(argumentos)) % 2
+        if ajustar:
+            g.bytes(b'\x48\x83\xEC\x08')  # sub rsp,8
+        for i, argumento in enumerate(argumentos):
+            expressao(g, argumento, variaveis, windows, registradores,
+                     pilha_extra + ajustar + i)
+            g.bytes(b'\x50')  # push rax
+        g.chamada(f'funcao_{nome}')
+        limpar = 8 * (len(argumentos) + ajustar)
+        if limpar:
+            if limpar < 128:
+                g.bytes(b'\x48\x83\xC4' + struct.pack('<B', limpar))
+            else:
+                g.bytes(b'\x48\x81\xC4' + struct.pack('<I', limpar))
     elif tipo == 'tamanho_texto':
         offset = deslocamento_variavel(variaveis, expr[1], windows)
         g.bytes(b'\x48\x8B\x85' + struct.pack('<i', offset))
     elif tipo == 'indice':
         nome, indice, tamanho = expr[1:]
-        _checar_indice(g, indice, tamanho, variaveis, windows)
+        _checar_indice(g, indice, tamanho, variaveis, windows, pilha_extra)
         offset = deslocamento_variavel(variaveis, nome, windows)
         g.bytes(b'\x48\x8B\x84\xC5' + struct.pack('<i', offset))  # mov rax,[rbp+rax*8+disp]
     elif tipo == 'var':
@@ -163,23 +183,23 @@ def expressao(g, expr, variaveis, windows, registradores=None):
             # Menor inteiro: o valor positivo 2^63 não cabe, mas sua negação sim.
             carregar_numero(g, -(1 << 63))
         else:
-            expressao(g, expr[1], variaveis, windows, registradores)
+            expressao(g, expr[1], variaveis, windows, registradores, pilha_extra)
             g.bytes(b'\x48\xF7\xD8')  # neg rax
             g.salto('erro_overflow_aritmetico', 'jo')
     elif tipo == 'comparacao':
         _, op, esquerda, direita = expr
-        expressao(g, esquerda, variaveis, windows, registradores)
+        expressao(g, esquerda, variaveis, windows, registradores, pilha_extra)
         g.bytes(b'\x50')  # salva o operando esquerdo
-        expressao(g, direita, variaveis, windows, registradores)
+        expressao(g, direita, variaveis, windows, registradores, pilha_extra + 1)
         g.bytes(b'\x59')  # rcx = operando esquerdo
         g.bytes(b'\x48\x39\xC1')  # cmp rcx, rax (inteiros com sinal)
         codigo = {'==': 0x94, '!=': 0x95, '<': 0x9C, '<=': 0x9E, '>': 0x9F, '>=': 0x9D}[op]
         g.bytes(bytes((0x0F, codigo, 0xC0)) + b'\x0F\xB6\xC0')  # setcc al; movzx eax,al
     elif tipo == 'bin':
         _, op, esquerda, direita = expr
-        expressao(g, esquerda, variaveis, windows, registradores)
+        expressao(g, esquerda, variaveis, windows, registradores, pilha_extra)
         g.bytes(b'\x50')  # push rax
-        expressao(g, direita, variaveis, windows, registradores)
+        expressao(g, direita, variaveis, windows, registradores, pilha_extra + 1)
         g.bytes(b'\x59')  # pop rcx: esquerda
         if op == '+':
             g.bytes(b'\x48\x01\xC8')  # add rax, rcx
@@ -603,8 +623,36 @@ def ler_buffer_texto(g, windows):
     g.bytes(b'\x5E\x41\x5F\x41\x5E\x41\x5D\xC3')
 
 
+def reservar_pilha(g, bytes_reservados):
+    """Reserva quadro com sondagem de páginas, sem saltar a página de guarda.
+
+    A sondagem é necessária para crescimento seguro da pilha Windows x64.
+    Usamos também no Linux para evitar pular regiões não mapeadas.
+    """
+    if bytes_reservados <= 0:
+        return
+    if bytes_reservados < 4096:
+        g.bytes(b'\x48\x81\xEC' + struct.pack('<I', bytes_reservados))
+        return
+    repeticoes, restante = divmod(bytes_reservados, 4096)
+    identificador = g.proxima_condicao
+    g.proxima_condicao += 1
+    rotulo = f'sondagem_pilha_{identificador}'
+    g.bytes(b'\xB9' + struct.pack('<I', repeticoes))
+    g.marcar(rotulo)
+    g.bytes(b'\x48\x81\xEC' + struct.pack('<I', 4096))
+    g.bytes(b'\xC6\x04\x24\x00')  # escreve na página atual
+    g.bytes(b'\xFF\xC9')                # dec ecx
+    g.salto(rotulo, 'jnz')
+    if restante:
+        g.bytes(b'\x48\x81\xEC' + struct.pack('<I', restante))
+        g.bytes(b'\xC6\x04\x24\x00')
+
+
 def montar_codigo(programa, windows, emissor_alternativo=None):
     g = Gerador()
+    g.funcoes = getattr(programa, 'funcoes', {})
+    funcao_atual = None
     variaveis = programa.variaveis
     mensagens = {}
     tem_leitura = any(op[0] in ('leia_int', 'leia_indice', 'leia_texto') for op in percorrer_instrucoes(programa.instrucoes))
@@ -618,7 +666,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         n = slots
         frame = ((8 * n + memoria_cache + 0x38 + 15) // 16) * 16 + 8
         g.bytes(b'\x55\x48\x89\xE5\x53')  # push rbp; mov rbp,rsp; push rbx
-        g.bytes(b'\x48\x81\xEC' + struct.pack('<I', frame))
+        reservar_pilha(g, frame)
         g.bytes(b'\xB9' + struct.pack('<I', 65001))
         g.relativo(b'\xFF\x15', 'SetConsoleOutputCP')
         if tem_leitura_texto:
@@ -635,7 +683,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         frame = alinhar(slots * 8 + memoria_cache, 16)
         g.bytes(b'\x55\x48\x89\xE5')
         if frame:
-            g.bytes(b'\x48\x81\xEC' + struct.pack('<I', frame))
+            reservar_pilha(g, frame)
 
     if tem_leitura:
         offset_cursor, offset_quantidade, _ = _offsets_cache_entrada(slots, windows)
@@ -653,8 +701,19 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 nome, capacidade = op[1:]
                 dados, comprimento, _ = _endereco_buffer(variaveis, nome, tipos, windows)
                 g.bytes(b'\x31\xC0')
-                for k in range(1+(capacidade+7)//8):
-                    g.bytes(b'\x48\x89\x85' + struct.pack('<i', comprimento - 8*k))
+                total = 1 + (capacidade+7)//8
+                if total < 64:
+                    for k in range(total):
+                        g.bytes(b'\x48\x89\x85' + struct.pack('<i', comprimento - 8*k))
+                else:
+                    identificador = g.proxima_condicao
+                    g.proxima_condicao += 1
+                    rotulo = f'zerar_texto_{identificador}'
+                    g.bytes(b'\x48\x8D\xBD' + struct.pack('<i', comprimento))  # lea rdi, [rbp+disp]
+                    g.bytes(b'\xB9' + struct.pack('<I', total))
+                    g.marcar(rotulo)
+                    g.bytes(b'\x48\x89\x07\x48\x83\xEF\x08\xFF\xC9')
+                    g.salto(rotulo, 'jnz')
             elif op[0] == 'modifique_texto':
                 _, modo, nome, origem = op
                 _copiar_para_buffer(g, nome, origem, modo=='junte', variaveis, tipos, windows, mensagens)
@@ -678,14 +737,24 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 nome, tamanho = op[1:]
                 inicio = deslocamento_variavel(variaveis, nome, windows)
                 g.bytes(b'\x31\xC0')  # xor eax,eax
-                for k in range(tamanho):
-                    g.bytes(b'\x48\x89\x85' + struct.pack('<i', inicio-8*k))
+                if tamanho < 64:
+                    for k in range(tamanho):
+                        g.bytes(b'\x48\x89\x85' + struct.pack('<i', inicio-8*k))
+                else:
+                    identificador = g.proxima_condicao
+                    g.proxima_condicao += 1
+                    rotulo = f'zerar_lista_{identificador}'
+                    g.bytes(b'\x48\x8D\xBD' + struct.pack('<i', inicio))
+                    g.bytes(b'\xB9' + struct.pack('<I', tamanho))
+                    g.marcar(rotulo)
+                    g.bytes(b'\x48\x89\x07\x48\x83\xEF\x08\xFF\xC9')
+                    g.salto(rotulo, 'jnz')
             elif op[0] == 'atribua_indice':
                 _, nome, indice, valor, tamanho = op
                 # Avalia e verifica índice antes de avaliar valor. Preserva erro de índice.
                 _checar_indice(g, indice, tamanho, variaveis, windows)
                 g.bytes(b'\x50')  # push indice negativo
-                expressao(g, valor, variaveis, windows)
+                expressao(g, valor, variaveis, windows, pilha_extra=1)
                 g.bytes(b'\x59')  # pop rcx = indice negativo
                 offset = deslocamento_variavel(variaveis, nome, windows)
                 g.bytes(b'\x48\x89\x84\xCD' + struct.pack('<i', offset))
@@ -763,6 +832,11 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 g.bytes(b'\x48\x89\x85' + struct.pack('<i', deslocamento))
                 g.salto(inicio)
                 g.marcar(fim)
+            elif op[0] == 'retorne':
+                if funcao_atual is None:
+                    raise ValueError('Retorno fora de função (erro interno).')
+                expressao(g, op[1], variaveis, windows)
+                g.salto(f'funcao_fim_{funcao_atual}')
             elif op[0] == 'pare':
                 if laco is None:
                     raise ValueError('Uso de pare fora de um laço (erro interno).')
@@ -784,6 +858,36 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         g.relativo(b'\xFF\x15', 'ExitProcess')
     else:
         g.bytes(b'\xB8\x3C\x00\x00\x00\x31\xFF\x0F\x05')
+    # As definições usam quadros locais independentes e instruções CALL/RET
+    # genuínas, sem expansão textual das funções (inclusive chamadas aninhadas).
+    for nome, funcao in g.funcoes.items():
+        funcao_atual = nome
+        variaveis = funcao.programa.variaveis
+        tipos = funcao.programa.tipos
+        n_slots = _total_slots(funcao.programa)
+        g.marcar(f'funcao_{nome}')
+        if windows:
+            n_frame = ((n_slots*8 + 0x38 + 15)//16)*16+8
+            g.bytes(b'\x55\x48\x89\xE5\x53')
+            reservar_pilha(g, n_frame)
+        else:
+            n_frame = alinhar(n_slots*8, 16)
+            g.bytes(b'\x55\x48\x89\xE5')
+            if n_frame:
+                reservar_pilha(g, n_frame)
+        total_args = len(funcao.parametros)
+        for pos, (interno, _tipo) in enumerate(funcao.parametros):
+            g.bytes(b'\x48\x8B\x85' + struct.pack('<i', 16 + 8*(total_args-pos-1)))
+            g.bytes(b'\x48\x89\x85' + struct.pack('<i', deslocamento_variavel(variaveis, interno, windows)))
+        emitir_bloco(funcao.programa.instrucoes)
+        g.marcar(f'funcao_fim_{nome}')
+        if windows:
+            g.bytes(b'\x48\x8D\x65\xF8\x5B\x5D\xC3')  # restaura RBX e retorna
+        else:
+            g.bytes(b'\x48\x89\xEC\x5D\xC3')
+    funcao_atual = None
+    variaveis = programa.variaveis
+    tipos = getattr(programa, 'tipos', {})
     imprime_inteiro(g, windows)
     if tem_leitura:
         emitir_cache_entrada(g, windows, slots)

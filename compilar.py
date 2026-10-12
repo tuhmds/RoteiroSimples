@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.22: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.23: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import re
@@ -42,6 +42,14 @@ def main(argv=None):
     try:
         fonte_texto = op.fonte.read_text(encoding='utf-8-sig')
         programa = analisar_programa(fonte_texto)
+        possui_fundacao_nova = bool(programa.funcoes) or programa.escopos_locais
+        analises_restritas = (op.mostrar_ir or op.mostrar_cfg or op.salvar_cfg
+                or op.mostrar_fluxo or op.salvar_fluxo or op.mostrar_ssa or op.salvar_ssa
+                or op.mostrar_copias_phi or op.mostrar_alocacao
+                or op.mostrar_memory_ssa or op.salvar_memory_ssa
+                or op.mostrar_efeitos or op.salvar_efeitos)
+        if possui_fundacao_nova and analises_restritas:
+            raise ErroCompilacao('Análises avançadas de fluxo e memória para funções e escopos novos ainda não estão disponíveis. O código nativo funciona pelo gerador conservador.')
         if op.mostrar_ast:
             from compilador.ast import formatar_ast
             print(formatar_ast(programa))

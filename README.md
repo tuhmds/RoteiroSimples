@@ -1,6 +1,58 @@
-# RoteiroSimples (RS) — versão experimental 0.22
+# RoteiroSimples (RS) — versão experimental 0.23
 
 Linguagem experimental em português brasileiro, com compilador em Python 3.10+ que **gera diretamente instruções de máquina x86-64**, em executáveis ELF64 (Linux) e PE32+ (Windows). Os programas gerados não dependem do Python para executar. **Não usar em produção.**
+
+## Novo na RS 0.23 — fundação: escopos, funções e dimensionamento
+
+A RS continua com **comandos e identificadores sem acentos**, e mensagens,
+nomes públicos e terminologia técnica em **português brasileiro**. A prioridade
+desta versão é a estrutura da linguagem, não outro nível de otimização.
+
+```text
+funcao calcular_total(preco: inteiro, quantidade: inteiro) -> inteiro {
+    seja total = preco * quantidade
+    retorne total
+}
+
+inicio {
+    seja preco = 25
+    escreva(calcular_total(preco, 4))
+}
+```
+
+O programa imprime **100**, executando chamada e retorno reais em x86-64.
+
+**Implementado:**
+
+- Escopos léxicos para `se`, `senao`, `enquanto` e `para`, com sombreamento e
+  proibição de acesso a nomes locais depois que o bloco termina.
+- Funções antes do bloco `inicio`, com parâmetros `inteiro`/`logico`, tipo de
+  retorno explícito, `retorne`, chamadas encadeadas e quadros independentes
+  na pilha, usando convenção interna do compilador.
+- Verificação de quantidade e tipos de argumentos, retorno obrigatório em
+  todos os caminhos e diagnóstico de recursão direta ou indireta.
+- Memória local calculada por tamanho: foram removidos o teto de 256 slots,
+  a capacidade máxima arbitrária de listas e textos e o teto de 4 KiB das
+  seções Windows. O compilador respeita o limite real do endereçamento
+  relativo do gerador; usa sondagem de páginas para quadros grandes, e laços
+  de inicialização para listas/buffers de maior capacidade.
+- Compatibilidade com programas das versões anteriores e manutenção das
+  opções `-O 0` a `-O 8`. Nos programas que usam funções ou escopos locais,
+  a geração nativa é conservadora; as otimizações SSA desses casos ainda
+  precisam ser adaptadas aos novos escopos e quadros de chamada.
+
+**Ainda não implementado:** recursão segura, parâmetros e retornos compostos
+(textos/listas), entrada de dados dentro de funções, tipos criados pelo
+programador, memória dinâmica e verificação estática de tempo de vida.
+A política de escopo do contador `para` permanece compatível: um contador
+novo pertence ao bloco que contém o laço e continua acessível após ele.
+O limite prático de pilha depende do sistema operacional e do executável;
+não se promete alocação infinita nem segurança completa de memória.
+
+Veja [Fundamentos da RS 0.23](docs/FUNDACAO_RS_0_23.md) e
+`exemplos/funcoes_escopos.rts`.
+
+---
 
 ## Novo na RS 0.22 — propagação de valores entre blocos
 

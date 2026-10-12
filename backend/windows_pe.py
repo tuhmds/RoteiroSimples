@@ -32,19 +32,19 @@ def construir_importacoes(base_rva, nomes):
     return conteudo, enderecos, inicio_iat, tabela
 
 def montar_pe(g, mensagens):
-    base_codigo, base_importacoes, base_dados = 0x1000, 0x2000, 0x3000
+    base_codigo = 0x1000
+    base_importacoes = alinhar(base_codigo + len(g.codigo), 0x1000)
     nomes = ['GetStdHandle', 'SetConsoleOutputCP', 'WriteFile', 'ExitProcess']
     if any(label in g.rotulos for label in ('ler_inteiro', 'ler_buffer_texto')):
         nomes.extend(['ReadFile', 'GetLastError'])
     if 'ler_buffer_texto' in g.rotulos:
         nomes.append('SetConsoleCP')
     importacoes, enderecos, inicio_iat, tamanho_iat = construir_importacoes(base_importacoes, nomes)
+    base_dados = alinhar(base_importacoes + len(importacoes), 0x1000)
     dados = bytearray()
     for i, msg in mensagens.items():
         enderecos[f'mensagem_{i}'] = base_dados + len(dados)
         dados += msg.encode('utf-8')
-    if max(len(g.codigo), len(importacoes), len(dados)) > 0x1000:
-        raise ErroCompilacao('Programa grande demais para as seções fixas da versão 0.8 (4 KiB).')
     g.finalizar(base_codigo, enderecos)
     secoes = [(b'.text', bytes(g.codigo), base_codigo, 0x60000020),
               (b'.idata', bytes(importacoes), base_importacoes, 0xC0000040),
@@ -71,7 +71,7 @@ def montar_pe(g, mensagens):
     struct.pack_into('<I', opt, 36, 0x200)
     struct.pack_into('<HHHH', opt, 40, 6, 0, 0, 0)
     struct.pack_into('<HH', opt, 48, 6, 0)
-    struct.pack_into('<I', opt, 56, 0x4000)
+    struct.pack_into('<I', opt, 56, alinhar(base_dados + max(1, len(dados)), 0x1000))
     struct.pack_into('<I', opt, 60, 0x200)
     struct.pack_into('<HH', opt, 68, 3, 0x100)
     struct.pack_into('<QQQQ', opt, 72, 0x100000, 0x1000, 0x100000, 0x1000)

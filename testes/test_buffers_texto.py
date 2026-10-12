@@ -126,7 +126,7 @@ class TestesBuffers(unittest.TestCase):
 
     def test_tipos_tamanhos_e_comandos_invalidos(self):
         fontes = [
-            'seja a: texto[0]', 'seja a: texto[2041]', 'seja a: texto[x]',
+            'seja a: texto[0]', 'seja a: texto[x]',
             'seja a: texto[2]\n a = 3', 'seja a: texto[2]\n escreva(a + 1)',
             'seja a: texto[2]\n leia(a[0])',
             'seja a: texto[2]\n copie(a, 4)',
@@ -134,7 +134,6 @@ class TestesBuffers(unittest.TestCase):
             'seja a: texto[2]\n escreva(a[0])',
             'seja a = 1\n limpe(a)',
             'seja a = 1\n escreva(capacidade(a))',
-            'seja a: texto[2000]\n seja b: texto[40]',
         ]
         for trecho in fontes:
             with self.subTest(trecho=trecho):

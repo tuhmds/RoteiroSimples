@@ -8,6 +8,12 @@ from .linux_elf import montar_elf
 def compilar(programa, alvo, otimizar=True, nivel=1):
     if alvo not in ('windows', 'linux'):
         raise ValueError('Alvo desconhecido: use windows ou linux.')
+    # Funções e variáveis locais de blocos usam o backend conservador.
+    # Os níveis -O existentes permanecem aceitos, sem aplicar análises
+    # que ainda não modelam chamadas ou tempos de vida dos novos escopos.
+    if getattr(programa, 'funcoes', None) or getattr(programa, 'escopos_locais', False):
+        gerador, mensagens = montar_codigo(programa, alvo == 'windows')
+        return montar_pe(gerador, mensagens) if alvo == 'windows' else montar_elf(gerador, mensagens)
     ir = construir_ir(programa, otimizar=otimizar, nivel=(nivel if nivel >= 7 else min(nivel, 3)))
     legado = programa_para_backend(ir)
     tem_listas = any(isinstance(t, tuple) and t[0] in ('lista', 'texto') for t in programa.tipos.values())

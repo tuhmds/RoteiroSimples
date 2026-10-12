@@ -87,6 +87,17 @@ class Expressao:
                 if not isinstance(tipo, tuple) or tipo[0] != 'texto':
                     raise ErroCompilacao(f'Linha {self.linha}: capacidade() exige buffer de texto.')
                 return NoExpressao(('numero', tipo[1]), getattr(token, 'origem', None))
+            if self.olhar() == '(' and token in getattr(self, 'funcoes', {}):
+                self.consumir('(')
+                argumentos = []
+                if self.olhar() != ')':
+                    while True:
+                        argumentos.append(self.comparacao())
+                        if self.olhar() != ',':
+                            break
+                        self.consumir(',')
+                self.consumir(')')
+                return NoExpressao(('chamada', str(token), tuple(argumentos)), getattr(token, 'origem', None))
             if self.olhar() == '(': 
                 if not self.importa:
                     raise ErroCompilacao(f"Linha {self.linha}: use 'inclua matematica' para chamar {token}.")

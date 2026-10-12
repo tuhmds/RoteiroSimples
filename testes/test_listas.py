@@ -80,21 +80,20 @@ class TestesListas(unittest.TestCase):
 
     def test_declaracoes_e_tipos_invalidos(self):
         fontes = [
-            'seja n: lista[0]', 'seja n: lista[257]', 'seja n: lista[x]',
+            'seja n: lista[0]', 'seja n: lista[x]',
             'seja n: lista[2]\n escreva(n)',
             'seja n: lista[2]\n n = 3',
             'seja n: lista[2]\n n[verdadeiro] = 1',
             'seja n = 2\n escreva(n[0])',
             'seja n: lista[2]\n escreva(n[0] + verdadeiro)',
             'seja n: lista[2]\n escreva(tamanho(1))',
-            'seja n: lista[200]\n seja outro: lista[57]',
         ]
         for texto in fontes:
             with self.subTest(codigo=texto):
                 with self.assertRaises(ErroCompilacao):
                     analisar_programa('inicio {\n ' + texto + '\n}')
 
-    def test_maximo_256_posicoes(self):
+    def test_256_posicoes_e_limites_maiores(self):
         codigo = 'inicio {\n seja n: lista[256]\n escreva(n[255])\n}'
         r = self.executar(codigo)
         self.assertEqual((r.returncode, r.stdout), (0, '0\n'), r.stderr)

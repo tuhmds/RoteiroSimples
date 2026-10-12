@@ -87,10 +87,11 @@ inicio {
         self.assertEqual(programa.instrucoes[2][0], 'se')
         self.assertEqual(programa.instrucoes[2][1][0], 'comparacao')
 
-    def test_variavel_local_no_bloco_rejeitada(self):
+    def test_variavel_local_no_bloco_e_escopo(self):
         fonte = 'inicio {\n se 1 == 1 {\n seja x = 1\n }\n}'
-        with self.assertRaisesRegex(ErroCompilacao, 'declare variáveis antes'):
-            analisar_programa(fonte)
+        programa = analisar_programa(fonte)
+        self.assertTrue(programa.escopos_locais)
+        self.assertEqual(len(programa.variaveis), 1)
 
     def test_linux_decisoes_e_comparacoes(self):
         if sys.platform != 'linux' or os.uname().machine != 'x86_64':
@@ -148,10 +149,10 @@ inicio {
                 with self.assertRaisesRegex(ErroCompilacao, 'só pode ser usado'):
                     analisar_programa(fonte_condicional)
 
-    def test_variavel_no_laco_rejeitada(self):
+    def test_variavel_no_laco_permitida(self):
         fonte = 'inicio {\n enquanto 1 {\n seja numero = 5\n }\n}'
-        with self.assertRaisesRegex(ErroCompilacao, 'declare variáveis antes'):
-            analisar_programa(fonte)
+        programa = analisar_programa(fonte)
+        self.assertEqual(len(programa.variaveis), 1)
 
     def test_linux_repeticao_continue_e_pare(self):
         if sys.platform != 'linux' or os.uname().machine != 'x86_64':
@@ -230,6 +231,59 @@ inicio {
             r = subprocess.run([str(exe)], capture_output=True, encoding='utf-8', timeout=5)
             self.assertEqual(r.returncode, 0)
             self.assertEqual(r.stdout, '8\n')
+
+    def test_comandos_ascii_funcionam(self):
+        programa = analisar_programa('''inicio {
+            seja preco = 10
+            se preco > 5 {
+                escreva("Está tudo ótimo, coração!")
+            } senao {
+                escreva("NÃO!")
+            }
+        }''')
+        self.assertEqual(programa.instrucoes[1][0], 'se')
+        self.assertEqual(programa.instrucoes[1][2][0], ('texto', 'Está tudo ótimo, coração!\n'))
+
+    def test_comandos_com_acentos_sao_rejeitados(self):
+        for fonte in (
+            'início {\n escreva(1)\n}',
+            'inicio {\n se 0 {\n escreva(1)\n } senão {\n escreva(2)\n }\n}',
+            'inicio {\n seja preço = 5\n escreva(1)\n}',
+            'inclua matemática\ninicio {\n escreva(1)\n}',
+            'ini\u0301cio {\n escreva(1)\n}',
+        ):
+            with self.subTest(fonte=fonte):
+                with self.assertRaisesRegex(ErroCompilacao, r'sem acentos'):
+                    analisar_programa(fonte)
+
+    def test_utf8_e_comentarios_preservados(self):
+        fonte = 'inicio {\n escreva("ação, coração, início, senão") // comentário com acento\n}'
+        programa = analisar_programa(fonte)
+        self.assertEqual(programa.instrucoes, [('texto','ação, coração, início, senão\n')])
+
+    def test_linux_codigo_sem_acentos_e_texto_acentuado(self):
+        if sys.platform != 'linux' or os.uname().machine != 'x86_64':
+            self.skipTest('Requer Linux x86-64')
+        fonte = '''inicio {
+            seja preco = 12
+            se preco >= 10 {
+                escreva("Preço válido!")
+            } senao {
+                escreva("Preço inválido!")
+            }
+        }'''
+        r = self.executar_linux(fonte)
+        self.assertEqual((r.returncode, r.stdout), (0, 'Preço válido!\n'))
+
+    def test_windows_codigo_sem_acentos_e_texto_acentuado(self):
+        if sys.platform != 'win32':
+            self.skipTest('Requer Windows real')
+        fonte = 'inicio {\n se 1 {\n escreva("Preço válido!")\n } senao {\n escreva("Erro")\n }\n}'
+        with tempfile.TemporaryDirectory() as d:
+            exe = Path(d) / 'ascii.exe'
+            exe.write_bytes(compilar(analisar_programa(fonte), 'windows'))
+            r = subprocess.run([str(exe)], capture_output=True, encoding='utf-8', timeout=5)
+            self.assertEqual((r.returncode, r.stdout), (0, 'Preço válido!\n'))
 
     def test_windows_pe_e_contem_importacoes(self):
         p = analisar_programa('inclua matematica\ninicio {\n escreva(dividir(20, 4))\n}')

@@ -3,7 +3,7 @@
 Os nós continuam equivalentes a tuplas na geração nativa. O atributo origem
 não interfere na semântica nem na serialização binária do programa.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class PosicaoFonte:
@@ -32,6 +32,16 @@ class Programa:
     variaveis: dict
     importa_matematica: bool
     tipos: dict  # metadados estáticos; armazenamento de 8 bytes por variável
+    funcoes: dict = field(default_factory=dict)
+    escopos_locais: bool = False
+
+
+@dataclass
+class Funcao:
+    nome: str
+    parametros: tuple  # ((nome_interno, tipo), ...)
+    retorno: str
+    programa: Programa
 
 
 def formatar_ast(programa):
@@ -47,6 +57,9 @@ def formatar_ast(programa):
         tag = e[0]
         if tag == 'neg':
             exibir_expr(e[1], nivel + 1)
+        elif tag == 'chamada':
+            for argumento in e[2]:
+                exibir_expr(argumento, nivel + 1)
         elif tag in ('bin', 'comparacao'):
             exibir_expr(e[2], nivel + 1)
             exibir_expr(e[3], nivel + 1)
@@ -58,6 +71,8 @@ def formatar_ast(programa):
             if tag in ('atribua',):
                 exibir_expr(no[2], nivel+1)
             elif tag in ('imprima_num', 'se', 'enquanto'):
+                exibir_expr(no[1], nivel+1)
+            elif tag == 'retorne':
                 exibir_expr(no[1], nivel+1)
             elif tag == 'para':
                 exibir_expr(no[2], nivel+1)
@@ -71,4 +86,7 @@ def formatar_ast(programa):
                 percorrer(no[5], nivel+1)
 
     percorrer(programa.instrucoes)
+    for nome, funcao in getattr(programa, 'funcoes', {}).items():
+        linhas.append(f'funcao {nome}: retorno {funcao.retorno}; parametros {len(funcao.parametros)}')
+        percorrer(funcao.programa.instrucoes, 1)
     return '\n'.join(linhas)
