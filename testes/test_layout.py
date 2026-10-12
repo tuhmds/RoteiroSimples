@@ -56,7 +56,8 @@ class TestesLayout(unittest.TestCase):
 
     def test_exemplos_equivalentes(self):
         for caminho in sorted((RAIZ/'exemplos').glob('*.rts')):
-            fonte = caminho.read_text(encoding='utf-8')
+            from compilador.modulos import carregar_fontes
+            fonte = carregar_fontes(caminho).texto
             entrada = '21\n' if caminho.stem == 'entrada' else ''
             with self.subTest(programa=caminho.name):
                 self.assertEqual(self.executar(fonte, 4, entrada), self.executar(fonte, 5, entrada))

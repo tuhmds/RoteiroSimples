@@ -152,7 +152,8 @@ class TesteIntegracaoO6(unittest.TestCase):
     def test_exemplos_iguais_a_o5(self):
         for path in sorted((RAIZ / 'exemplos').glob('*.rts')):
             with self.subTest(exemplo=path.name):
-                fonte = path.read_text(encoding='utf-8')
+                from compilador.modulos import carregar_fontes
+                fonte = carregar_fontes(path).texto
                 self.assertEqual(self.executar(fonte, 5), self.executar(fonte, 6))
 
     def test_erros_iguais_a_o5(self):
