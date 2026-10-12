@@ -132,6 +132,7 @@ def _rotina(g, windows, gravar):
     loop = nome + '_volta'
     termino = nome + '_termino'
     prova = nome + '_prova'
+    g.marcar(nome)
     _prologo(g)
     _abrir(g, windows, gravar)
     g.marcar(loop)
