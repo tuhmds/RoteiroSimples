@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
-echo === RoteiroSimples RS 0.30 - compilar e executar ===
+echo === RoteiroSimples RS 0.31 - compilar e executar ===
 echo.
 where py >nul 2>nul
 if errorlevel 1 (
@@ -9,7 +9,7 @@ if errorlevel 1 (
  pause
  exit /b 1
 )
-py -3 compilar.py exemplos\resultados_tipados.rts --alvo windows -O 8 -o roteiro_windows.exe
+py -3 compilar.py exemplos\resultados_genericos.rts --alvo windows -O 8 -o roteiro_windows.exe
 if errorlevel 1 (
  echo.
  echo Nao foi possivel compilar. Confira o erro acima.

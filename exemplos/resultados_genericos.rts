@@ -1,0 +1,35 @@
+// RS 0.31: resultados genéricos e propagação explícita de falhas.
+funcao dividir(a: inteiro, b: inteiro) -> resultado[inteiro] {
+    se b == 0 {
+        retorne falha[inteiro](1)
+    }
+    retorne sucesso[inteiro](a / b)
+}
+
+funcao calcular(n: inteiro, divisor: inteiro) -> resultado[inteiro] {
+    seja anterior: resultado[inteiro] = dividir(n, divisor)
+    propague anterior
+    retorne sucesso[inteiro](anterior.valor + 5)
+}
+
+funcao valor_positivo(n: inteiro) -> resultado[logico] {
+    seja calculado = calcular(n, 2)
+    propague calculado
+    retorne sucesso[logico](calculado.valor > 0)
+}
+
+inicio {
+    escreva("RS 0.31: resultados genericos")
+
+    seja a = calcular(20, 2)
+    escreva(a.valido)
+    escreva(a.valor)
+
+    seja b = calcular(20, 0)
+    escreva(b.valido)
+    escreva(b.codigo_erro)
+
+    seja c = valor_positivo(20)
+    escreva(c.valido)
+    escreva(c.valor)
+}

@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.30
+# RoteiroSimples (RS) — versão experimental 0.31
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -10,7 +10,46 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
 
-## Novo na RS 0.30 — resultados tipados e erros explícitos
+## Novo na RS 0.31 — resultados genéricos e propagação de falhas
+
+O sistema de tipos agora aceita **resultado[T]**, especializado na compilação para
+cada tipo concreto utilizado, inclusive **inteiros, lógicos, registros, textos e listas fixas**.
+
+\`\`\`text
+funcao dividir(a: inteiro, b: inteiro) -> resultado[inteiro] {
+    se b == 0 {
+        retorne falha[inteiro](1)
+    }
+    retorne sucesso[inteiro](a / b)
+}
+
+funcao calcular(n: inteiro) -> resultado[inteiro] {
+    seja parte = dividir(n, 2)
+    propague parte
+    retorne sucesso[inteiro](parte.valor + 5)
+}
+
+inicio {
+    seja resposta = calcular(20)
+    escreva(resposta.valido)
+    escreva(resposta.valor)
+}
+\`\`\`
+
+**Resultado:** 1 e 15, um por linha.
+
+- **resultado[T]** possui campos \`valido\`, \`valor\` e \`codigo_erro\`.
+- **sucesso[T](valor)** constrói um resultado válido.
+- **falha[T](codigo)** constrói um resultado inválido, com valor inicializado.
+- **propague nome** encaminha o erro de uma variável de resultado para a função atual quando \`valido\` é falso. Funciona apenas em funções com retorno \`resultado[T]\` e exige nome de variável explícito.
+- Tipos compostos e capacidades são conferidos estaticamente. **resultado[inteiro] e resultado[logico] são tipos diferentes**; não há conversão implícita.
+- Os registros da Biblioteca Padrão RS 0.30 continuam disponíveis e não são automaticamente convertidos para os novos resultados genéricos.
+
+**Escopo real:** o recurso é uma *especialização estática*, não uma implementação de funções genéricas arbitrárias ou exceções. Transbordamentos nativos e falhas de índices continuam encerrando a execução conforme a proteção anterior — \`propague\` não os captura.
+
+**Exemplo novo:** [\`exemplos/resultados_genericos.rts\`](exemplos/resultados_genericos.rts). Veja a [documentação completa e limitações](docs/RESULTADOS_GENERICOS_RS_0_31.md). Nenhum nível de otimização foi acrescentado.
+
+## Histórico: RS 0.30 — resultados tipados e erros explícitos
 
 A Biblioteca Padrão agora fornece dois **tipos de resultado**: `ResultadoInteiro` e `ResultadoLogico`. Cada um possui `valido`, `valor` e `codigo_erro`. São registros realmente implementados em `.rts`; a linguagem verifica os tipos na compilação e copia os resultados por valor, sem depender de Python na execução.
 
@@ -292,13 +331,13 @@ nativo. Não se promete segurança para aplicações de produção.
 1. Instale Python 3.10 ou posterior e confirme `py -3 --version`.
 2. Baixe ou clone este repositório e extraia o pacote em uma pasta.
 3. Execute **`INICIAR_RS.bat`** e escolha **1** para compilar e executar a demonstração
-   dos resultados tipados da RS 0.30. A opção **2** abre o mesmo exemplo no Bloco de Notas.
+   dos resultados genéricos da RS 0.31. A opção **2** abre o mesmo exemplo no Bloco de Notas.
 4. Para executar os testes, escolha **3**.
 
 Via PowerShell:
 
 ```powershell
-py -3 compilar.py exemplos\resultados_tipados.rts --alvo windows -O 8 -o roteiro_windows.exe
+py -3 compilar.py exemplos\resultados_genericos.rts --alvo windows -O 8 -o roteiro_windows.exe
 .\roteiro_windows.exe
 py -3 -m unittest discover -s testes -v
 ```
@@ -308,7 +347,7 @@ py -3 -m unittest discover -s testes -v
 Requer sistema Linux e processador x86-64:
 
 ```bash
-python3 compilar.py exemplos/resultados_tipados.rts --alvo linux -O 8 -o roteiro_linux
+python3 compilar.py exemplos/resultados_genericos.rts --alvo linux -O 8 -o roteiro_linux
 ./roteiro_linux
 python3 -m unittest discover -s testes -v
 ```
@@ -318,7 +357,7 @@ nenhum nível foi criado na RS 0.29. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes até a RS 0.30
+## Recursos presentes até a RS 0.31
 
 | Recurso | Situação |
 |---|---|
@@ -336,6 +375,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Espaços de nomes com apelidos e visibilidade pública/privada | Implementado na 0.28 |
 | Biblioteca Padrão RS escrita em .rts, 30 funções em quatro módulos | Implementado na 0.29 |
 | Resultados tipados e operações matemáticas com erro explícito | Implementado na 0.30 |
+| resultado[T], sucesso[T], falha[T] e propague | Implementado na 0.31 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
 | Tipos reais/decimais, dados dinâmicos, referências e empréstimos | Ainda não |
@@ -354,6 +394,9 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**RS 0.31 (planejamento):** estudar resultados genéricos e propagação explícita de falhas, sem esconder os encerramentos nativos por transbordamento. Depois, tamanhos de lista paramétricos, dados dinâmicos e propriedade segura de memória. Novos níveis de otimização continuam fora da prioridade.
+**RS 0.32 (planejamento):** decisões sobre propriedade da memória, tempo de vida,
+listas com tamanho variável e tipos numéricos adicionais. Propagação automática de
+erros, conversões entre resultados e captura de falhas nativas ainda não existem.
+Continuamos priorizando os fundamentos, sem criar outro nível de otimização.
 
 Ainda não foi escolhida uma licença para publicação do código.
