@@ -33,7 +33,7 @@ def _ler_tipo(itens, linha):
             raise ErroCompilacao(f'Linha {linha}: tamanho inválido em resultado[T].')
         texto = f'{itens[0]}[{capacidade}]'
         return texto, ' '.join(itens)
-    raise ErroCompilacao(f'Linha {linha}: resultado[T] exige um tipo concreto (inteiro, logico, registro, texto[N] ou lista[N]).')
+    raise ErroCompilacao(f'Linha {linha}: resultado[T] exige tipo concreto, recebeu {itens!r}.')
 
 
 def _nomes(tipo):
@@ -124,16 +124,23 @@ def preparar_resultados_genericos(fontes):
             if token in MARCADORES and indice + 1 < len(itens) and itens[indice + 1] == '[':
                 encontrado = _separar_generico(itens, indice, origem.numero)
                 bruto, fim = encontrado
-                chave, tipo = _ler_tipo(bruto, origem.numero)
-                especiais[chave] = tipo
-                nomes = _nomes(chave)
-                nome = nomes[('resultado', 'sucesso', 'falha').index(token)]
-                novos.append(nome)
-                indice = fim
-                usou_recurso = True
-            else:
-                novos.append(token)
-                indice += 1
+                # Não confundir a variável chamada resultado com uma lista:
+                # resultado[i] continua sendo um acesso comum a uma lista.
+                em_tipo = (token == 'resultado' and indice > 0 and
+                           itens[indice - 1] in (':', '>'))
+                em_construtor = (token in ('sucesso', 'falha') and
+                                 fim < len(itens) and itens[fim] == '(')
+                if em_tipo or em_construtor:
+                    chave, tipo = _ler_tipo(bruto, origem.numero)
+                    especiais[chave] = tipo
+                    nomes = _nomes(chave)
+                    nome = nomes[('resultado', 'sucesso', 'falha').index(token)]
+                    novos.append(nome)
+                    indice = fim
+                    usou_recurso = True
+                    continue
+            novos.append(token)
+            indice += 1
         return novos
 
     for origem in origens:
