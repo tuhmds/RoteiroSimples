@@ -64,7 +64,7 @@ def emitir_comando(g, instrucao, variaveis, tipos, windows, mensagens,
         g.marcar(fim)
 
 
-def _abrir(g, windows, gravar, erro_abrir, erro_posicao):
+def _abrir(g, windows, gravar, erro_abrir, erro_posicao, erro_rejeitado):
     if windows:
         bytes_nativos(g, '48 8B 4D F8')
         g.bytes(b'\xBA' + struct.pack('<I', 0x40000000 if gravar else 0x80000000))
@@ -80,7 +80,7 @@ def _abrir(g, windows, gravar, erro_abrir, erro_posicao):
         bytes_nativos(g, '48 89 C7')
         g.chamada('rs_verificar_arquivo_regular')
         bytes_nativos(g, '48 85 C0')
-        g.salto(erro_posicao, 'jnz')  # rejeita identificador antes de transferir
+        g.salto(erro_rejeitado, 'jnz')  # rejeita como falha de abertura
         # HANDLE, LARGE_INTEGER deslocamento, saida nula, FILE_BEGIN
         bytes_nativos(g, '48 8B 4D D8 48 8B 55 E0 45 31 C0 45 31 C9')
         bytes_nativos(g, '48 83 EC 20')
@@ -136,6 +136,7 @@ def _rotina(g, windows, gravar):
     falha_argumentos = f'{nome}_argumentos'
     falha_abertura = f'{nome}_abertura'
     falha_posicao = f'{nome}_posicao'
+    falha_rejeitado = f'{nome}_rejeitado'
     falha_transferencia = f'{nome}_transferencia'
     falha_fechamento = f'{nome}_fechamento'
     fechar = f'{nome}_fechar'
@@ -153,7 +154,7 @@ def _rotina(g, windows, gravar):
     bytes_nativos(g, '48 8B 45 E0 48 03 45 E8') # posicao + tamanho
     g.salto(falha_argumentos, 'jo')
 
-    _abrir(g, windows, gravar, falha_abertura, falha_posicao)
+    _abrir(g, windows, gravar, falha_abertura, falha_posicao, falha_rejeitado)
 
     g.marcar(laco)
     bytes_nativos(g, '48 8B 45 D0 48 3B 45 E8')
@@ -172,6 +173,9 @@ def _rotina(g, windows, gravar):
     g.salto(fechar)
     g.marcar(falha_posicao)
     bytes_nativos(g, '48 C7 C0 FD FF FF FF 48 89 45 C0')
+    g.salto(fechar)
+    g.marcar(falha_rejeitado)
+    bytes_nativos(g, '48 C7 C0 FF FF FF FF 48 89 45 C0')
     g.salto(fechar)
 
     g.marcar(fechar)
