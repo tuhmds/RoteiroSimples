@@ -109,29 +109,37 @@ TLS etc.) e normalizar diagnósticos, não resultados incompatíveis.
 
 ## 7. Requisitos que cabem à linguagem RS
 
-A RS 0.34 oferece `grave_arquivo` e `carregue_arquivo` para `texto[N]`.
-A RS 0.35 acrescenta `grave_trecho` e `carregue_trecho`: acesso binário
-posicional em 64 bits, sem truncamento total e com retorno numérico
-recuperável (-1, -2, -3, -4). Sua implementação usa chamadas nativas
-diferentes no Linux e Windows e inclui testes de conteúdo binário e de
-persistência entre processos.
+A RS 0.34 iniciou a persistência de arquivos inteiros. A RS 0.35
+introduziu leitura/gravação em posições de 64 bits com erros recuperáveis.
+A RS 0.37 acrescentou `bytes[N]` e encerramento explícito com status.
+A RS 0.38 introduziu recursos `arquivo`, acesso posicional, 
+`fsync`/`FlushFileBuffers`, fechamento controlado e biblioteca de
+adaptação a `resultado[inteiro]`.
 
-**Ainda não basta para um banco confiável:** não existe `fsync`/
-`FlushFileBuffers`, transação, travamento, abertura persistente nem
-abstração tipada de bytes e erros. `texto[N]` continua sendo o buffer
-temporário, não um tipo de sequência binária.
+A RS 0.39 acrescentou `publique_arquivo`, publicação por renomeação
+com sincronização do diretório no Linux, validação de caminhos dinâmicos
+e bloqueios não bloqueantes (`flock` no Linux, exclusividade de abertura
+no Windows). Essas funções têm limites documentados e são exercitadas
+em binários Windows/Linux, incluindo falhas injetadas por encerramento
+em pontos definidos do fluxo.
+
+**Ainda não basta para um banco confiável:** não existem WAL, recuperação
+transacional, isolamento geral de escritores/leitores, proteção integral
+contra links no diretório, nem testes de desligamento físico e falhas
+injetadas das chamadas do sistema.
 
 Prioridades que deverão ser implementadas e validadas na linguagem/núcleo:
 
-1. Bytes e sequências binárias tipadas; **leitura/escrita por posição em
-   64 bits implementadas na RS 0.35**, ainda usando `texto[N]`.
-2. Identificadores de arquivo com tempo de vida seguro; operações parciais
-   já suportadas pelos comandos posicionais, mas ainda faltam abertura
-   persistente e codificação explícita de valores.
-3. Erros recuperáveis já disponíveis como códigos inteiros na RS 0.35;
-   evoluir para resultados tipados (`resultado[T]`).
-4. Sincronização durável, substituição atômica, travamento e modos de
-   compartilhamento documentados em Windows e Linux.
+1. Buffers `bytes[N]`, com escrita/leitura por posição em 64 bits,
+   implementados na RS 0.35 a 0.37; bytes dinâmicos continuam pendentes.
+2. Recursos `arquivo` de propriedade única, com abertura persistente,
+   fechamento e sincronização implementados na RS 0.38.
+3. Erros recuperáveis em códigos inteiros, adaptáveis à
+   `resultado[inteiro]` por biblioteca RS (0.38/0.39); ampliar
+   a integração de tipos de erro ao núcleo da linguagem.
+4. Publicação por renomeação e bloqueio não bloqueante (0.39),
+   ainda sem controle transacional de concorrência entre arquivos
+   ou garantia absoluta após perda de energia.
 5. Texto dinâmico ou buffers dimensionados seguros para consultas e campos.
 6. Interface de funções externas (ABI C) para drivers existentes.
 7. Rede, TLS e gerenciamento de credenciais para modo servidor e clientes

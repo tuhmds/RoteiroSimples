@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.38
+# RoteiroSimples (RS) — versão experimental 0.39
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,32 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.39 — Publicação de arquivos e proteção de nomes
+
+A RS 0.39 oferece novos recursos necessários à persistência segura:
+`publique_arquivo("rascunho.rsd","banco.rsd",estado)` solicita uma
+substituição de versão **após** o programa gravar, sincronizar e
+fechar o arquivo provisório. No Linux usa `renameat` e sincroniza o
+diretório; no Windows utiliza `MoveFileExA` com substituição e
+`WRITE_THROUGH`, respeitando os limites de cada sistema.
+
+`bloqueie_arquivo(arq,estado)` estabelece um bloqueio `flock`
+não bloqueante no Linux (cooperativo), ou verifica a exclusão obtida
+na abertura Windows (onde `CreateFileA` já usa compartilhamento
+negado). `abra_arquivo` agora também aceita `texto[N]` como nome
+dinâmico de arquivo, validado byte a byte: somente basename ASCII,
+sem barras, travessias, caracteres de controle ou dispositivos
+reservados no Windows.
+
+Os testes incluem interrupções injetadas **antes e depois** da
+publicação, verificando que nunca observamos a versão anterior
+sobrescrita parcialmente nesses cenários. Isso **não** representa
+prova de tolerância a queda de energia, nem implementa isolamento
+ou transações do Dados RS.
+
+Consulte a [especificação RS 0.39](docs/PUBLICACAO_ARQUIVOS_RS_0_39.md)
+e o [programa de publicação real](exemplos/aplicacoes/publicar_banco_rs039.rts).
 
 ## RS 0.38 — recursos de arquivo com sincronização
 
@@ -608,7 +634,7 @@ nenhum nível foi criado na RS 0.29. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes até a RS 0.38
+## Recursos presentes até a RS 0.39
 
 | Recurso | Situação |
 |---|---|
@@ -634,6 +660,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Leitura e gravação binária por posição, com estado de erro recuperável | Implementado na 0.35 |
 | Tipo `bytes[N]`, limites binários e `encerre(codigo)` | Implementado na 0.37 |
 | Recursos `arquivo`, leitura/escrita posicional, sincronização e fechamento automático | Implementado na 0.38 |
+| Publicação por renomeação, bloqueio não bloqueante e basename variável verificado | Implementado na 0.39 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
 | Tipos reais/decimais, textos dinâmicos, empréstimos mutáveis, FFI e durabilidade de arquivos | Ainda não |
@@ -653,7 +680,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**RS 0.39 (planejamento):** nomes de arquivos parametrizáveis com validação rigorosa, atualização atômica por substituição, travas e testes com falhas injetadas. Os recursos de arquivo e a sincronização nativa chegaram à RS 0.38; ainda não temos isolamento, transações ou durabilidade absoluta. Antes do motor Dados RS, precisamos de bibliotecas externas, dados binários versionados e recuperação.
+**RS 0.40 (planejamento):** endereçamento de diretórios confiáveis, testes de falhas de chamadas de sistema, controle de escritores concorrentes e formato binário versionado. A RS 0.39 introduziu publicação por renomeação e bloqueio cooperativo, mas continua sem transações, isolamento geral nem garantias absolutas de durabilidade. Para o Dados RS também faltam interfaces de bibliotecas externas e recuperação.
 
 O projeto ainda é experimental, não pronto para produção. Não estamos acrescentando níveis de otimização.
 

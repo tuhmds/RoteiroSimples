@@ -1,0 +1,61 @@
+// RS 0.39: demonstra publicação por substituição de um arquivo pequeno.
+// A aplicacao gera dados completos em um arquivo provisório, sincroniza,
+// fecha e só então solicita a renomeação para o nome público do banco.
+//
+// Publicar NÃO fornece transações, isolamento nem backup automaticamente.
+importe "padrao/arquivos.rts" como arquivos
+
+inicio {
+    seja provisoria: arquivo
+    seja dados: bytes[12]
+    seja estado = 0
+
+    abra_arquivo("rascunho.rsd", provisoria, "novo", estado)
+    se estado != 0 {
+        escreva("Nao consegui criar rascunho exclusivo")
+        encerre(11)
+    }
+
+    bloqueie_arquivo(provisoria, estado)
+    se estado != 0 {
+        escreva("Nao consegui bloquear o rascunho")
+        encerre(12)
+    }
+
+    // Assinatura RSDB + versao + numero de registros 100, em bytes.
+    adicione_byte(dados, 82)
+    adicione_byte(dados, 83)
+    adicione_byte(dados, 68)
+    adicione_byte(dados, 66)
+    adicione_byte(dados, 1)
+    adicione_byte(dados, 100)
+
+    grave_em(provisoria, dados, 0, estado)
+    se estado != tamanho(dados) {
+        escreva("Falha na gravacao do rascunho")
+        encerre(13)
+    }
+
+    sincronize_arquivo(provisoria, estado)
+    se estado != 0 {
+        escreva("Falha na sincronizacao do rascunho")
+        encerre(14)
+    }
+
+    feche_arquivo(provisoria, estado)
+    se estado != 0 {
+        escreva("Falha no fechamento do rascunho")
+        encerre(15)
+    }
+
+    publique_arquivo("rascunho.rsd", "banco.rsd", estado)
+    seja publicacao = arquivos.resultado_arquivo(estado)
+    se publicacao.valido == falso {
+        escreva("Publicacao nao confirmada")
+        escreva(publicacao.codigo_erro)
+        encerre(16)
+    }
+
+    escreva("Nova versao publicada")
+    encerre(0)
+}

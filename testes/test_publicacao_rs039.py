@@ -127,6 +127,21 @@ class TestesRS039(unittest.TestCase):
             self.assertEqual(r.returncode,98,r.stderr)
             self.assertEqual((Path(pasta)/'banco.rsd').read_bytes(),b'\x01\x02\x03')
 
+    def test_aplicacao_completa_republica_versao_sem_sobras(self):
+        fonte = (RAIZ/'exemplos'/'aplicacoes'/'publicar_banco_rs039.rts').read_text(
+            encoding='utf-8')
+        with tempfile.TemporaryDirectory() as pasta:
+            programa = construir(pasta,'publicacao_real',fonte)
+            (Path(pasta)/'banco.rsd').write_bytes(b'VERSAO_ANTIGA_COM_MUITOS_BYTES')
+            for passagem in range(2):
+                with self.subTest(passagem=passagem):
+                    r=executar(programa,pasta)
+                    self.assertEqual((r.returncode,r.stdout),
+                                     (0,'Nova versao publicada\n'),r.stderr)
+                    self.assertEqual((Path(pasta)/'banco.rsd').read_bytes(),
+                                     b'RSDB\x01\x64')
+                    self.assertFalse((Path(pasta)/'rascunho.rsd').exists())
+
     def test_publicacao_origem_ausente_nao_destroi_destino(self):
         fonte = """inicio {
             seja estado = 0
