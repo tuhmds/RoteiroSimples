@@ -82,13 +82,18 @@ def gerar_desenrolamentos(gerador, base_codigo, base_xdados):
         if not 0 <= inicio < fim <= len(gerador.codigo):
             raise ErroCompilacao('Intervalo de desenrolamento Windows invalido.')
         comprimento = fim_prologo - inicio
-        if not 12 <= comprimento <= 255:
+        auxiliar = descricao.get('prologo') == 'auxiliar_sem_rbx'
+        minimo = 8 if auxiliar else 12
+        if not minimo <= comprimento <= 255:
             raise ErroCompilacao('Prologo Windows fora do limite de 255 bytes.')
-        if not (tamanho_quadro > 0 and tamanho_quadro % 16 == 8
+        # A entrada principal salva RBP + RBX (16 bytes) e possui um
+        # deslocamento de quadro diferente das rotinas auxiliares, que
+        # salvam somente RBP antes de reservar o quadro.
+        residuo = 0 if auxiliar else 8
+        if not (tamanho_quadro > 0 and tamanho_quadro % 16 == residuo
                 and tamanho_quadro <= 0xFFFFFFFF):
             raise ErroCompilacao(
-                'Quadro Windows deve manter alinhamento de 16 bytes '
-                'e tamanho representavel.')
+                'Quadro Windows nao respeita o alinhamento deste prologo.')
         if descricao.get('prologo') == 'auxiliar_sem_rbx':
             prefixo = bytes(gerador.codigo[inicio:inicio+7])
             if prefixo == b'\x55\x48\x89\xE5\x48\x83\xEC':
