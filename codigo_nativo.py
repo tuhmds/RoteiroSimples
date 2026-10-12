@@ -232,7 +232,14 @@ def ler_inteiro(g, windows):
         g.bytes(b'\xC7\x44\x24\x20\x00\x00\x00\x00')  # overlapped NULL
         g.relativo(b'\xFF\x15', 'ReadFile')
         g.bytes(b'\x85\xC0')
-        g.salto('erro_entrada_invalida', 'jz')
+        g.salto('leia_lida', 'jnz')
+        g.relativo(b'\xFF\x15', 'GetLastError')
+        g.bytes(b'\x83\xF8\x6D')  # ERROR_BROKEN_PIPE = 109 (EOF)
+        g.salto('leia_fim_entrada', 'jz')
+        g.bytes(b'\x83\xF8\x26')  # ERROR_HANDLE_EOF = 38
+        g.salto('leia_fim_entrada', 'jz')
+        g.salto('erro_entrada_invalida')
+        g.marcar('leia_lida')
         g.bytes(b'\x8B\x44\x24\x38\x85\xC0')
         g.salto('leia_fim_entrada', 'jz')
         g.bytes(b'\x44\x8A\x54\x24\x30')  # r10b = byte
@@ -483,7 +490,7 @@ def montar_pe(g, mensagens):
     base_codigo, base_importacoes, base_dados = 0x1000, 0x2000, 0x3000
     nomes = ['GetStdHandle', 'SetConsoleOutputCP', 'WriteFile', 'ExitProcess']
     if 'ler_inteiro' in g.rotulos:
-        nomes.append('ReadFile')
+        nomes.extend(['ReadFile', 'GetLastError'])
     importacoes, enderecos, inicio_iat, tamanho_iat = construir_importacoes(base_importacoes, nomes)
     dados = bytearray()
     for i, msg in mensagens.items():
