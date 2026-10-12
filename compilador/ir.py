@@ -6,41 +6,43 @@ from .otimizador import dobrar_constantes
 
 def converter_expressao(expr, tipos, otimizar=True, literal_minimo=False):
     tag = expr[0]
+    origem = getattr(expr, 'origem', None)
     if tag == 'numero':
         if expr[1] == 1 << 63 and not literal_minimo:
             raise ErroCompilacao('Número positivo fora do intervalo de 64 bits.')
-        return ExpressaoIR('inteiro', 'numero', expr[1])
+        return ExpressaoIR('inteiro', 'numero', expr[1], origem=origem)
     if tag == 'logico':
-        return ExpressaoIR('logico', 'logico', expr[1])
+        return ExpressaoIR('logico', 'logico', expr[1], origem=origem)
     if tag == 'var':
-        return ExpressaoIR(tipos[expr[1]], 'var', expr[1])
+        return ExpressaoIR(tipos[expr[1]], 'var', expr[1], origem=origem)
     if tag == 'neg':
         filho = converter_expressao(expr[1], tipos, otimizar,
                                    literal_minimo=expr[1] == ('numero', 1 << 63))
-        node = ExpressaoIR('inteiro', 'neg', filhos=(filho,))
+        node = ExpressaoIR('inteiro', 'neg', filhos=(filho,), origem=origem)
     elif tag in ('bin', 'comparacao'):
         esquerdo = converter_expressao(expr[2], tipos, otimizar)
         direito = converter_expressao(expr[3], tipos, otimizar)
         node = ExpressaoIR('inteiro' if tag == 'bin' else 'logico', tag,
-                           expr[1], (esquerdo, direito))
+                           expr[1], (esquerdo, direito), origem=origem)
     else:
         raise ErroCompilacao(f'Expressão IR desconhecida: {tag}.')
     return dobrar_constantes(node) if otimizar else node
 
 def converter_instrucao(instr, tipos, otimizar):
     tag = instr[0]
+    origem = getattr(instr, 'origem', None)
     expr = lambda n: converter_expressao(n, tipos, otimizar)
     bloco = lambda b: tuple(converter_instrucao(x, tipos, otimizar) for x in b)
-    if tag == 'texto': return InstrucaoIR(tag, (instr[1],))
-    if tag in ('atribua',): return InstrucaoIR(tag, (instr[1], expr(instr[2])))
-    if tag == 'leia_int': return InstrucaoIR(tag, (instr[1],))
-    if tag == 'imprima_num': return InstrucaoIR(tag, (expr(instr[1]),))
-    if tag == 'se': return InstrucaoIR(tag, (expr(instr[1]), bloco(instr[2]), bloco(instr[3])))
-    if tag == 'enquanto': return InstrucaoIR(tag, (expr(instr[1]), bloco(instr[2])))
+    if tag == 'texto': return InstrucaoIR(tag, (instr[1],), origem)
+    if tag in ('atribua',): return InstrucaoIR(tag, (instr[1], expr(instr[2])), origem)
+    if tag == 'leia_int': return InstrucaoIR(tag, (instr[1],), origem)
+    if tag == 'imprima_num': return InstrucaoIR(tag, (expr(instr[1]),), origem)
+    if tag == 'se': return InstrucaoIR(tag, (expr(instr[1]), bloco(instr[2]), bloco(instr[3])), origem)
+    if tag == 'enquanto': return InstrucaoIR(tag, (expr(instr[1]), bloco(instr[2])), origem)
     if tag == 'para':
         return InstrucaoIR(tag, (instr[1], expr(instr[2]), expr(instr[3]),
-                                 instr[4], bloco(instr[5])))
-    if tag in ('pare', 'continue'): return InstrucaoIR(tag, ())
+                                 instr[4], bloco(instr[5])), origem)
+    if tag in ('pare', 'continue'): return InstrucaoIR(tag, (), origem)
     raise ErroCompilacao(f'Instrução IR desconhecida: {tag}.')
 
 

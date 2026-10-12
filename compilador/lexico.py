@@ -1,8 +1,17 @@
 """Tokenizador: palavras reservadas e identificadores ASCII, textos UTF-8."""
 import re
 from .erros import ErroCompilacao
+from .ast import PosicaoFonte
 
 REGEX = re.compile(r'\s+|"(?:\\.|[^"\\])*"|\d+|[^\W\d]\w*|==|!=|<=|>=|[()+*/%=,;{}<>!:-]|.', re.UNICODE)
+
+class Token(str):
+    """Token com localização 1-based; comparável a str normal."""
+    def __new__(cls, valor, linha, coluna):
+        obj = super().__new__(cls, valor)
+        obj.origem = PosicaoFonte(linha, coluna)
+        return obj
+
 
 def tokens(linha, numero):
     # Comentários são aceitos fora de strings.
@@ -22,12 +31,12 @@ def tokens(linha, numero):
             continue
         if not valor.startswith('"') and not valor.isascii():
             raise ErroCompilacao(
-                f"Linha {numero}: comando ou identificador com caractere nao ASCII: {valor!r}. "
+                f"Linha {numero}, coluna {achado.start()+1}: comando ou identificador com caractere nao ASCII: {valor!r}. "
                 "Escreva comandos e nomes sem acentos (ex.: inicio, senao, preco)."
             )
         if valor.startswith('//'):
             break
         if len(valor) == 1 and valor not in '+-*/%=,;{}()<>!:' and not (valor.isdecimal() or valor.isalpha()):
-            raise ErroCompilacao(f"Linha {numero}: caractere inválido: {valor!r}.")
-        encontrados.append(valor)
+            raise ErroCompilacao(f"Linha {numero}, coluna {achado.start()+1}: caractere inválido: {valor!r}.")
+        encontrados.append(Token(valor, numero, achado.start()+1))
     return encontrados

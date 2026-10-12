@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.9: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.10: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
+import re
 import sys
 from pathlib import Path
 from compilador.erros import ErroCompilacao
@@ -10,25 +11,49 @@ from backend import compilar
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.9')
+    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.10')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--alvo', choices=['windows', 'linux'], default='windows')
     parser.add_argument('-o', '--saida', type=Path, help='arquivo executável de saída')
     parser.add_argument('-O', '--otimizacao', choices=['0', '1'], default='1', help='nível de otimização (0 = desativada, 1 = constantes)')
     parser.add_argument('--mostrar-ir', action='store_true', help='mostra a IR tipada antes de gerar código')
+    parser.add_argument('--mostrar-ast', action='store_true', help='mostra a AST com linha e coluna')
+    parser.add_argument('--mostrar-cfg', action='store_true', help='exibe grafo de controle em texto')
+    parser.add_argument('--salvar-cfg', type=Path, help='salva grafo de controle em formato DOT')
     op = parser.parse_args(argv)
     saida = op.saida or op.fonte.with_suffix('.exe' if op.alvo == 'windows' else '')
+    fonte_texto = ''
     try:
-        programa = analisar_programa(op.fonte.read_text(encoding='utf-8-sig'))
+        fonte_texto = op.fonte.read_text(encoding='utf-8-sig')
+        programa = analisar_programa(fonte_texto)
+        if op.mostrar_ast:
+            from compilador.ast import formatar_ast
+            print(formatar_ast(programa))
         if op.mostrar_ir:
             from compilador.ir import construir_ir, formatar_ir
             print(formatar_ir(construir_ir(programa, otimizar=op.otimizacao == '1')))
+        if op.mostrar_cfg or op.salvar_cfg:
+            from compilador.ir import construir_ir
+            from compilador.cfg import construir_cfg
+            grafo = construir_cfg(construir_ir(programa, otimizar=op.otimizacao == '1'))
+            if op.mostrar_cfg:
+                print(grafo.formatar())
+            if op.salvar_cfg:
+                op.salvar_cfg.write_text(grafo.para_dot(), encoding='utf-8')
+                print(f'CFG salvo em: {op.salvar_cfg}')
         binario = compilar(programa, op.alvo, otimizar=op.otimizacao == '1')
         saida.write_bytes(binario)
         if op.alvo == 'linux':
             os.chmod(saida, saida.stat().st_mode | 0o111)
     except (ErroCompilacao, OSError, ValueError, OverflowError) as erro:
         print(f'Erro: {erro}', file=sys.stderr)
+        detalhe = re.search(r'Linha (\d+), coluna (\d+):', str(erro))
+        if detalhe and fonte_texto:
+            linha, coluna = map(int, detalhe.groups())
+            linhas = fonte_texto.splitlines()
+            if 1 <= linha <= len(linhas):
+                print('    ' + linhas[linha-1], file=sys.stderr)
+                print('    ' + ' '*(coluna-1) + '^', file=sys.stderr)
         return 1
     print(f'Compilado: {saida} ({len(binario)} bytes, {op.alvo}).')
     return 0

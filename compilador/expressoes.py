@@ -1,6 +1,7 @@
 """Parser de expressões (precedência e chamadas a biblioteca matematica)."""
 import re
 from .erros import ErroCompilacao
+from .ast import NoExpressao
 
 class Expressao:
     def __init__(self, tokens, linha, variaveis, importa):
@@ -28,27 +29,27 @@ class Expressao:
         expr = self.soma()
         if self.olhar() in ('==', '!=', '<', '<=', '>', '>='):
             operador = self.consumir()
-            expr = ('comparacao', operador, expr, self.soma())
+            expr = NoExpressao(('comparacao', operador, expr, self.soma()), getattr(operador, 'origem', None))
         return expr
 
     def soma(self):
         expr = self.produto()
         while self.olhar() in ('+', '-'):
             op = self.consumir()
-            expr = ('bin', op, expr, self.produto())
+            expr = NoExpressao(('bin', op, expr, self.produto()), getattr(op, 'origem', None))
         return expr
 
     def produto(self):
         expr = self.unario()
         while self.olhar() in ('*', '/', '%'):
             op = self.consumir()
-            expr = ('bin', op, expr, self.unario())
+            expr = NoExpressao(('bin', op, expr, self.unario()), getattr(op, 'origem', None))
         return expr
 
     def unario(self):
         if self.olhar() == '-':
-            self.consumir('-')
-            return ('neg', self.unario())
+            operador = self.consumir('-')
+            return NoExpressao(('neg', self.unario()), getattr(operador, 'origem', None))
         if self.olhar() == '+':
             self.consumir('+')
             return self.unario()
@@ -61,12 +62,12 @@ class Expressao:
             self.consumir(')')
             return expr
         if token in ('verdadeiro', 'falso'):
-            return ('logico', 1 if token == 'verdadeiro' else 0)
+            return NoExpressao(('logico', 1 if token == 'verdadeiro' else 0), getattr(token, 'origem', None))
         if token.isascii() and token.isdecimal():
             numero = int(token)
             if numero > (1 << 63):
                 raise ErroCompilacao(f'Linha {self.linha}: número inteiro fora do limite de 64 bits.')
-            return ('numero', numero)
+            return NoExpressao(('numero', numero), getattr(token, 'origem', None))
         if re.fullmatch(r'[^\W\d]\w*', token, re.UNICODE):
             if self.olhar() == '(':
                 if not self.importa:
@@ -79,8 +80,8 @@ class Expressao:
                 self.consumir(',')
                 b = self.comparacao()
                 self.consumir(')')
-                return ('bin', OPERACOES[token], a, b)
+                return NoExpressao(('bin', OPERACOES[token], a, b), getattr(token, 'origem', None))
             if token not in self.variaveis:
                 raise ErroCompilacao(f"Linha {self.linha}: variável '{token}' não foi declarada.")
-            return ('var', token)
+            return NoExpressao(('var', token), getattr(token, 'origem', None))
         raise ErroCompilacao(f"Linha {self.linha}: expressão inválida perto de {token!r}.")

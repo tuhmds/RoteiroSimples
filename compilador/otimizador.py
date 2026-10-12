@@ -28,4 +28,4 @@ def dobrar_constantes(node):
         return node
     if node.tipo == 'inteiro' and not MINIMO <= v <= MAXIMO:
         return node  # preservar sinalização de overflow em tempo de execução
-    return ExpressaoIR(node.tipo, 'logico' if node.tipo == 'logico' else 'numero', v)
+    return ExpressaoIR(node.tipo, 'logico' if node.tipo == 'logico' else 'numero', v, origem=node.origem)

@@ -5,3 +5,7 @@ __pycache__/
 *.elf
 roteiro_linux
 *.rts.exe
+
+# Saidas temporarias do analisador de fluxo
+fluxo.dot
+fluxo.png

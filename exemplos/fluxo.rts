@@ -1,0 +1,20 @@
+inicio {
+    seja soma: inteiro = 0
+    seja vezes = 0
+    escreva("RoteiroSimples RS 0.10 - fluxo de controle")
+    para i de 1 ate 8 {
+        se i == 3 {
+            continue
+        }
+        se i == 6 {
+            pare
+        }
+        soma = soma + i
+    }
+    enquanto vezes < 2 {
+        vezes = vezes + 1
+    }
+    escreva("Resultado:")
+    escreva(soma)
+    escreva(vezes)
+}

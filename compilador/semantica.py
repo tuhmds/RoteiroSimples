@@ -14,12 +14,20 @@ class ContextoSemantico:
         self.tipos = {}
 
     def expressao_tipada(self, partes, linha, exigir=None):
-        arvore = Expressao(partes, linha, self.variaveis,
-                            self.importa_matematica).analisar()
-        tipo = tipo_expressao(arvore, self.tipos, linha)
-        if exigir is not None and tipo != exigir:
-            raise ErroCompilacao(
-                f'Linha {linha}: tipo incompatível: esperava {exigir}, recebeu {tipo}.')
+        coluna = partes[0].origem.coluna if partes and hasattr(partes[0], 'origem') else 1
+        try:
+            arvore = Expressao(partes, linha, self.variaveis,
+                               self.importa_matematica).analisar()
+            tipo = tipo_expressao(arvore, self.tipos, linha)
+            if exigir is not None and tipo != exigir:
+                raise ErroCompilacao(
+                    f'Linha {linha}: tipo incompatível: esperava {exigir}, recebeu {tipo}.')
+        except ErroCompilacao as erro:
+            mensagem = str(erro)
+            prefixo = f'Linha {linha}:'
+            if mensagem.startswith(prefixo):
+                mensagem = f'Linha {linha}, coluna {coluna}:' + mensagem[len(prefixo):]
+            raise ErroCompilacao(mensagem) from erro
         return arvore, tipo
 
     def registrar(self, nome, tipo, linha):

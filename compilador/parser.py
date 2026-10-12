@@ -1,7 +1,7 @@
 """Análise de blocos, declarações e instruções da linguagem."""
 import json
 import re
-from .ast import Programa
+from .ast import Programa, NoInstrucao, PosicaoFonte
 from .erros import ErroCompilacao
 from .lexico import tokens
 from .semantica import ContextoSemantico
@@ -29,6 +29,10 @@ def analisar_programa(fonte):
 
     def bloco(i, profundidade=0, em_laco=False):
         instrucoes = []
+
+        def adicionar(instruicao, linha, partes):
+            instrucao = NoInstrucao(instruicao, PosicaoFonte(linha, partes[0].origem.coluna))
+            instrucoes.append(instrucao)
         while i < len(normalizadas):
             n, t = normalizadas[i]
             if t == ['}']:
@@ -44,12 +48,12 @@ def analisar_programa(fonte):
                 falso = []
                 if i < len(normalizadas) and normalizadas[i][1] == ['senao', '{']:
                     falso, i = bloco(i+1, profundidade+1, em_laco)
-                instrucoes.append(('se', cond, verdadeiro, falso))
+                adicionar(('se', cond, verdadeiro, falso), n, t)
                 continue
             if len(t) >= 3 and t[0] == 'enquanto' and t[-1] == '{':
                 cond, _ = expressao_tipada(t[1:-1], n)
                 corpo, i = bloco(i+1, profundidade+1, True)
-                instrucoes.append(('enquanto', cond, corpo))
+                adicionar(('enquanto', cond, corpo), n, t)
                 continue
             if len(t) >= 7 and t[0] == 'para' and t[-1] == '{':
                 # Sintaxe: para nome de inicio ate fim [passo inteiro] {
@@ -82,12 +86,12 @@ def analisar_programa(fonte):
                 elif tipos[nome] != 'inteiro':
                     raise ErroCompilacao(f'Linha {n}: contador do para precisa ser inteiro.')
                 corpo, i = bloco(i+1, profundidade+1, True)
-                instrucoes.append(('para', nome, inicial, final, passo, corpo))
+                adicionar(('para', nome, inicial, final, passo, corpo), n, t)
                 continue
             if t in (['pare'], ['continue']):
                 if not em_laco:
                     raise ErroCompilacao(f"Linha {n}: '{t[0]}' só pode ser usado dentro de um laço.")
-                instrucoes.append((t[0],))
+                adicionar((t[0],), n, t)
                 i += 1
                 continue
             if t[:2] == ['leia', '('] and t[-1] == ')':
@@ -97,7 +101,7 @@ def analisar_programa(fonte):
                     raise ErroCompilacao(f"Linha {n}: declare a variável '{t[2]}' com seja antes de leia.")
                 if tipos[t[2]] != 'inteiro':
                     raise ErroCompilacao(f'Linha {n}: leia aceita somente variável do tipo inteiro nesta versão.')
-                instrucoes.append(('leia_int', t[2]))
+                adicionar(('leia_int', t[2]), n, t)
             elif t[:2] == ['escreva', '('] and t[-1] == ')':
                 expr = t[2:-1]
                 if len(expr) == 1 and expr[0].startswith('"'):
@@ -105,10 +109,10 @@ def analisar_programa(fonte):
                         valor = json.loads(expr[0])
                     except (ValueError, UnicodeError) as exc:
                         raise ErroCompilacao(f'Linha {n}: texto inválido.') from exc
-                    instrucoes.append(('texto', valor + '\n'))
+                    adicionar(('texto', valor + '\n'), n, t)
                 else:
                     arvore, _ = expressao_tipada(expr, n)
-                    instrucoes.append(('imprima_num', arvore))
+                    adicionar(('imprima_num', arvore), n, t)
             elif t[0] == 'seja':
                 if profundidade:
                     raise ErroCompilacao(f'Linha {n}: declare variáveis antes dos blocos de decisão ou repetição nesta versão.')
@@ -127,15 +131,15 @@ def analisar_programa(fonte):
                 else:
                     raise ErroCompilacao(f"Linha {n}: use 'seja nome = valor' ou 'seja nome: inteiro = valor'.")
                 registrar(nome, inferido, n)
-                instrucoes.append(('atribua', nome, arvore))
+                adicionar(('atribua', nome, arvore), n, t)
             elif len(t) >= 3 and t[1] == '=':
                 nome = t[0]
                 if nome not in variaveis:
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' não foi declarada.")
                 arvore, _ = expressao_tipada(t[2:], n, tipos[nome])
-                instrucoes.append(('atribua', nome, arvore))
+                adicionar(('atribua', nome, arvore), n, t)
             else:
-                raise ErroCompilacao(f'Linha {n}: instrução desconhecida ou incompleta.')
+                raise ErroCompilacao(f'Linha {n}, coluna {t[0].origem.coluna}: instrução desconhecida ou incompleta.')
             i += 1
         raise ErroCompilacao('Bloco sem fechamento: faltou uma linha com } .')
 

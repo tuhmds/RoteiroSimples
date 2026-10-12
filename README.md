@@ -1,22 +1,43 @@
-# RoteiroSimples (RS) — versão experimental 0.9
+# RoteiroSimples (RS) — versão experimental 0.10
 
 Linguagem experimental em português brasileiro, com compilador em Python 3.10+ que **gera diretamente instruções de máquina x86-64**, em executáveis ELF64 (Linux) e PE32+ (Windows). Os programas gerados não dependem do Python para executar. **Não usar em produção.**
 
-## RS 0.9 — Estrutura modular do compilador
+## RS 0.10 — AST localizável e CFG
 
-Separamos o código em pacotes de verdade: `compilador/` (análise léxica, expressões, parser, símbolos, tipos, AST, IR e otimizador) e `backend/` (instruções x86-64 e executáveis PE/ELF). Os módulos antigos `sintaxe.py`, `ir.py` e `codigo_nativo.py` foram mantidos como **fachadas de compatibilidade**.
+A RS continua com comandos **sem acentos**, inclusive `inicio` e `senao`. Textos e comentários continuam aceitando UTF-8. Esta atualização não muda a sintaxe pública ou a geração de instruções nativas.
 
-Esta versão reorganiza a implementação **sem alterar a sintaxe RS**: os comandos continuam sem acentos, as strings e comentários aceitam UTF-8, os alvos permanecem Windows e Linux x86-64. O código produzido nos nove exemplos anteriores deve permanecer idêntico com `-O 0` e `-O 1`. A suíte inclui testes dos 36 hashes SHA-256 de binários da RS 0.8.
+Agora cada token possui **linha e coluna**, e os nós das expressões e instruções da AST preservam essa origem, incluindo blocos aninhados. O compilador também preserva as posições na IR tipada, mesmo quando otimiza constantes.
 
-- [Arquitetura e responsabilidades dos módulos](docs/ARQUITETURA_RS_0_9.md)
+**Novas opções de análise:**
+
+```powershell
+py -3 compilar.py exemplos\fluxo.rts --alvo windows --mostrar-ast --mostrar-cfg --salvar-cfg fluxo.dot -o roteiro_windows.exe
+.\roteiro_windows.exe
+```
+
+- `--mostrar-ast` apresenta a árvore de instruções e expressões com suas posições originais.
+- `--mostrar-cfg` lista os blocos e caminhos do fluxo de controle (`verdadeiro`, `falso`, `continue`, `pare`, `proximo`).
+- `--salvar-cfg fluxo.dot` exporta o diagrama no formato DOT, que pode ser aberto com Graphviz. **O Graphviz não é necessário para compilar ou executar o RS.**
+- Erros de caracteres, instruções desconhecidas e expressões inválidas passam a indicar linha e coluna e exibir um `^` apontando o local no terminal.
+- O menu `INICIAR_RS.bat` ganhou a **opção 5** para ver a AST e o CFG e salvar o DOT; as outras opções continuam funcionando.
+
+**Importante:** o CFG **apenas analisa** o programa. Não implementamos ainda SSA, otimizações globais de caminhos nem um novo backend. O backend continua gerando código nativo, com as mesmas regras da 0.9. Mantivemos testes de igualdade **byte a byte dos 36 executáveis** registrados como referência (9 exemplos × 2 plataformas × 2 níveis de otimização). Consulte [o guia técnico do CFG](docs/CFG_RS_0_10.md).
+
+**Exemplo:** `exemplos/fluxo.rts` usa `para`, `se`, `continue`, `pare` e `enquanto` e imprime 12 e 2 após o texto de demonstração.
+
+## RS 0.9 — Reestruturação interna sem mudar a linguagem
+
+O compilador foi dividido em dois pacotes reais: `compilador/` (léxico, expressões, parser, semântica, tipos, AST, IR e otimizador) e `backend/` (emissão AMD64 e empacotamento PE/ELF). Os arquivos antigos `sintaxe.py`, `ir.py` e `codigo_nativo.py` continuam acessíveis para compatibilidade, mas delegam as operações aos novos pacotes.
+
+A **RS 0.9** não implementava CFG, SSA, ponteiros, heap ou registradores otimizados. A RS 0.10 acrescenta CFG apenas de análise. A IR permanece tipada, o dobramento de constantes existente foi isolado em `compilador/otimizador.py`, e o backend ainda recebe a AST legada por meio de um adaptador. O objetivo foi preparar o projeto para evoluções sem alterar o comportamento atual.
+
+- [Arquitetura detalhada e fronteiras dos módulos](docs/ARQUITETURA_RS_0_9.md)
 - [Especificação provisória da linguagem](docs/ESPECIFICACAO_RS_0_9.md)
-- [Snapshots de binários da RS 0.8](testes/fixtures/rs08_binarios.json)
+- [Snapshots de binários da RS 0.8](testes/fixtures/rs08_binarios.json) usados como proteção contra regressões.
 
-**Ainda não implementamos CFG, SSA, heap, ponteiros, alocador de registradores nem AST detalhada por nó.** O backend usa temporariamente uma AST reconstruída a partir da IR. Não usar em produção.
+Comandos e identificadores continuam **sem acentos**. Strings e mensagens podem usar UTF-8. Abra `INICIAR_RS.bat` no Windows para compilar e executar `exemplos/arquitetura.rts`, que mostra uma contagem tipada e imprime 60.
 
-No Windows, execute `INICIAR_RS.bat`, opção **1**, para compilar e rodar `exemplos/arquitetura.rts`. O exemplo exibe a versão e calcula 60 pontos.
-
-## Mantido da RS 0.8: estouro verificado e IR tipada
+## Novo na RS 0.8: estouro verificado e IR tipada
 
 ```text
 inicio {

@@ -1,4 +1,4 @@
-"""Representação imutável de nós da IR tipada, ainda sem CFG/SSA."""
+"""Representação imutável de nós da IR tipada, com origem opcional."""
 from dataclasses import dataclass
 
 MINIMO = -(1 << 63)
@@ -11,12 +11,14 @@ class ExpressaoIR:
     operacao: str
     valor: object = None
     filhos: tuple = ()
+    origem: object = None
 
 
 @dataclass(frozen=True)
 class InstrucaoIR:
     operacao: str
     argumentos: tuple
+    origem: object = None
 
 
 @dataclass(frozen=True)
