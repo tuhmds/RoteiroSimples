@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.40D
+# RoteiroSimples (RS) — versão experimental 0.41
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,33 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.41 — Proteção do carregamento ELF e PE
+
+A RS 0.41 melhora a segurança dos executáveis **sem exigir ferramentas
+externas de compilação nem ambientes de execução adicionais**.
+
+No **Linux**, os programas usam ELF64 `ET_DYN` (PIE), de modo que o núcleo
+pode variar a base de carregamento, e o cabeçalho `PT_GNU_STACK` solicita
+pilha não executável.
+
+No **Windows**, a imagem PE32+ possui uma seção `.reloc` com realocação
+`DIR64` efetivamente usada pela entrada do programa, e habilita
+`DYNAMIC_BASE` (ASLR) e `NX_COMPAT`. A opção `HIGH_ENTROPY_VA`
+continua **desligada**, pois provocou violações de acesso em certos
+programas; não afirmamos suporte a alta entropia antes da correção
+do gerador nativo.
+
+As verificações comparam cabeçalhos, permissões, realocação e execução
+real em Windows e Linux, de `-O 0` a `-O 8`. As assinaturas SHA-256
+anteriores continuam arquivadas; novos arquivos de referência registram
+o formato 0.41.
+
+A RS ainda **não** oferece proteção integral da pilha, CFG, metadados
+completos de desenrolamento de exceções no PE ou garantia de memória
+segura. Não deve ser usada em produção.
+
+[Especificação e limitações da RS 0.41](docs/SEGURANCA_EXECUTAVEIS_RS_0_41.md).
 
 ## RS 0.40D — Modelo comum de efeitos e propriedade
 
