@@ -113,6 +113,51 @@ class TestesProtecoesExecutaveisRS041(unittest.TestCase):
                 self.assertEqual(pilha[1], 6)         # leitura + escrita; sem X
                 self.assertEqual((pilha[5], pilha[6]), (0, 0))
 
+    def test_linux_dados_constantes_isolados_do_codigo(self):
+        fonte = """inicio {
+            escreva("Mensagem constante e segura")
+            escreva("Outra mensagem na secao de leitura")
+        }"""
+        for nivel in (0, 4, 8):
+            with self.subTest(nivel=nivel):
+                imagem = binario('linux', nivel, fonte)
+                tipo, maquina, entrada, programas = ler_elf(imagem)
+                self.assertEqual(tipo, 3)
+                cargas = [p for p in programas if p[0] == 1]
+                self.assertEqual(len(cargas), 2)
+                codigo, dados = cargas
+                self.assertEqual(codigo[1], 5) # leitura e execução
+                self.assertEqual(dados[1], 4) # somente leitura
+                self.assertNotEqual(dados[1] & 1, 1)
+                self.assertNotEqual(codigo[1] & 2, 2)
+                self.assertEqual(dados[2], dados[3])
+                self.assertEqual(dados[2] % 4096, 0)
+                self.assertGreaterEqual(dados[2], codigo[5])
+                self.assertEqual(dados[2] + dados[5], len(imagem))
+                self.assertIn(b'Mensagem constante e segura',
+                              imagem[dados[2]:dados[2] + dados[5]])
+                self.assertFalse(any(p[1] & 2 and p[1] & 1 for p in cargas))
+
+    def test_linux_mensagens_posicionadas_funcionam_em_todos_niveis(self):
+        if sys.platform != 'linux' or os.uname().machine != 'x86_64':
+            self.skipTest('Linux x86-64 necessário.')
+        fonte = """inicio {
+            escreva("Mensagem constante e segura")
+            escreva("Outra mensagem na secao de leitura")
+        }"""
+        with tempfile.TemporaryDirectory() as pasta:
+            for nivel in range(9):
+                with self.subTest(nivel=nivel):
+                    caminho = Path(pasta)/f'mensagem_{nivel}'
+                    caminho.write_bytes(binario('linux', nivel, fonte))
+                    caminho.chmod(0o700)
+                    r = subprocess.run([str(caminho)], capture_output=True,
+                                       text=True, encoding='utf-8', timeout=12)
+                    self.assertEqual((r.returncode, r.stdout),
+                                     (0, 'Mensagem constante e segura\n'
+                                      'Outra mensagem na secao de leitura\n'),
+                                     r.stderr)
+
     def test_windows_pe_posicionavel_com_realocacao_em_uso(self):
         for nivel in (0, 4, 8):
             with self.subTest(nivel=nivel):
