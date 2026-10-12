@@ -53,7 +53,10 @@ def construir_ir(programa, otimizar=True, nivel=1):
                     programa.importa_matematica)
     if otimizar and nivel >= 2:
         from .propagacao import propagar_constantes_locais
-        return propagar_constantes_locais(ir)
+        ir = propagar_constantes_locais(ir)
+        if nivel >= 3:
+            from .ssa_otimizador import otimizar_com_ssa
+            ir = otimizar_com_ssa(ir)
     return ir
 
 

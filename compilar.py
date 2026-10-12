@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.12: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.13: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import re
@@ -11,15 +11,16 @@ from backend import compilar
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.12')
+    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.13')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--alvo', choices=['windows', 'linux'], default='windows')
     parser.add_argument('-o', '--saida', type=Path, help='arquivo executável de saída')
-    parser.add_argument('-O', '--otimizacao', choices=['0', '1', '2'], default='1', help='otimização (0 = sem, 1 = constantes, 2 = propagação local)' )
+    parser.add_argument('-O', '--otimizacao', choices=['0', '1', '2', '3'], default='1', help='otimização (0 = sem, 1 = constantes, 2 = propagação local, 3 = SSA)' )
     parser.add_argument('--mostrar-ir', action='store_true', help='mostra a IR tipada antes de gerar código')
     parser.add_argument('--mostrar-ast', action='store_true', help='mostra a AST com linha e coluna')
     parser.add_argument('--mostrar-fluxo', action='store_true', help='mostra análise de dados por bloco')
     parser.add_argument('--salvar-fluxo', type=Path, help='salva análise em JSON')
+    parser.add_argument('--mostrar-copias-phi', action='store_true', help='exibe o plano de copias paralelas de cada aresta phi (nao emitidas)')
     parser.add_argument('--mostrar-ssa', action='store_true', help='mostra renomeação SSA e nós phi')
     parser.add_argument('--salvar-ssa', type=Path, help='salva SSA tipada em arquivo JSON')
     parser.add_argument('--mostrar-cfg', action='store_true', help='exibe grafo de controle em texto')
@@ -38,13 +39,20 @@ def main(argv=None):
             from compilador.ir import construir_ir, formatar_ir
             print(formatar_ir(construir_ir(programa, otimizar=nivel > 0, nivel=nivel)))
         if (op.mostrar_cfg or op.salvar_cfg or op.mostrar_fluxo or op.salvar_fluxo
-                or op.mostrar_ssa or op.salvar_ssa):
+                or op.mostrar_ssa or op.salvar_ssa or op.mostrar_copias_phi):
             from compilador.ir import construir_ir
             from compilador.cfg import construir_cfg
             grafo = construir_cfg(construir_ir(programa, otimizar=nivel > 0, nivel=nivel))
-            if op.mostrar_ssa or op.salvar_ssa:
+            if op.mostrar_ssa or op.salvar_ssa or op.mostrar_copias_phi:
                 from compilador.ssa import construir_ssa
                 ssa = construir_ssa(grafo)
+                if op.mostrar_copias_phi:
+                    from compilador.ssa_baixamento import formatar_copias_phi
+                    # Exibe o plano do CFG antes de O3 eliminar atribuicoes mortas.
+                    from compilador.ssa import construir_ssa as montar_ssa
+                    cfg_original = construir_cfg(construir_ir(
+                        programa, otimizar=nivel > 0, nivel=min(nivel, 2)))
+                    print(formatar_copias_phi(montar_ssa(cfg_original)))
                 if op.mostrar_ssa:
                     print(ssa.formatar())
                 if op.salvar_ssa:

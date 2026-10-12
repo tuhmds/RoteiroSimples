@@ -5,20 +5,22 @@ cd /d "%~dp0"
 :MENU
 cls
 echo ==============================================
-echo         RoteiroSimples RS 0.12
+echo         RoteiroSimples RS 0.13
 echo ==============================================
 echo.
-echo  [1] Compilar e executar exemplo de fluxo de dados
+echo  [1] Compilar e executar exemplo com SSA -O 3
 echo  [2] Editar o exemplo no Bloco de Notas
 echo  [3] Rodar testes automatizados
  echo  [4] Executar o ultimo .exe gerado
  echo  [5] Mostrar AST e CFG e gerar fluxo.dot
  echo  [6] Mostrar fluxo de dados e salvar analise.json
  echo  [7] Mostrar SSA e gerar ssa.json
+ echo  [8] Mostrar plano de copias phi por aresta
  echo  [0] Sair
  echo.
-choice /c 12345670 /n /m "Escolha uma opcao: "
-if errorlevel 8 goto FIM
+choice /c 123456780 /n /m "Escolha uma opcao: "
+if errorlevel 9 goto FIM
+if errorlevel 8 goto COPIAS
 if errorlevel 7 goto SSA
 if errorlevel 6 goto DADOS
 if errorlevel 5 goto GRAFO
@@ -30,7 +32,7 @@ if errorlevel 1 goto COMPILAR
 call "%~dp0COMPILAR_WINDOWS.bat"
 goto MENU
 :EDITAR
-notepad "%~dp0exemplos\fluxo_dados.rts"
+notepad "%~dp0exemplos\ssa_otimizacao.rts"
 goto MENU
 :TESTES
 py -3 -m unittest discover -s testes -v
@@ -48,14 +50,14 @@ if not exist "%~dp0roteiro_windows.exe" (
 pause
 goto MENU
 :GRAFO
-py -3 compilar.py exemplos\fluxo_dados.rts --alvo windows --mostrar-ast --mostrar-cfg --salvar-cfg fluxo.dot -o roteiro_windows.exe
+py -3 compilar.py exemplos\ssa_otimizacao.rts --alvo windows --mostrar-ast --mostrar-cfg --salvar-cfg fluxo.dot -o roteiro_windows.exe
 if errorlevel 1 echo Falha ao gerar a AST e o CFG.
 echo.
 echo O diagrama foi salvo em fluxo.dot.
 pause
 goto MENU
 :DADOS
-py -3 compilar.py exemplos\fluxo_dados.rts --alvo windows -O 2 --mostrar-fluxo --salvar-fluxo analise.json -o roteiro_windows.exe
+py -3 compilar.py exemplos\ssa_otimizacao.rts --alvo windows -O 2 --mostrar-fluxo --salvar-fluxo analise.json -o roteiro_windows.exe
 if errorlevel 1 echo Falha na analise de fluxo.
 pause
 goto MENU
@@ -63,6 +65,11 @@ goto MENU
 py -3 compilar.py exemplos\ssa.rts --alvo windows -O 2 --mostrar-ssa --salvar-ssa ssa.json -o roteiro_windows.exe
 if errorlevel 1 echo Falha ao gerar a SSA.
 echo.
+pause
+goto MENU
+:COPIAS
+py -3 compilar.py exemplos\ssa_otimizacao.rts --alvo windows -O 3 --mostrar-copias-phi -o roteiro_windows.exe
+if errorlevel 1 echo Falha ao mostrar copias de phi.
 pause
 goto MENU
 :FIM

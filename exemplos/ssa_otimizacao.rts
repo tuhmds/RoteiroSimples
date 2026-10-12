@@ -1,0 +1,12 @@
+inicio {
+    seja pontos: inteiro = 0
+    seja bonus: inteiro = 1
+    se bonus {
+        pontos = 42
+    } senao {
+        pontos = 42
+    }
+    escreva("RoteiroSimples RS 0.13 - SSA no otimizador")
+    escreva("Pontos:")
+    escreva(pontos)
+}

@@ -1,6 +1,34 @@
-# RoteiroSimples (RS) — versão experimental 0.12
+# RoteiroSimples (RS) — versão experimental 0.13
 
 Linguagem experimental em português brasileiro, com compilador em Python 3.10+ que **gera diretamente instruções de máquina x86-64**, em executáveis ELF64 (Linux) e PE32+ (Windows). Os programas gerados não dependem do Python para executar. **Não usar em produção.**
+
+## RS 0.13 — SSA agora otimiza código nativo com `-O 3`
+
+**Novidade funcional:** a RS utiliza versões SSA para propagar constantes entre blocos de controle, inclusive através de nós `phi` quando os valores de todos os predecessores concordam. A IR reescrita é passada ao mesmo backend x86-64 das versões anteriores. Este é o **primeiro uso da SSA na geração dos executáveis**, não uma substituição completa do backend pela SSA.
+
+- **`-O 3`:** herda `-O 2` e habilita propagação conservadora entre blocos com versões SSA e nós `phi`.
+- **Remoção segura de atribuições mortas:** uma atribuição só é retirada quando o resultado é um literal sem efeitos e não haverá leitura posterior da variável (análise de vivacidade). Operações que podem gerar estouro, divisão por zero ou erro de entrada permanecem.
+- **Diagnóstico de cópias `phi`:** `--mostrar-copias-phi` lista por aresta os pares origem/destino das cópias paralelas. **Esse plano ainda não é emitido no código de máquina**; o backend continua utilizando slots de pilha. Tampouco há alocador de registradores nesta versão.
+- **Compatibilidade:** `-O 0`, `-O 1`, `-O 2` preservam os 72 binários de referência; `-O 3` é experimental. O padrão ainda é `-O 1`.
+- A fase não altera palavras-chave, tipos, ponteiros ou o modelo de memória da linguagem. Comandos e identificadores **não têm acentos**; textos são UTF-8.
+
+Exemplo: `exemplos/ssa_otimizacao.rts`. Ambos os caminhos do `se` atribuem `42` à mesma variável. No encontro dos caminhos, o `phi` permite substituir `escreva(pontos)` por uma impressão da constante. A vivacidade permite remover as atribuições que ficaram sem leitores. O programa continua exibindo `42` com qualquer nível de otimização.
+
+Windows:
+
+```powershell
+py -3 compilar.py exemplos\ssa_otimizacao.rts --alvo windows -O 3 --mostrar-ir --mostrar-copias-phi -o roteiro_windows.exe
+.\roteiro_windows.exe
+```
+
+Linux:
+
+```bash
+python3 compilar.py exemplos/ssa_otimizacao.rts --alvo linux -O 3 -o roteiro_linux
+./roteiro_linux
+```
+
+Veja [detalhes de otimização SSA da RS 0.13](docs/OTIMIZACAO_SSA_RS_0_13.md). Os próximos desafios são o **baixamento real dos `phi` em cópias paralelas** (com ciclos e arestas críticas), alocação de registradores e benchmarking de desempenho. Tamanho do arquivo não equivale necessariamente a velocidade.
 
 ## RS 0.12 — Conversão para SSA tipada (modo de análise)
 
@@ -208,4 +236,4 @@ Não temos ainda números decimais, entrada de textos, funções definidas pelo 
 - `exemplos/otimizacao.rts`: exemplo da RS 0.8; `tipos.rts` e demais exemplos preservados.
 - `docs/ARQUITETURA_E_OTIMIZACOES.md`: arquitetura e próximos passos.
 
-**Próxima prioridade após a RS 0.12:** baixar os nós `phi` em cópias nas arestas, testar equivalência e experimentar alocação de registradores. Buffers de entrada, tipos compostos e segurança de memória continuam pendentes. Licença ainda não definida.
+**Próxima prioridade após a RS 0.13:** baixar os nós `phi` em cópias nas arestas, testar equivalência e experimentar alocação de registradores. Buffers de entrada, tipos compostos e segurança de memória continuam pendentes. Licença ainda não definida.
