@@ -80,6 +80,24 @@ class TesteDiagnosticoExcecao(unittest.TestCase):
                                   ctypes.sizeof(mod),ctypes.byref(usados))
                             base=mod[0] if ok and usados.value >= 8 else None
                             endereco=info.registro.endereco
+                            hthread=k.OpenThread(0x0048,0,ev.fluxo)
+                            regs={}
+                            if hthread:
+                                memoria=ctypes.create_string_buffer(1408)
+                                alinhado=(ctypes.addressof(memoria)+15)&~15
+                                ctypes.c_uint32.from_address(alinhado+48).value=0x100003
+                                k.GetThreadContext.argtypes=[ctypes.c_void_p,ctypes.c_void_p]
+                                k.GetThreadContext.restype=ctypes.c_int
+                                if k.GetThreadContext(ctypes.c_void_p(hthread),
+                                                       ctypes.c_void_p(alinhado)):
+                                    for nome,pos in (('RAX',120),('RCX',128),
+                                        ('RDX',136),('RBX',144),('RSP',152),
+                                        ('RBP',160),('RSI',168),('RDI',176),
+                                        ('R8',184),('R9',192),('RIP',248)):
+                                        regs[nome]=hex(ctypes.c_uint64.from_address(
+                                            alinhado+pos).value)
+                                k.CloseHandle(ctypes.c_void_p(hthread))
+                            print('REGISTRADORES_0411',regs,flush=True)
                             print('EXCECAO_0411',
                                 'codigo',hex(codigo),
                                 'endereco',hex(endereco) if endereco else None,
