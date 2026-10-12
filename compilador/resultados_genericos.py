@@ -109,7 +109,14 @@ def preparar_resultados_genericos(fontes):
     linhas transformadas preservam caminho e número do arquivo original.
     """
     especiais = {}
-    origens = list(fontes.origens)
+    # O carregador de espaços de nomes mantém o texto ORIGINAL em origens
+    # para os diagnósticos, mas fontes.texto contém os nomes já resolvidos.
+    # A especialização deve ler as linhas RESOLVIDAS, nunca as originais.
+    linhas_resolvidas = fontes.texto.splitlines()
+    if len(linhas_resolvidas) != len(fontes.origens):
+        raise ErroCompilacao('Erro interno: linhas dos módulos não correspondem às origens.')
+    origens = [OrigemLinha(origem.caminho, origem.numero, linha)
+               for origem, linha in zip(fontes.origens, linhas_resolvidas)]
     saida = []
     funcao_retorno = None
     nivel_funcao = 0
