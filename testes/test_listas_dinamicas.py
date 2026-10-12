@@ -93,19 +93,19 @@ class TestesListasDinamicas(unittest.TestCase):
 
     def test_liberacao_explicita_e_segunda_liberacao_rejeitada(self):
         fonte = """inicio {
-            seja lista: lista[]
-            adicione(lista, 10)
-            libere(lista)
+            seja colecao: lista[]
+            adicione(colecao, 10)
+            libere(colecao)
             escreva(123)
         }"""
         resultado=executar(fonte)
         self.assertEqual((resultado.returncode, resultado.stdout),(0,'123\n'))
-        for comando in ('libere(lista)', 'adicione(lista, 42)', 'escreva(tamanho(lista))',
-                        'escreva(lista[0])', 'remova_ultimo(lista)'):
+        for comando in ('libere(colecao)', 'adicione(colecao, 42)', 'escreva(tamanho(colecao))',
+                        'escreva(colecao[0])', 'remova_ultimo(colecao)'):
             fonte = """inicio {
-                seja lista: lista[]
-                adicione(lista, 10)
-                libere(lista)
+                seja colecao: lista[]
+                adicione(colecao, 10)
+                libere(colecao)
                 """+comando+"\n}"
             with self.subTest(comando=comando):
                 r=executar(fonte)
@@ -113,13 +113,13 @@ class TestesListasDinamicas(unittest.TestCase):
                 self.assertIn('liber',r.stdout.lower()+r.stderr.lower())
 
     def test_indices_invalidos(self):
-        for expressao in ('lista[0]', 'lista[-1]', 'lista[2]'):
+        for expressao in ('colecao[0]', 'colecao[-1]', 'colecao[2]'):
             fonte="""inicio {
-                seja lista: lista[]
-                adicione(lista, 8)
+                seja colecao: lista[]
+                adicione(colecao, 8)
                 escreva("""+expressao+""")
             }"""
-            if expressao == 'lista[0]':
+            if expressao == 'colecao[0]':
                 r=executar(fonte)
                 self.assertEqual((r.returncode,r.stdout),(0,'8\n'))
             else:
@@ -129,18 +129,18 @@ class TestesListasDinamicas(unittest.TestCase):
 
     def test_ler_indice_existente(self):
         fonte="""inicio {
-            seja lista: lista[]
-            adicione(lista, 0)
-            leia(lista[0])
-            escreva(lista[0])
+            seja colecao: lista[]
+            adicione(colecao, 0)
+            leia(colecao[0])
+            escreva(colecao[0])
         }"""
         r=executar(fonte,'123\n')
         self.assertEqual((r.returncode,r.stdout),(0,'123\n'))
 
     def test_remover_lista_vazia_falha(self):
         r=executar("""inicio {
-            seja lista: lista[]
-            remova_ultimo(lista)
+            seja colecao: lista[]
+            remova_ultimo(colecao)
         }""")
         self.assertNotEqual(r.returncode,0)
 
@@ -163,8 +163,8 @@ class TestesListasDinamicas(unittest.TestCase):
             }""",
             """inicio {
                 para i de 0 ate 3 {
-                    seja lista: lista[]
-                    adicione(lista, i)
+                    seja colecao: lista[]
+                    adicione(colecao, i)
                 }
             }""",
         ]

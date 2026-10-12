@@ -23,7 +23,7 @@ class Gerador(Emissor):
         self.rotulos[nome] = len(self.codigo)
 
     def salto(self, nome, tipo='jmp'):
-        prefixo = {'jmp': b'\xE9', 'jz': b'\x0F\x84', 'jnz': b'\x0F\x85', 'jns': b'\x0F\x89', 'jg': b'\x0F\x8F', 'jl': b'\x0F\x8C', 'jo': b'\x0F\x80', 'je': b'\x0F\x84', 'jne': b'\x0F\x85', 'jb': b'\x0F\x82', 'ja': b'\x0F\x87', 'js': b'\x0F\x88', 'jle': b'\x0F\x8E', 'jge': b'\x0F\x8D', 'jbe': b'\x0F\x86'}[tipo]
+        prefixo = {'jmp': b'\xE9', 'jz': b'\x0F\x84', 'jnz': b'\x0F\x85', 'jns': b'\x0F\x89', 'jg': b'\x0F\x8F', 'jl': b'\x0F\x8C', 'jo': b'\x0F\x80', 'je': b'\x0F\x84', 'jne': b'\x0F\x85', 'jb': b'\x0F\x82', 'ja': b'\x0F\x87', 'jae': b'\x0F\x83', 'js': b'\x0F\x88', 'jle': b'\x0F\x8E', 'jge': b'\x0F\x8D', 'jbe': b'\x0F\x86'}[tipo]
         inicio = len(self.codigo)
         self.relativo(prefixo, nome)
         if self._saltos_curtos_ssa and nome.startswith('ssa_'):
