@@ -5,10 +5,10 @@ cd /d "%~dp0"
 :MENU
 cls
 echo ==============================================
-echo         RoteiroSimples RS 0.29
+echo         RoteiroSimples RS 0.30
 echo ==============================================
 echo.
-echo  [1] Compilar e executar Biblioteca Padrao (RS 0.29)
+echo  [1] Compilar e executar resultados tipados (RS 0.30)
 echo  [2] Editar o exemplo no Bloco de Notas
 echo  [3] Rodar testes automatizados
  echo  [4] Executar o ultimo .exe gerado
@@ -42,7 +42,7 @@ if errorlevel 1 goto COMPILAR
 call "%~dp0COMPILAR_WINDOWS.bat"
 goto MENU
 :EDITAR
-notepad "%~dp0exemplos\biblioteca_padrao.rts"
+notepad "%~dp0exemplos\resultados_tipados.rts"
 goto MENU
 :TESTES
 py -3 -m unittest discover -s testes -v

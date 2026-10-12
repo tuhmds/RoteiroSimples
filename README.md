@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.29
+# RoteiroSimples (RS) — versão experimental 0.30
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -10,7 +10,38 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
 
-## Novo na RS 0.29 — Biblioteca Padrão escrita em RoteiroSimples
+## Novo na RS 0.30 — resultados tipados e erros explícitos
+
+A Biblioteca Padrão agora fornece dois **tipos de resultado**: `ResultadoInteiro` e `ResultadoLogico`. Cada um possui `valido`, `valor` e `codigo_erro`. São registros realmente implementados em `.rts`; a linguagem verifica os tipos na compilação e copia os resultados por valor, sem depender de Python na execução.
+
+```text
+importe "padrao/resultados.rts" como resultados
+importe "padrao/matematica_segura.rts" como segura
+
+inicio {
+    seja divisao: resultados.ResultadoInteiro = segura.dividir(10, 0)
+
+    se divisao.valido {
+        escreva(divisao.valor)
+    } senao {
+        escreva("Falha de divisao detectada")
+        escreva(divisao.codigo_erro)
+    }
+
+    seja raiz: resultados.ResultadoInteiro = segura.raiz_quadrada_inteira(81)
+    escreva(resultados.inteiro_ou(raiz, -1))
+}
+```
+
+**Saída:** `Falha de divisao detectada`, `1` e `9`, em linhas separadas.
+
+O módulo `padrao/resultados.rts` contém os construtores de sucesso e falha, dois tipos de resultado, funções de consulta com valor alternativo e os códigos padronizados. `padrao/matematica_segura.rts` disponibiliza **dez operações com verificação explícita de domínio**: `dividir`, `resto`, `fatorial`, `fibonacci`, `mdc`, `mmc`, `potencia_natural`, `raiz_quadrada_inteira`, `eh_primo` e `limitar`.
+
+**Limitação importante:** são registros tipados da Biblioteca Padrão, **não** um tipo genérico embutido `resultado[T]`. Erros de domínio conhecidos são devolvidos como valores; **transbordamentos em multiplicações gerais ainda podem encerrar o executável**. As funções antigas com retornos convencionais continuam disponíveis para não quebrar programas anteriores. A RS 0.30 não introduziu um novo nível de otimização.
+
+**Exemplo completo:** [`exemplos/resultados_tipados.rts`](exemplos/resultados_tipados.rts). Consulte a [documentação de resultados e códigos de erro](docs/RESULTADOS_TIPADOS_RS_0_30.md).
+
+## Histórico: RS 0.29 — Biblioteca Padrão escrita em RoteiroSimples
 
 A primeira Biblioteca Padrão oficial está em **`biblioteca_padrao/`**, com **30 funções reais** implementadas em arquivos `.rts`, organizadas em quatro módulos: `numeros` (9), `matematica` (8), `estatistica` (6) e `listas` (7).
 
@@ -261,13 +292,13 @@ nativo. Não se promete segurança para aplicações de produção.
 1. Instale Python 3.10 ou posterior e confirme `py -3 --version`.
 2. Baixe ou clone este repositório e extraia o pacote em uma pasta.
 3. Execute **`INICIAR_RS.bat`** e escolha **1** para compilar e executar a demonstração
-   da Biblioteca Padrão RS 0.29. A opção **2** abre o mesmo exemplo no Bloco de Notas.
+   dos resultados tipados da RS 0.30. A opção **2** abre o mesmo exemplo no Bloco de Notas.
 4. Para executar os testes, escolha **3**.
 
 Via PowerShell:
 
 ```powershell
-py -3 compilar.py exemplos\biblioteca_padrao.rts --alvo windows -O 8 -o roteiro_windows.exe
+py -3 compilar.py exemplos\resultados_tipados.rts --alvo windows -O 8 -o roteiro_windows.exe
 .\roteiro_windows.exe
 py -3 -m unittest discover -s testes -v
 ```
@@ -277,7 +308,7 @@ py -3 -m unittest discover -s testes -v
 Requer sistema Linux e processador x86-64:
 
 ```bash
-python3 compilar.py exemplos/biblioteca_padrao.rts --alvo linux -O 8 -o roteiro_linux
+python3 compilar.py exemplos/resultados_tipados.rts --alvo linux -O 8 -o roteiro_linux
 ./roteiro_linux
 python3 -m unittest discover -s testes -v
 ```
@@ -287,7 +318,7 @@ nenhum nível foi criado na RS 0.29. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes até a RS 0.29
+## Recursos presentes até a RS 0.30
 
 | Recurso | Situação |
 |---|---|
@@ -304,6 +335,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Importação de módulos e resolução de dependências | Implementado na 0.27 |
 | Espaços de nomes com apelidos e visibilidade pública/privada | Implementado na 0.28 |
 | Biblioteca Padrão RS escrita em .rts, 30 funções em quatro módulos | Implementado na 0.29 |
+| Resultados tipados e operações matemáticas com erro explícito | Implementado na 0.30 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
 | Tipos reais/decimais, dados dinâmicos, referências e empréstimos | Ainda não |
@@ -313,7 +345,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 - `compilador/`: léxico, análise sintática, escopos, tipos, representação intermediária
   e análises de fluxo.
 - `backend/`: emissão direta de instruções x86-64 e geração de PE/ELF.
-- `biblioteca_padrao/`: 30 funções oficiais em módulos `.rts` (números, matemática, estatística e listas).
+- `biblioteca_padrao/`: funções oficiais em módulos `.rts`, incluindo números, matemática, estatística, listas e resultados tipados.
 - `bibliotecas/`: compatibilidade com antigas operações matemáticas internas.
 - `exemplos/`: programas `.rts`, inclusive a demonstração nova.
 - `testes/`: verificações estáticas, execução dos executáveis e regressões.
@@ -322,6 +354,6 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**RS 0.30 (planejamento):** resultados tipados e erros de domínio explícitos; depois, tamanhos de lista paramétricos e dados dinâmicos com segurança de memória. Não vamos acrescentar níveis de otimização enquanto esses fundamentos estiverem pendentes.
+**RS 0.31 (planejamento):** estudar resultados genéricos e propagação explícita de falhas, sem esconder os encerramentos nativos por transbordamento. Depois, tamanhos de lista paramétricos, dados dinâmicos e propriedade segura de memória. Novos níveis de otimização continuam fora da prioridade.
 
 Ainda não foi escolhida uma licença para publicação do código.

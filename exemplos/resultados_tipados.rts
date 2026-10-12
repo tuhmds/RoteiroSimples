@@ -1,0 +1,27 @@
+importe "padrao/resultados.rts" como resultados
+importe "padrao/matematica_segura.rts" como segura
+
+inicio {
+    escreva("RS 0.30: resultados tipados")
+
+    seja divisao: resultados.ResultadoInteiro = segura.dividir(10, 0)
+    se divisao.valido {
+        escreva(divisao.valor)
+    } senao {
+        escreva("Falha de divisao detectada")
+        escreva(divisao.codigo_erro)
+    }
+
+    seja raiz: resultados.ResultadoInteiro = segura.raiz_quadrada_inteira(81)
+    se raiz.valido {
+        escreva(raiz.valor)
+    }
+
+    seja fatorial: resultados.ResultadoInteiro = segura.fatorial(5)
+    escreva(resultados.inteiro_ou(fatorial, -1))
+
+    seja primo: resultados.ResultadoLogico = segura.eh_primo(29)
+    se primo.valido {
+        escreva(primo.valor)
+    }
+}

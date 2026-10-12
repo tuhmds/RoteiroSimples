@@ -1,0 +1,84 @@
+// Biblioteca Padrão RS 0.30 — resultados tipados, sempre passados por valor.
+// Convenção: codigo_erro == 0 quando valido; valor zerado em caso de falha.
+// Os campos são acessíveis para que toda falha seja tratada explicitamente.
+
+publico tipo ResultadoInteiro {
+    valido: logico
+    valor: inteiro
+    codigo_erro: inteiro
+}
+
+publico tipo ResultadoLogico {
+    valido: logico
+    valor: logico
+    codigo_erro: inteiro
+}
+
+publico funcao sucesso_inteiro(valor: inteiro) -> ResultadoInteiro {
+    seja resultado: ResultadoInteiro
+    resultado.valido = verdadeiro
+    resultado.valor = valor
+    resultado.codigo_erro = 0
+    retorne resultado
+}
+
+publico funcao falha_inteiro(codigo: inteiro) -> ResultadoInteiro {
+    seja resultado: ResultadoInteiro
+    resultado.valido = falso
+    resultado.valor = 0
+    resultado.codigo_erro = codigo
+    retorne resultado
+}
+
+publico funcao sucesso_logico(valor: logico) -> ResultadoLogico {
+    seja resultado: ResultadoLogico
+    resultado.valido = verdadeiro
+    resultado.valor = valor
+    resultado.codigo_erro = 0
+    retorne resultado
+}
+
+publico funcao falha_logica(codigo: inteiro) -> ResultadoLogico {
+    seja resultado: ResultadoLogico
+    resultado.valido = falso
+    resultado.valor = falso
+    resultado.codigo_erro = codigo
+    retorne resultado
+}
+
+// Códigos padronizados para os erros de domínio e as validações conhecidas.
+publico funcao erro_nenhum() -> inteiro {
+    retorne 0
+}
+
+publico funcao erro_divisao_zero() -> inteiro {
+    retorne 1
+}
+
+publico funcao erro_fora_dominio() -> inteiro {
+    retorne 2
+}
+
+publico funcao erro_transbordamento() -> inteiro {
+    retorne 3
+}
+
+publico funcao erro_intervalo_invalido() -> inteiro {
+    retorne 4
+}
+
+// Consulta alternativa: devolve o valor padrão somente quando ocorreu falha.
+// Não substitui verificar valido/codigo_erro quando o programa precisa diagnosticar.
+publico funcao inteiro_ou(resultado: ResultadoInteiro, padrao: inteiro) -> inteiro {
+    se resultado.valido {
+        retorne resultado.valor
+    }
+    retorne padrao
+}
+
+publico funcao logico_ou(resultado: ResultadoLogico, padrao: logico) -> logico {
+    se resultado.valido {
+        retorne resultado.valor
+    }
+    retorne padrao
+}

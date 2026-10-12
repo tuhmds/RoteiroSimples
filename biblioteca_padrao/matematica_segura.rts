@@ -1,0 +1,122 @@
+// Biblioteca Padrão RS 0.30 — operações que devolvem sucesso ou erro tipado.
+// Usam funções RS e estruturas por valor, sem dependência de Python na execução.
+
+importe "resultados.rts" como resultados
+importe "matematica.rts" como matematica
+
+publico funcao dividir(a: inteiro, b: inteiro) -> resultados.ResultadoInteiro {
+    se b == 0 {
+        retorne resultados.falha_inteiro(resultados.erro_divisao_zero())
+    }
+    // A divisão do menor inteiro por -1 não cabe em 64 bits.
+    se a == -9223372036854775808 {
+        se b == -1 {
+            retorne resultados.falha_inteiro(resultados.erro_transbordamento())
+        }
+    }
+    retorne resultados.sucesso_inteiro(a / b)
+}
+
+publico funcao resto(a: inteiro, b: inteiro) -> resultados.ResultadoInteiro {
+    se b == 0 {
+        retorne resultados.falha_inteiro(resultados.erro_divisao_zero())
+    }
+    se a == -9223372036854775808 {
+        se b == -1 {
+            retorne resultados.falha_inteiro(resultados.erro_transbordamento())
+        }
+    }
+    retorne resultados.sucesso_inteiro(a % b)
+}
+
+publico funcao fatorial(n: inteiro) -> resultados.ResultadoInteiro {
+    se n < 0 {
+        retorne resultados.falha_inteiro(resultados.erro_fora_dominio())
+    }
+    se n > 20 {
+        retorne resultados.falha_inteiro(resultados.erro_fora_dominio())
+    }
+    retorne resultados.sucesso_inteiro(matematica.fatorial(n))
+}
+
+publico funcao fibonacci(n: inteiro) -> resultados.ResultadoInteiro {
+    se n < 0 {
+        retorne resultados.falha_inteiro(resultados.erro_fora_dominio())
+    }
+    se n > 92 {
+        retorne resultados.falha_inteiro(resultados.erro_fora_dominio())
+    }
+    retorne resultados.sucesso_inteiro(matematica.fibonacci(n))
+}
+
+publico funcao mdc(a: inteiro, b: inteiro) -> resultados.ResultadoInteiro {
+    se a < 0 {
+        retorne resultados.falha_inteiro(resultados.erro_fora_dominio())
+    }
+    se b < 0 {
+        retorne resultados.falha_inteiro(resultados.erro_fora_dominio())
+    }
+    retorne resultados.sucesso_inteiro(matematica.mdc(a, b))
+}
+
+publico funcao mmc(a: inteiro, b: inteiro) -> resultados.ResultadoInteiro {
+    se a < 0 {
+        retorne resultados.falha_inteiro(resultados.erro_fora_dominio())
+    }
+    se b < 0 {
+        retorne resultados.falha_inteiro(resultados.erro_fora_dominio())
+    }
+    // O transbordamento da multiplicação geral ainda é tratado pelo núcleo.
+    retorne resultados.sucesso_inteiro(matematica.mmc(a, b))
+}
+
+publico funcao potencia_natural(base: inteiro, expoente: inteiro) -> resultados.ResultadoInteiro {
+    se expoente < 0 {
+        retorne resultados.falha_inteiro(resultados.erro_fora_dominio())
+    }
+    // O transbordamento da potência geral ainda é tratado pelo núcleo.
+    retorne resultados.sucesso_inteiro(matematica.potencia_natural(base, expoente))
+}
+
+publico funcao raiz_quadrada_inteira(n: inteiro) -> resultados.ResultadoInteiro {
+    se n < 0 {
+        retorne resultados.falha_inteiro(resultados.erro_fora_dominio())
+    }
+    se n == 0 {
+        retorne resultados.sucesso_inteiro(0)
+    }
+    // Busca binária: evita elevar o candidato ao quadrado e transbordar.
+    seja inferior = 1
+    seja superior = 3037000499
+    seja resposta = 0
+    enquanto inferior <= superior {
+        seja meio = inferior + (superior - inferior) / 2
+        se meio <= n / meio {
+            resposta = meio
+            inferior = meio + 1
+        } senao {
+            superior = meio - 1
+        }
+    }
+    retorne resultados.sucesso_inteiro(resposta)
+}
+
+publico funcao eh_primo(n: inteiro) -> resultados.ResultadoLogico {
+    se n < 0 {
+        retorne resultados.falha_logica(resultados.erro_fora_dominio())
+    }
+    retorne resultados.sucesso_logico(matematica.eh_primo(n))
+}
+
+publico funcao limitar(valor: inteiro, inferior: inteiro, superior: inteiro) -> resultados.ResultadoInteiro {
+    se inferior > superior {
+        retorne resultados.falha_inteiro(resultados.erro_intervalo_invalido())
+    }
+    se valor < inferior {
+        retorne resultados.sucesso_inteiro(inferior)
+    }
+    se valor > superior {
+        retorne resultados.sucesso_inteiro(superior)
+    }
+    retorne resultados.sucesso_inteiro(valor)
+}
