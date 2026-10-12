@@ -46,11 +46,15 @@ def converter_instrucao(instr, tipos, otimizar):
     raise ErroCompilacao(f'Instrução IR desconhecida: {tag}.')
 
 
-def construir_ir(programa, otimizar=True):
-    return ProgramaIR(tuple(converter_instrucao(i, programa.tipos, otimizar)
-                            for i in programa.instrucoes),
-                      dict(programa.tipos), dict(programa.variaveis),
-                      programa.importa_matematica)
+def construir_ir(programa, otimizar=True, nivel=1):
+    ir = ProgramaIR(tuple(converter_instrucao(i, programa.tipos, otimizar)
+                          for i in programa.instrucoes),
+                    dict(programa.tipos), dict(programa.variaveis),
+                    programa.importa_matematica)
+    if otimizar and nivel >= 2:
+        from .propagacao import propagar_constantes_locais
+        return propagar_constantes_locais(ir)
+    return ir
 
 
 def expressao_para_ast(node):

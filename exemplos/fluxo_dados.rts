@@ -1,0 +1,22 @@
+inicio {
+    seja base: inteiro = 2
+    seja pontos: inteiro = base * 3 + 4
+    seja habilitado: logico = pontos >= 10
+    seja voltas: inteiro = 0
+
+    se habilitado {
+        pontos = pontos + 2
+    } senao {
+        pontos = pontos - 2
+    }
+
+    enquanto voltas < 3 {
+        voltas = voltas + 1
+    }
+
+    escreva("RoteiroSimples RS 0.11")
+    escreva("Pontos:")
+    escreva(pontos)
+    escreva("Voltas:")
+    escreva(voltas)
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.10: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.11: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import re
@@ -11,13 +11,15 @@ from backend import compilar
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.10')
+    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.11')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--alvo', choices=['windows', 'linux'], default='windows')
     parser.add_argument('-o', '--saida', type=Path, help='arquivo executável de saída')
-    parser.add_argument('-O', '--otimizacao', choices=['0', '1'], default='1', help='nível de otimização (0 = desativada, 1 = constantes)')
+    parser.add_argument('-O', '--otimizacao', choices=['0', '1', '2'], default='1', help='otimização (0 = sem, 1 = constantes, 2 = propagação local)' )
     parser.add_argument('--mostrar-ir', action='store_true', help='mostra a IR tipada antes de gerar código')
     parser.add_argument('--mostrar-ast', action='store_true', help='mostra a AST com linha e coluna')
+    parser.add_argument('--mostrar-fluxo', action='store_true', help='mostra análise de dados por bloco')
+    parser.add_argument('--salvar-fluxo', type=Path, help='salva análise em JSON')
     parser.add_argument('--mostrar-cfg', action='store_true', help='exibe grafo de controle em texto')
     parser.add_argument('--salvar-cfg', type=Path, help='salva grafo de controle em formato DOT')
     op = parser.parse_args(argv)
@@ -29,19 +31,28 @@ def main(argv=None):
         if op.mostrar_ast:
             from compilador.ast import formatar_ast
             print(formatar_ast(programa))
+        nivel = int(op.otimizacao)
         if op.mostrar_ir:
             from compilador.ir import construir_ir, formatar_ir
-            print(formatar_ir(construir_ir(programa, otimizar=op.otimizacao == '1')))
-        if op.mostrar_cfg or op.salvar_cfg:
+            print(formatar_ir(construir_ir(programa, otimizar=nivel > 0, nivel=nivel)))
+        if op.mostrar_cfg or op.salvar_cfg or op.mostrar_fluxo or op.salvar_fluxo:
             from compilador.ir import construir_ir
             from compilador.cfg import construir_cfg
-            grafo = construir_cfg(construir_ir(programa, otimizar=op.otimizacao == '1'))
+            grafo = construir_cfg(construir_ir(programa, otimizar=nivel > 0, nivel=nivel))
+            if op.mostrar_fluxo or op.salvar_fluxo:
+                from compilador.fluxo_dados import analisar_fluxo
+                analise = analisar_fluxo(grafo)
+                if op.mostrar_fluxo:
+                    print(analise.formatar())
+                if op.salvar_fluxo:
+                    op.salvar_fluxo.write_text(analise.para_json(), encoding='utf-8')
+                    print(f'Fluxo salvo em: {op.salvar_fluxo}')
             if op.mostrar_cfg:
                 print(grafo.formatar())
             if op.salvar_cfg:
                 op.salvar_cfg.write_text(grafo.para_dot(), encoding='utf-8')
                 print(f'CFG salvo em: {op.salvar_cfg}')
-        binario = compilar(programa, op.alvo, otimizar=op.otimizacao == '1')
+        binario = compilar(programa, op.alvo, otimizar=nivel > 0, nivel=nivel)
         saida.write_bytes(binario)
         if op.alvo == 'linux':
             os.chmod(saida, saida.stat().st_mode | 0o111)

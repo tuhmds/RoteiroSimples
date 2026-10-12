@@ -1,6 +1,36 @@
-# RoteiroSimples (RS) — versão experimental 0.10
+# RoteiroSimples (RS) — versão experimental 0.11
 
 Linguagem experimental em português brasileiro, com compilador em Python 3.10+ que **gera diretamente instruções de máquina x86-64**, em executáveis ELF64 (Linux) e PE32+ (Windows). Os programas gerados não dependem do Python para executar. **Não usar em produção.**
+
+## RS 0.11 — Fluxo de dados, vivacidade e otimização local O2
+
+A RS 0.11 mantém os comandos **sem acentos** e preserva a compatibilidade com os programas anteriores. O novo módulo `compilador/fluxo_dados.py` analisa o CFG para calcular definições alcançantes, variáveis vivas e dominadores. Ele identifica **candidatos a junções `phi`**, mas **ainda não converte o programa para SSA real**.
+
+Com `-O 2`, a IR aplica uma propagação **conservadora e local** de constantes em trechos sequenciais, sem mover ou remover operações, e invalida suposições ao encontrar decisões e laços. `-O 0` e `-O 1` preservam o comportamento da RS 0.10; `-O 1` continua sendo o padrão.
+
+### Exemplo novo
+
+```text
+inicio {
+    seja a = 2
+    seja b = a * 3 + 4
+    escreva(b) // 10
+}
+```
+
+Inspecione as variáveis vivas e os pontos em que dois caminhos se encontram:
+
+```powershell
+py -3 compilar.py exemplos\fluxo_dados.rts --alvo windows -O 2 --mostrar-fluxo --salvar-fluxo analise.json --mostrar-ir -o roteiro_windows.exe
+.\roteiro_windows.exe
+```
+
+- `--mostrar-fluxo`: relatório em texto por bloco do CFG.
+- `--salvar-fluxo analise.json`: relatório estruturado em JSON UTF-8.
+- `-O 2`: ativa a propagação local de valores constantes, sem perda das verificações de estouro ou divisão por zero.
+- `INICIAR_RS.bat`: nova **opção 6** para executar a análise de fluxo e salvar `analise.json`. A opção 1 compila e executa o novo exemplo de demonstração.
+
+A análise e a otimização ainda **não** implementam SSA real, ponteiros, heap, otimização global, seleção avançada de registradores ou segurança geral de memória. Veja [detalhes de fluxo de dados e O2](docs/FLUXO_DADOS_RS_0_11.md).
 
 ## RS 0.10 — AST localizável e CFG
 
@@ -161,4 +191,4 @@ Não temos ainda números decimais, entrada de textos, funções definidas pelo 
 - `exemplos/otimizacao.rts`: exemplo da RS 0.8; `tipos.rts` e demais exemplos preservados.
 - `docs/ARQUITETURA_E_OTIMIZACOES.md`: arquitetura e próximos passos.
 
-**Próxima prioridade:** IR com fluxo de controle explícito, buffer de entrada mais eficiente, tipos compostos, diagnóstico com linhas de origem e verificação de memória. Licença ainda não definida.
+**Próxima prioridade:** construção de SSA real com junções `phi` e renomeação de variáveis, seguida por testes rigorosos de equivalência e experimentos de alocação de registradores. Buffers de entrada, tipos compostos e segurança de memória continuam pendentes. Licença ainda não definida.

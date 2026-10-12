@@ -5,10 +5,10 @@ from .windows_pe import montar_pe
 from .linux_elf import montar_elf
 
 
-def compilar(programa, alvo, otimizar=True):
+def compilar(programa, alvo, otimizar=True, nivel=1):
     if alvo not in ('windows', 'linux'):
         raise ValueError('Alvo desconhecido: use windows ou linux.')
-    ir = construir_ir(programa, otimizar=otimizar)
+    ir = construir_ir(programa, otimizar=otimizar, nivel=nivel)
     legado = programa_para_backend(ir)
     gerador, mensagens = montar_codigo(legado, alvo == 'windows')
     return montar_pe(gerador, mensagens) if alvo == 'windows' else montar_elf(gerador, mensagens)
