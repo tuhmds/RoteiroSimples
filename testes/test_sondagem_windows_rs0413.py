@@ -143,5 +143,42 @@ class TestesSondagemWindowsRS0413(unittest.TestCase):
                                          (0,esperado),proc.stderr)
 
 
+    def test_pilha_grande_mantem_entrada_listas_arquivos_e_saida(self):
+        if sys.platform!='win32':
+            self.skipTest('Somente Windows x64.')
+        fonte="""inicio {
+            seja dados: bytes[15000]
+            seja numeros: lista[inteiro]
+            seja numero = 0
+            seja arq: arquivo
+            seja estado = 0
+            adicione_byte(dados, 10)
+            adicione(numeros, 123)
+            leia(numero)
+            escreva(numero)
+            abra_arquivo("sondagem.rsd", arq, "alteracao", estado)
+            escreva(estado)
+            feche_arquivo(arq, estado)
+            escreva(estado)
+            escreva(numeros[0])
+            escreva(dados[0])
+            libere(numeros)
+        }"""
+        programa=analisar_programa(fonte)
+        with tempfile.TemporaryDirectory() as pasta:
+            for nivel in (0,4,8):
+                with self.subTest(nivel=nivel):
+                    exe=Path(pasta)/f'completo_{nivel}.exe'
+                    exe.write_bytes(compilar(programa,'windows',
+                                            otimizar=nivel>0,nivel=nivel))
+                    r=subprocess.run([str(exe)],cwd=pasta,input='7\n',
+                                     capture_output=True,text=True,
+                                     encoding='utf-8',errors='replace',
+                                     timeout=20)
+                    self.assertEqual((r.returncode,r.stdout),
+                                     (0,'7\n0\n0\n123\n10\n'),r.stderr)
+                    self.assertTrue((Path(pasta)/'sondagem.rsd').is_file())
+
+
 if __name__=='__main__':
     unittest.main()
