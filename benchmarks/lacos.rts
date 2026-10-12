@@ -1,0 +1,13 @@
+inicio {
+    seja contador = 0
+    seja soma = 0
+    enquanto contador < 1000000 {
+        se contador % 2 == 0 {
+            soma = soma + 1
+        } senao {
+            soma = soma + 2
+        }
+        contador = contador + 1
+    }
+    escreva(soma)
+}

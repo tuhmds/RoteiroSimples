@@ -1,4 +1,4 @@
-"""RS 0.14: backend SSA real, com copias phi emitidas em cada aresta.
+"""RS 0.15: backend SSA real, com layout de blocos opcional (-O 5).
 
 As localizacoes sao r13/r14/r15 e slots rbp-relativos; uma copia
 paralela pode formar ciclos apos alocacao, portanto usamos um slot
@@ -92,13 +92,53 @@ def construir_backend_ssa(ir):
     return ssa, aloc
 
 
-def emissor_ssa(ir, ssa, aloc):
+def planejar_layout(ssa):
+    """Traços determinísticos no CFG para favorecer queda natural entre blocos.
+
+    Não remove arestas nem blocos; apenas muda sua disposição física.
+    O layout só considera blocos alcançáveis e mantém entrada primeiro.
+    """
+    vivos = {bid for bid, b in ssa.blocos.items() if b.alcancavel}
+    ordem = []
+    vistos = set()
+    posicao = {bid: i for i, bid in enumerate(ssa.blocos)}
+
+    def peso(aresta):
+        return {'verdadeiro': 7, 'proximo': 6, 'continue': 5,
+                'falso': 2, 'pare': 1, 'overflow': 0}.get(aresta.motivo, 3)
+
+    def traco(entrada):
+        atual = entrada
+        while atual in vivos and atual not in vistos:
+            vistos.add(atual)
+            ordem.append(atual)
+            candidatos = [a for a in ssa.cfg.blocos[atual].saidas
+                          if a.destino in vivos and a.destino not in vistos]
+            if not candidatos:
+                break
+            candidatos.sort(key=lambda a: (-peso(a), posicao[a.destino]))
+            atual = candidatos[0].destino
+
+    traco(ssa.cfg.entrada)
+    for bid in ssa.blocos:
+        if bid in vivos and bid not in vistos:
+            traco(bid)
+    assert set(ordem) == vivos and ordem[0] == ssa.cfg.entrada
+    return ordem
+
+
+def emissor_ssa(ir, ssa, aloc, otimizar_layout=False):
     """Retorna callback executavel para montar_codigo, com arquivo nativo real."""
     locais = aloc.locais
     pilha = {v: loc.indice for v, loc in locais.items() if loc.classe == 'pilha'}
     regs = {v: loc.indice for v, loc in locais.items() if loc.classe == 'reg'}
     temporario = Local('pilha', aloc.vagas_pilha)
     alcancaveis = {b for b, bloco in ssa.blocos.items() if bloco.alcancavel}
+    ordem = planejar_layout(ssa) if otimizar_layout else [
+        bid for bid in ssa.blocos if bid in alcancaveis]
+    proximos = {bid: (ordem[i+1] if i+1 < len(ordem) else None)
+                for i, bid in enumerate(ordem)}
+
     def emissor(g, mensagens, windows):
         from .x86_64 import expressao  # aceita registradores em modo SSA
 
@@ -108,17 +148,49 @@ def emissor_ssa(ir, ssa, aloc):
         def rotulo(bid):
             return f'ssa_{bid}'
 
-        def aresta(de, para):
+        def copias_da_aresta(de, para):
             destino = ssa.blocos[para]
-            copias = [(p.destino, p.entradas[de])
-                      for p in sorted(destino.phis.values(), key=lambda p: p.variavel)]
-            copias_paralelas(g, copias, locais, temporario, windows)
-            g.salto(rotulo(para))
+            return [(p.destino, p.entradas[de])
+                    for p in sorted(destino.phis.values(), key=lambda p: p.variavel)]
 
-        g.salto(rotulo(ssa.cfg.entrada))
-        for bid, bloco in ssa.blocos.items():
-            if bid not in alcancaveis:
-                continue
+        def precisa_copiar(de, para):
+            return any(locais[a] != locais[b] for a, b in copias_da_aresta(de, para))
+
+        def aresta(de, para, cair=False):
+            copias_paralelas(g, copias_da_aresta(de, para), locais, temporario, windows)
+            if not (otimizar_layout and cair and proximos[de] == para):
+                g.salto(rotulo(para))
+
+        desvios = []  # trampolins para arestas condicionais com phi
+
+        def condicional(bid, falso, verdadeiro, salto_falso, salto_verdadeiro):
+            """O caminho fisicamente seguinte pode evitar um jmp.
+
+            Uma aresta não contígua sem phi recebe salto condicional direto;
+            com phi recebe trampolim fora da linha principal.
+            """
+            seguinte = proximos[bid] if otimizar_layout else None
+            if seguinte not in (falso, verdadeiro):
+                rotulo_falso = f'ssa_falso_{bid}'
+                g.salto(rotulo_falso, salto_falso)
+                aresta(bid, verdadeiro)
+                g.marcar(rotulo_falso)
+                aresta(bid, falso)
+                return
+            outro = falso if seguinte == verdadeiro else verdadeiro
+            salto = salto_falso if seguinte == verdadeiro else salto_verdadeiro
+            if precisa_copiar(bid, outro):
+                desvio = f'ssa_desvio_{bid}'
+                g.salto(desvio, salto)
+                desvios.append((desvio, bid, outro))
+            else:
+                g.salto(rotulo(outro), salto)
+            aresta(bid, seguinte, cair=True)
+
+        if not otimizar_layout:
+            g.salto(rotulo(ssa.cfg.entrada))
+        for bid in ordem:
+            bloco = ssa.blocos[bid]
             g.marcar(rotulo(bid))
             cfgb = ssa.cfg.blocos[bid]
             if cfgb.papel == 'saida':
@@ -166,11 +238,7 @@ def emissor_ssa(ir, ssa, aloc):
                     g.bytes(b'\x48\x85\xC0')  # test rax,rax
                     falso = next(a.destino for a in cfgb.saidas if a.motivo == 'falso')
                     verdadeiro = next(a.destino for a in cfgb.saidas if a.motivo == 'verdadeiro')
-                    rotulo_falso = f'ssa_falso_{bid}'
-                    g.salto(rotulo_falso, 'jz')
-                    aresta(bid, verdadeiro)
-                    g.marcar(rotulo_falso)
-                    aresta(bid, falso)
+                    condicional(bid, falso, verdadeiro, 'jz', 'jnz')
                     continue
                 elif nome == 'para:condicao':
                     contador, limite, passo = args
@@ -180,20 +248,21 @@ def emissor_ssa(ir, ssa, aloc):
                     g.bytes(b'\x59\x48\x39\xC8')  # pop rcx; cmp rax,rcx
                     falso = next(a.destino for a in cfgb.saidas if a.motivo == 'falso')
                     verdadeiro = next(a.destino for a in cfgb.saidas if a.motivo == 'verdadeiro')
-                    rotulo_falso = f'ssa_falso_{bid}'
-                    g.salto(rotulo_falso, 'jg' if passo > 0 else 'jl')
-                    aresta(bid, verdadeiro)
-                    g.marcar(rotulo_falso)
-                    aresta(bid, falso)
+                    condicional(bid, falso, verdadeiro,
+                                'jg' if passo > 0 else 'jl',
+                                'jle' if passo > 0 else 'jge')
                     continue
                 elif nome not in ('pare', 'continue'):
                     raise ValueError(f'Instrucao SSA nao emitida: {nome}.')
             saidas = cfgb.saidas
             if len(saidas) == 1:
-                aresta(bid, saidas[0].destino)
+                aresta(bid, saidas[0].destino, cair=True)
             elif not saidas:
                 g.salto('ssa_saida_geral')
             else:
                 raise ValueError(f'Bloco SSA sem emissao de condicao: {bid}.')
+        for rotulo_desvio, origem, destino in desvios:
+            g.marcar(rotulo_desvio)
+            aresta(origem, destino)
         g.marcar('ssa_saida_geral')
     return emissor

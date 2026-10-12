@@ -1,6 +1,18 @@
-# RoteiroSimples (RS) — versão experimental 0.14
+# RoteiroSimples (RS) — versão experimental 0.15
 
 Linguagem experimental em português brasileiro, com compilador em Python 3.10+ que **gera diretamente instruções de máquina x86-64**, em executáveis ELF64 (Linux) e PE32+ (Windows). Os programas gerados não dependem do Python para executar. **Não usar em produção.**
+
+## Novo na RS 0.15 — layout de blocos e benchmark nativo
+
+A opção `-O 5` usa a mesma SSA e alocação de registradores da RS 0.14, mas **reordena blocos básicos**, permite queda natural entre blocos adjacentes e reduz saltos incondicionais. Quando um bloco tem ramificações, a emissão preserva cópias `phi` em cada aresta; desvios que precisam de cópias usam trampolins próprios. Todos os níveis `-O 0..4` continuam disponíveis.
+
+```powershell
+py -3 compilar.py exemplos\layout.rts --alvo windows -O 5 -o roteiro_windows.exe
+.\roteiro_windows.exe
+py -3 benchmarks\medir.py --repeticoes 7 --json resultados.json
+```
+
+Os benchmarks medem tempos de execução real por mediana, excluem compilação e conferem que saída e código de retorno são idênticos. Resultados dependem de CPU, sistema e carga; [veja o protocolo](docs/LAYOUT_RS_0_15.md). **Não confundir redução do tamanho dos executáveis com aumento garantido de velocidade.**
 
 ## Novo na RS 0.14 — SSA executável e primeira alocação de registradores
 

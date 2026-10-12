@@ -16,7 +16,7 @@ def compilar(programa, alvo, otimizar=True, nivel=1):
         # Uma vaga extra na pilha serve de temporario para copias circulares.
         legado.variaveis = {f'slot{i}': i for i in range(aloc.vagas_pilha + 1)}
         gerador, mensagens = montar_codigo(
-            legado, alvo == 'windows', emissor_ssa(ir, ssa, aloc))
+            legado, alvo == 'windows', emissor_ssa(ir, ssa, aloc, otimizar_layout=(nivel >= 5)))
     else:
         gerador, mensagens = montar_codigo(legado, alvo == 'windows')
     return montar_pe(gerador, mensagens) if alvo == 'windows' else montar_elf(gerador, mensagens)

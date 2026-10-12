@@ -1,0 +1,12 @@
+inicio {
+    seja resultado = 0
+    para i de 1 ate 10 {
+        se i % 2 == 0 {
+            resultado = resultado + i
+        } senao {
+            resultado = resultado + 1
+        }
+    }
+    escreva("RS 0.15 - saltos otimizados")
+    escreva(resultado)
+}
