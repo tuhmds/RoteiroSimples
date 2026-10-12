@@ -1,0 +1,10 @@
+importe "valores.rts"
+
+tipo Pedido {
+    preco: inteiro
+    quantidade: inteiro
+}
+
+funcao calcular_pedido(pedido: Pedido) -> inteiro {
+    retorne acrescentar_taxa(pedido.preco * pedido.quantidade)
+}

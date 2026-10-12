@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.26
+# RoteiroSimples (RS) — versão experimental 0.27
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -10,7 +10,47 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
 
-## Novo na RS 0.26 — registros aninhados e chamadas compostas diretas
+## Novo na RS 0.27 — sistema de módulos em português
+
+Agora podemos organizar um projeto em **vários arquivos `.rts`**, reutilizando tipos e funções próprias com o comando `importe`:
+
+```text
+// exemplos/modulos/valores.rts
+funcao acrescentar_taxa(valor: inteiro) -> inteiro {
+    retorne valor + 5
+}
+```
+
+```text
+// exemplos/modulos/pedidos.rts
+importe "valores.rts"
+tipo Pedido {
+    preco: inteiro
+    quantidade: inteiro
+}
+funcao calcular_pedido(pedido: Pedido) -> inteiro {
+    retorne acrescentar_taxa(pedido.preco * pedido.quantidade)
+}
+```
+
+```text
+// exemplos/projeto_modulos.rts
+importe "modulos/pedidos.rts"
+inicio {
+    seja pedido: Pedido
+    pedido.preco = 25
+    pedido.quantidade = 4
+    escreva(calcular_pedido(pedido))
+}
+```
+
+**Resultado:** `105`. O compilador resolve as dependências, reúne os arquivos e gera um único executável Windows ou Linux, sem carregar módulos durante a execução.
+
+A importação usa caminho relativo ao arquivo que importa; apenas arquivos `.rts` dentro da pasta do projeto são aceitos. Importações repetidas são reunidas uma única vez, dependências circulares e nomes duplicados geram erros. Nesta versão todos os tipos e funções compartilham o mesmo espaço global; nomes qualificados e elementos privados ainda não existem.
+
+**Exemplo:** [`exemplos/projeto_modulos.rts`](exemplos/projeto_modulos.rts). Veja [a documentação completa dos módulos](docs/MODULOS_RS_0_27.md). O parâmetro `--mostrar-modulos` mostra os arquivos carregados. Os níveis de otimização continuam de `-O 0` a `-O 8`, sem acrescentar outro nível.
+
+## Histórico: RS 0.26 — registros aninhados e chamadas compostas diretas
 
 Registros podem conter outros registros, listas de inteiros e buffers UTF-8 de capacidade declarada. Os campos são acessados por caminhos completos e verificados na compilação.
 
@@ -164,7 +204,7 @@ nativo. Não se promete segurança para aplicações de produção.
 Via PowerShell:
 
 ```powershell
-py -3 compilar.py exemplos\registros_aninhados.rts --alvo windows -O 8 -o roteiro_windows.exe
+py -3 compilar.py exemplos\projeto_modulos.rts --alvo windows -O 8 -o roteiro_windows.exe
 .\roteiro_windows.exe
 py -3 -m unittest discover -s testes -v
 ```
@@ -174,7 +214,7 @@ py -3 -m unittest discover -s testes -v
 Requer sistema Linux e processador x86-64:
 
 ```bash
-python3 compilar.py exemplos/registros_aninhados.rts --alvo linux -O 8 -o roteiro_linux
+python3 compilar.py exemplos/projeto_modulos.rts --alvo linux -O 8 -o roteiro_linux
 ./roteiro_linux
 python3 -m unittest discover -s testes -v
 ```
@@ -184,7 +224,7 @@ nenhum nível foi criado na RS 0.26. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes até a RS 0.26
+## Recursos presentes até a RS 0.27
 
 | Recurso | Situação |
 |---|---|
@@ -198,6 +238,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Memória dimensionada para quadros locais, sondagem de páginas | Implementado |
 | Representação intermediária tipada, fluxo de controle, versões únicas, memória versionada | Implementado para a parte já suportada da linguagem |
 | Registros aninhados, campos de listas e texto | Implementado na 0.26 |
+| Importação de módulos e resolução de dependências | Implementado na 0.27 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
 | Tipos reais/decimais, módulos, dados dinâmicos, referências e empréstimos | Ainda não |
@@ -215,7 +256,6 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**RS 0.27 (planejamento):** sistema de módulos e organização de programas em múltiplos arquivos, seguido de tipos reais e decimais com regras de precisão definidas.
-Depois: memória dinâmica e referências seguras com controle de propriedade e tempo de vida. Novos níveis de otimização não são prioridade.
+**RS 0.28 (planejamento):** espaços de nomes e controle de visibilidade entre módulos, seguidos por compilação incremental e bibliotecas padronizadas. Em seguida, ampliar tipos numéricos, memória dinâmica e referências seguras, sem acrescentar novos níveis de otimização antes de amadurecer a linguagem.
 
 Ainda não foi escolhida uma licença para publicação do código.

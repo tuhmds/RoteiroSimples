@@ -1,0 +1,9 @@
+importe "modulos/pedidos.rts"
+
+inicio {
+    seja pedido: Pedido
+    pedido.preco = 25
+    pedido.quantidade = 4
+    escreva("RS 0.27: sistema de modulos")
+    escreva(calcular_pedido(pedido))
+}

@@ -1,0 +1,3 @@
+funcao acrescentar_taxa(valor: inteiro) -> inteiro {
+    retorne valor + 5
+}
