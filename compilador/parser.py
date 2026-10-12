@@ -5,6 +5,7 @@ from .ast import Programa, Funcao, NoInstrucao, PosicaoFonte
 from .erros import ErroCompilacao
 from .lexico import tokens
 from .semantica import ContextoSemantico
+from .validacao_caminhos import validar_literal_arquivo
 
 def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _retorno=None, _registros=None):
     # O analisador público também compreende resultados genéricos, e não só
@@ -215,24 +216,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     def validar_caminho(parte, linha):
         if len(parte) != 1 or not parte[0].startswith('"'):
             raise ErroCompilacao(f'Linha {linha}: nome de arquivo deve ser texto literal.')
-        try:
-            caminho = json.loads(str(parte[0]))
-        except (ValueError, UnicodeError) as exc:
-            raise ErroCompilacao(f'Linha {linha}: caminho invalido.') from exc
-        if (not isinstance(caminho,str) or not 1 <= len(caminho) <= 240
-                or not re.fullmatch(r'[A-Za-z0-9_./-]+',caminho,re.ASCII)
-                or caminho.startswith('/') or caminho.endswith('/')
-                or any(item in ('','.','..') for item in caminho.split('/'))):
-            raise ErroCompilacao(f'Linha {linha}: use caminho relativo ASCII, sem . ou .. como segmento.')
-        # Nomes DOS como NUL, CON e COM1 não são arquivos comuns no
-        # Windows, mesmo quando terminam com extensões (.rsd etc).
-        # Rejeitar também no Linux preserva semântica multiplataforma.
-        ultimo = caminho.split('/')[-1].split('.')[0].upper()
-        if ultimo in ('CON', 'PRN', 'AUX', 'NUL') or (
-                len(ultimo) == 4 and ultimo[:3] in ('COM', 'LPT')
-                and ultimo[3] in '123456789'):
-            raise ErroCompilacao(f'Linha {linha}: nome de dispositivo reservado: {ultimo}.')
-        return caminho
+        return validar_literal_arquivo(parte[0], linha)
 
     def recurso_nome(parte, linha):
         if len(parte) != 1:
@@ -497,16 +481,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(
                         f'Linha {n}: use {t[0]}("dados.rsd", buffer, posicao, '
                         + ('estado).' if gravar else 'quantidade, estado).'))
-                try:
-                    caminho = json.loads(str(partes[0][0]))
-                except (ValueError, UnicodeError) as exc:
-                    raise ErroCompilacao(f'Linha {n}: nome de arquivo invalido.') from exc
-                if (not isinstance(caminho, str) or not 1 <= len(caminho) <= 240
-                        or not re.fullmatch(r'[A-Za-z0-9_./-]+', caminho, re.ASCII)
-                        or caminho.startswith('/') or caminho.endswith('/')
-                        or any(parte in ('', '.', '..') for parte in caminho.split('/'))):
-                    raise ErroCompilacao(
-                        f'Linha {n}: arquivo deve ter caminho relativo ASCII, sem . ou .. como pasta.')
+                caminho = validar_literal_arquivo(partes[0][0], n)
                 nome = contexto.resolver_caminho(partes[1], n)
                 tipo_buffer = tipos.get(nome)
                 if not isinstance(tipo_buffer, tuple) or tipo_buffer[0] not in ('texto', 'bytes'):
@@ -526,16 +501,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             elif t[0] in ('grave_arquivo', 'carregue_arquivo') and t[1:2] == ['('] and t[-1:] == [')']:
                 if len(t) != 6 or t[3] != ',' or not t[2].startswith('"'):
                     raise ErroCompilacao(f'Linha {n}: use {t[0]}("arquivo.txt", variavel_texto).')
-                try:
-                    caminho = json.loads(str(t[2]))
-                except (ValueError, UnicodeError) as exc:
-                    raise ErroCompilacao(f'Linha {n}: nome de arquivo invalido.') from exc
-                if (not isinstance(caminho, str) or not 1 <= len(caminho) <= 240
-                        or not re.fullmatch(r'[A-Za-z0-9_./-]+', caminho, re.ASCII)
-                        or caminho.startswith('/') or caminho.endswith('/')
-                        or any(parte in ('', '.', '..') for parte in caminho.split('/'))):
-                    raise ErroCompilacao(
-                        f'Linha {n}: arquivo deve ter caminho relativo ASCII, sem . ou .. como pasta.')
+                caminho = validar_literal_arquivo(t[2], n)
                 nome, _ = texto_destino([t[4]], n)
                 adicionar((str(t[0]), caminho, nome), n, t)
             elif t[0] in ('copie', 'junte') and len(t) >= 6 and t[1] == '(' and t[-1] == ')':
