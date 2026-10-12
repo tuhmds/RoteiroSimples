@@ -117,7 +117,7 @@ class TestesDesenrolamentoWindowsRS0412(unittest.TestCase):
             for desc in emissor.desenrolamentos
         })
 
-    def test_registro_parcial_nao_finge_compatibilidade_com_sondagem(self):
+    def test_sondagem_nativa_gera_tabela_real_para_quadros_grandes(self):
         fonte="""inicio {
             seja dados: bytes[5000]
             adicione_byte(dados, 255)
@@ -126,13 +126,32 @@ class TestesDesenrolamentoWindowsRS0412(unittest.TestCase):
         programa=analisar_programa(fonte)
         emissor,_=montar_codigo(programa,True)
         self.assertGreaterEqual(emissor.desenrolamentos[0]['quadro'],4096)
+        self.assertTrue(emissor.exige_sondagem_pilha)
+        self.assertIn('rs_sondar_pilha',emissor.rotulos)
         tabela,dados=gerar_desenrolamentos(emissor,0x1000,0x9000)
-        self.assertEqual(tabela,b'')
-        self.assertEqual(dados,b'')
+        self.assertEqual(len(tabela),12)
+        self.assertEqual(len(dados),16)
+        self.assertEqual(dados[2],5)
         pe=compilar(programa,'windows',otimizar=False,nivel=0)
         diretorio,secoes=campos_pe(pe)
-        self.assertEqual(diretorio,(0,0))
-        self.assertNotIn('.pdata',secoes)
+        self.assertEqual(diretorio[1],12)
+        self.assertIn('.pdata',secoes)
+        self.assertIn('.xdata',secoes)
+
+    def test_tamanho_grande_usa_alocacao_de_32_bits(self):
+        fonte="""inicio {
+            seja dados: bytes[600000]
+            adicione_byte(dados, 7)
+            escreva(dados[0])
+        }"""
+        emissor,_=montar_codigo(analisar_programa(fonte),True)
+        tabela,infos=gerar_desenrolamentos(emissor,0x1000,0x9000)
+        self.assertEqual(len(tabela),12)
+        self.assertEqual(infos[2],6)  # UWOP_ALLOC_LARGE com 3 slots
+        self.assertEqual(infos[5],0x11)  # opInfo=1, operacao=1
+        tamanho,=struct.unpack_from('<I',infos,6)
+        self.assertEqual(tamanho,emissor.desenrolamentos[0]['quadro'])
+
 
     def test_recusa_metadados_de_prologo_incorreto(self):
         programa=analisar_programa('inicio {\n escreva(12)\n}')
