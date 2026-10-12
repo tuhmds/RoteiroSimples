@@ -97,6 +97,18 @@ class TesteDiagnosticoExcecao(unittest.TestCase):
                                         regs[nome]=hex(ctypes.c_uint64.from_address(
                                             alinhado+pos).value)
                                 k.CloseHandle(ctypes.c_void_p(hthread))
+                            memoria_rip=ctypes.create_string_buffer(32)
+                            leitura=ctypes.c_size_t(0)
+                            k.ReadProcessMemory.argtypes=[
+                                ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,
+                                ctypes.c_size_t,ctypes.POINTER(ctypes.c_size_t)]
+                            k.ReadProcessMemory.restype=ctypes.c_int
+                            leu=k.ReadProcessMemory(ctypes.c_void_p(int(p._handle)),
+                                ctypes.c_void_p(endereco),
+                                memoria_rip,32,ctypes.byref(leitura))
+                            print('CODIGO_EXCEPTION_0411',
+                                  memoria_rip.raw[:leitura.value].hex() if leu else 'falhou',
+                                  flush=True)
                             print('REGISTRADORES_0411',regs,flush=True)
                             print('EXCECAO_0411',
                                 'codigo',hex(codigo),
