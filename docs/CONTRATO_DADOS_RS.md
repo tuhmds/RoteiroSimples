@@ -109,16 +109,27 @@ TLS etc.) e normalizar diagnósticos, não resultados incompatíveis.
 
 ## 7. Requisitos que cabem à linguagem RS
 
-A RS 0.34 dispõe de `grave_arquivo` e `carregue_arquivo` para
-`texto[N]`, mas eles substituem/leem arquivos inteiros e erros de sistema
-podem encerrar a execução. Isso **não basta** para um banco confiável.
+A RS 0.34 oferece `grave_arquivo` e `carregue_arquivo` para `texto[N]`.
+A RS 0.35 acrescenta `grave_trecho` e `carregue_trecho`: acesso binário
+posicional em 64 bits, sem truncamento total e com retorno numérico
+recuperável (-1, -2, -3, -4). Sua implementação usa chamadas nativas
+diferentes no Linux e Windows e inclui testes de conteúdo binário e de
+persistência entre processos.
+
+**Ainda não basta para um banco confiável:** não existe `fsync`/
+`FlushFileBuffers`, transação, travamento, abertura persistente nem
+abstração tipada de bytes e erros. `texto[N]` continua sendo o buffer
+temporário, não um tipo de sequência binária.
 
 Prioridades que deverão ser implementadas e validadas na linguagem/núcleo:
 
-1. Bytes e sequências binárias tipadas; leitura/escrita em posições arbitrárias.
+1. Bytes e sequências binárias tipadas; **leitura/escrita por posição em
+   64 bits implementadas na RS 0.35**, ainda usando `texto[N]`.
 2. Identificadores de arquivo com tempo de vida seguro; operações parciais
-   e codificação explícita de valores; limites de 64 bits.
-3. Erros recuperáveis (`resultado[T]`) para abrir, ler, gravar e fechar.
+   já suportadas pelos comandos posicionais, mas ainda faltam abertura
+   persistente e codificação explícita de valores.
+3. Erros recuperáveis já disponíveis como códigos inteiros na RS 0.35;
+   evoluir para resultados tipados (`resultado[T]`).
 4. Sincronização durável, substituição atômica, travamento e modos de
    compartilhamento documentados em Windows e Linux.
 5. Texto dinâmico ou buffers dimensionados seguros para consultas e campos.

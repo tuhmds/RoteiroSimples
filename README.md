@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.33 (em desenvolvimento)
+# RoteiroSimples (RS) — versão experimental 0.35
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -10,7 +10,7 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
 
-## RS 0.35 — acesso binário posicional (em desenvolvimento)
+## RS 0.35 — acesso binário posicional
 
 Dois comandos permitem modificar partes de arquivos sem truncar o conteúdo
 e recuperar resultados de I/O sem encerrar o programa:
@@ -511,7 +511,7 @@ nenhum nível foi criado na RS 0.29. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes até a RS 0.32
+## Recursos presentes até a RS 0.35
 
 | Recurso | Situação |
 |---|---|
@@ -530,10 +530,14 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Biblioteca Padrão RS escrita em .rts, 30 funções em quatro módulos | Implementado na 0.29 |
 | Resultados tipados e operações matemáticas com erro explícito | Implementado na 0.30 |
 | resultado[T], sucesso[T], falha[T] e propague | Implementado na 0.31 |
-| lista[] e proprietário exclusivo com liberação automática | Implementado na 0.32 |
+| `lista[]` e proprietário exclusivo com liberação automática | Implementado na 0.32 |
+| Transferência `mova`, limpeza por escopo, empréstimo imutável | Implementado na 0.33 |
+| Listas dinâmicas tipadas para inteiros, lógicos e registros | Implementado na 0.33 |
+| Leitura e gravação de arquivos inteiros | Implementado na 0.34 |
+| Leitura e gravação binária por posição, com estado de erro recuperável | Implementado na 0.35 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
-| Tipos reais/decimais, dados dinâmicos, referências e empréstimos | Ainda não |
+| Tipos reais/decimais, textos dinâmicos, empréstimos mutáveis, FFI e durabilidade de arquivos | Ainda não |
 
 ## Organização atual
 
@@ -550,7 +554,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**RS 0.33 (validação em andamento):** `mova`, liberação por escopo e empréstimos explícitos de leitura implementados. Listas dinâmicas de outros tipos, textos dinâmicos e estruturas compostas permanecem em planejamento.
+**RS 0.36 (planejamento):** tipo `byte` e armazenamento binário explícito, identificadores de arquivos com ciclo de vida seguro e estados de erro tipados. Depois: sincronização durável (`fsync` e `FlushFileBuffers`), operações atômicas, travamento e interface para bibliotecas externas. Esses fundamentos antecedem o motor de banco de dados Dados RS.
 
 O projeto ainda é experimental, não pronto para produção. Não estamos acrescentando níveis de otimização.
 

@@ -76,6 +76,6 @@ arquivo e devolve um código negativo, sem reverter alterações. O comando
 não executa `fsync`/`FlushFileBuffers`, não gerencia travas e não é
 apropriado para uso concorrente sem coordenação externa.
 
-A etapa seguinte deve introduzir identificadores de arquivo, fechamento
-seguro, sincronização no disco, substituição atômica e estruturas de erro
-tipadas. Não confundir essas primitivas com um motor de banco de dados.
+A etapa seguinte deve introduzir um tipo explícito de bytes,
+identificadores de arquivo de propriedade única, fechamento seguro,
+sincronização no disco, substituição atômica e estruturas de erro tipadas. Não confundir essas primitivas com um motor de banco de dados.
