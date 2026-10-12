@@ -4,6 +4,7 @@ Aceitar -O 8 não significa necessariamente usar SSA nesse programa.
 O gerador conservador protege construções ainda não representadas pela IR.
 """
 from dataclasses import dataclass
+from .cobertura_intermediaria import analisar_cobertura, motivos_de_cobertura
 
 
 @dataclass(frozen=True)
@@ -59,8 +60,12 @@ def decidir_estrategia(programa, nivel=1, otimizar=True):
                     'grave_trecho', 'carregue_trecho') for i in instrucoes):
         motivos.append('arquivos nativos')
 
+    # Uma operação nova nunca deve entrar silenciosamente na IR antiga.
+    # O relatório percorre expressões e blocos aninhados e cobre funções.
+    motivos.extend(motivos_de_cobertura(analisar_cobertura(programa)))
     if motivos:
-        return Estrategia('conservador', nivel, 0, tuple(motivos), False)
+        return Estrategia('conservador', nivel, 0,
+                          tuple(dict.fromkeys(motivos)), False)
 
     listas_ou_textos = any(isinstance(t, tuple) and t[0] in ('lista', 'texto')
                            for t in tipos.values())

@@ -3,6 +3,7 @@ from .ast import Programa
 from .erros import ErroCompilacao
 from .nos_ir import MINIMO, MAXIMO, ExpressaoIR, InstrucaoIR, ProgramaIR
 from .otimizador import dobrar_constantes
+from .cobertura_intermediaria import analisar_cobertura, motivos_de_cobertura
 
 def converter_expressao(expr, tipos, otimizar=True, literal_minimo=False):
     tag = expr[0]
@@ -59,6 +60,20 @@ def converter_instrucao(instr, tipos, otimizar):
 
 
 def construir_ir(programa, otimizar=True, nivel=1):
+    """Constrói IR somente quando a tradução é representável sem perdas."""
+    cobertura = analisar_cobertura(programa)
+    impedimentos = list(motivos_de_cobertura(cobertura))
+    if getattr(programa, 'funcoes', None):
+        impedimentos.append('funções não são representadas na IR atual')
+    if getattr(programa, 'registros', None):
+        impedimentos.append('registros não são representados na IR atual')
+    if getattr(programa, 'escopos_locais', False):
+        impedimentos.append('escopos locais não são representados na IR atual')
+    if impedimentos:
+        raise ErroCompilacao(
+            'A representação intermediária não está disponível para este programa: '
+            + '; '.join(impedimentos) + '. '
+            'A compilação nativa permanece disponível pelo gerador conservador.')
     ir = ProgramaIR(tuple(converter_instrucao(i, programa.tipos, otimizar)
                           for i in programa.instrucoes),
                     dict(programa.tipos), dict(programa.variaveis),

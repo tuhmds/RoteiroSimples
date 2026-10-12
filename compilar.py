@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.40B: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.40C: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import re
@@ -10,6 +10,7 @@ from compilador.parser import analisar_programa
 from compilador.modulos import carregar_fontes, apresentar_erro
 from backend import compilar
 from compilador.estrategia import decidir_estrategia, descrever_estrategia
+from compilador.cobertura_intermediaria import analisar_cobertura, formatar_cobertura
 
 
 def main(argv=None):
@@ -18,10 +19,12 @@ def main(argv=None):
     for canal in (sys.stdout, sys.stderr):
         if canal is not None and hasattr(canal, 'reconfigure'):
             canal.reconfigure(encoding='utf-8')
-    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.40B')
+    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.40C')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--mostrar-modulos', action='store_true', help='lista os módulos e a ordem de importação')
     parser.add_argument('--mostrar-estrategia', action='store_true', help='explica quais otimizações serão aplicadas de fato')
+    parser.add_argument('--mostrar-cobertura-intermediaria', action='store_true',
+                        help='mostra instruções e expressões cobertas pela IR e motivos do gerador conservador')
     parser.add_argument('--alvo', choices=['windows', 'linux'], default='windows')
     parser.add_argument('-o', '--saida', type=Path, help='arquivo executável de saída')
     parser.add_argument('-O', '--otimizacao', choices=['0', '1', '2', '3', '4', '5', '6', '7', '8'], default='1', help='otimização (0 = sem, 1 = constantes, 2 = propagação local, 3 = SSA, 4 = SSA nativa, 5 = layout, 6 = coalescencia e saltos curtos, 7 = memoria versionada local, 8 = propagacao entre blocos)' )
@@ -53,20 +56,30 @@ def main(argv=None):
         if op.mostrar_modulos:
             for arquivo in fontes.arquivos:
                 print(f'Módulo: {arquivo}')
-        possui_fundacao_nova = bool(programa.funcoes) or programa.escopos_locais
-        analises_restritas = (op.mostrar_ir or op.mostrar_cfg or op.salvar_cfg
-                or op.mostrar_fluxo or op.salvar_fluxo or op.mostrar_ssa or op.salvar_ssa
-                or op.mostrar_copias_phi or op.mostrar_alocacao
-                or op.mostrar_memory_ssa or op.salvar_memory_ssa
-                or op.mostrar_efeitos or op.salvar_efeitos)
-        if possui_fundacao_nova and analises_restritas:
-            raise ErroCompilacao('Análises avançadas de fluxo e memória para funções e escopos novos ainda não estão disponíveis. O código nativo funciona pelo gerador conservador.')
+        nivel = int(op.otimizacao)
+        decisao = decidir_estrategia(programa, nivel, otimizar=nivel > 0)
+        if op.mostrar_cobertura_intermediaria:
+            print(formatar_cobertura(analisar_cobertura(programa), decisao))
+        if op.mostrar_estrategia:
+            print(descrever_estrategia(decisao))
+        analises_ir = (
+            op.mostrar_ir or op.mostrar_cfg or op.salvar_cfg
+            or op.mostrar_fluxo or op.salvar_fluxo
+            or op.mostrar_ssa or op.salvar_ssa
+            or op.mostrar_copias_phi or op.mostrar_alocacao
+            or op.mostrar_memory_ssa or op.salvar_memory_ssa
+            or op.mostrar_efeitos or op.salvar_efeitos
+        )
+        if analises_ir and decisao.gerador == 'conservador':
+            raise ErroCompilacao(
+                'A análise solicitada requer a representação intermediária, '
+                'mas este programa usa o gerador conservador: '
+                + '; '.join(decisao.motivos)
+                + '. Compile normalmente ou utilize '
+                  '--mostrar-cobertura-intermediaria para examinar os limites.')
         if op.mostrar_ast:
             from compilador.ast import formatar_ast
             print(formatar_ast(programa))
-        nivel = int(op.otimizacao)
-        if op.mostrar_estrategia:
-            print(descrever_estrategia(decidir_estrategia(programa, nivel, otimizar=nivel > 0)))
         tem_listas = any(isinstance(t, tuple) and t[0] in ('lista', 'texto') for t in programa.tipos.values())
         if tem_listas and (op.mostrar_cfg or op.salvar_cfg or op.mostrar_fluxo
                 or op.salvar_fluxo or op.mostrar_ssa or op.salvar_ssa
