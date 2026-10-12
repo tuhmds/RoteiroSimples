@@ -1,0 +1,15 @@
+inicio {
+    seja dados: lista[3]
+    seja mensagem: texto[40]
+    copie(mensagem, "Olá")
+    para i de 0 ate 2 {
+        dados[i] = (i + 1) * 10
+        se i == 1 {
+            junte(mensagem, "!")
+        } senao {
+            junte(mensagem, ".")
+        }
+    }
+    escreva(mensagem)
+    escreva(dados[1])
+}

@@ -5,7 +5,7 @@ cd /d "%~dp0"
 :MENU
 cls
 echo ==============================================
-echo         RoteiroSimples RS 0.19
+echo         RoteiroSimples RS 0.20
 echo ==============================================
 echo.
 echo  [1] Compilar e executar exemplo de entrada bufferizada (-O 6)
@@ -19,9 +19,11 @@ echo  [3] Rodar testes automatizados
  echo  [9] Ver alocacao de registradores e pilha
  echo  [A] Benchmark de velocidade -O 3, -O 4, -O 5 e -O 6
 echo  [B] Mostrar efeitos de memoria e E/S
+echo  [C] Mostrar Memory SSA e salvar memoria.json
 echo  [0] Sair
  echo.
-choice /c 1234567890AB /n /m "Escolha uma opcao: "
+choice /c 1234567890ABC /n /m "Escolha uma opcao: "
+if errorlevel 13 goto MEMORY_SSA
 if errorlevel 12 goto EFEITOS
 if errorlevel 11 goto BENCHMARK
 if errorlevel 10 goto FIM
@@ -91,6 +93,12 @@ goto MENU
 :EFEITOS
 py -3 compilar.py exemplos\entrada_bufferizada.rts --alvo windows -O 6 --mostrar-efeitos --salvar-efeitos efeitos.json -o roteiro_windows.exe
 if errorlevel 1 echo Falha ao mostrar efeitos da IR.
+pause
+goto MENU
+:MEMORY_SSA
+py -3 compilar.py exemplos\memory_ssa.rts --alvo windows -O 6 --mostrar-memory-ssa --salvar-memory-ssa memoria.json -o roteiro_windows.exe
+if errorlevel 1 echo Falha ao gerar a Memory SSA.
+echo.
 pause
 goto MENU
 :FIM

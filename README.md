@@ -1,6 +1,28 @@
-# RoteiroSimples (RS) — versão experimental 0.19
+# RoteiroSimples (RS) — versão experimental 0.20
 
 Linguagem experimental em português brasileiro, com compilador em Python 3.10+ que **gera diretamente instruções de máquina x86-64**, em executáveis ELF64 (Linux) e PE32+ (Windows). Os programas gerados não dependem do Python para executar. **Não usar em produção.**
+
+## Novo na RS 0.20 — Memory SSA por objeto e efeito
+
+A RS agora **versiona leituras e escritas em memória** sobre o CFG. Cada lista ou
+buffer local possui sua própria cadeia de versões, enquanto `leia`, `escreva`
+e possíveis erros usam cadeias de dependência de efeito observável. Junções
+de caminhos e laços criam nós `phi` de memória. O verificador confere
+unicidade, dominância, preenchimento de `phi` e ordem das escritas.
+
+```powershell
+py -3 compilar.py exemplos\memory_ssa.rts --alvo windows -O 6 --mostrar-memory-ssa --salvar-memory-ssa memoria.json -o roteiro_windows.exe
+.\roteiro_windows.exe
+```
+
+A opção **C** de `INICIAR_RS.bat` mostra as versões e salva `memoria.json`.
+**Isso é análise, não uma otimização ativa do backend**: programas com listas e
+textos ainda usam o caminho de pilha com verificações de limites, inclusive
+com `-O 6`. A RS continua sem ponteiros, aliases, heap ou empréstimos; os
+modelos de referência ainda precisam ser implementados. Leia a
+[especificação da Memory SSA](docs/MEMORY_SSA_RS_0_20.md).
+
+Exemplo: `exemplos/memory_ssa.rts` (saída `Olá.!.` e `20`).
 
 ## Novo na RS 0.19 — leitura bufferizada e efeitos de memória
 
@@ -13,7 +35,7 @@ Linguagem experimental em português brasileiro, com compilador em Python 3.10+ 
 - **Efeitos da IR:** `compilador/efeitos.py` identifica leituras/escritas,
   entrada e saída e possíveis falhas, inclusive dentro de laços e decisões.
   Use `--mostrar-efeitos` e `--salvar-efeitos efeitos.json`.
-- **Não é ainda Memory SSA:** não aplicamos movimentação/eliminações de
+- **Na RS 0.19 ainda não havia Memory SSA:** não aplicávamos movimentação/eliminações de
   operações de memória. Listas e textos continuam com backend de pilha em
   qualquer nível de otimização.
 - **Compatibilidade:** programas antigos que não usam `leia` preservam seus
@@ -44,7 +66,7 @@ inicio {
 
 `copie` e `junte` aceitam literais ou outro buffer. `limpe` zera o comprimento lógico; `leia` lê uma linha do teclado e **verifica UTF-8 e capacidade**. `tamanho` retorna **bytes ocupados**, e `capacidade` retorna bytes reservados: `á` ocupa dois bytes, `🌎` ocupa quatro. Excesso de capacidade ou UTF-8 inválido provoca erro e saída `1`. Buffers não podem ser usados diretamente em contas ou como ponteiros.
 
-A memória continua na pilha, com orçamento total conservador de 256 slots de 8 bytes (inclui listas, buffers e suas informações de comprimento); capacidades individuais vão de 1 a 2040 bytes, respeitando esse orçamento. Programas com buffers ou listas usam o backend seguro de pilha em qualquer nível `-O 0..6`; CFG/SSA ainda não considera efeitos da memória estruturada. Desde a RS 0.19, a entrada usa um cache compartilhado de 1.024 bytes no Linux e 256 bytes no Windows.
+A memória continua na pilha, com orçamento total conservador de 256 slots de 8 bytes (inclui listas, buffers e suas informações de comprimento); capacidades individuais vão de 1 a 2040 bytes, respeitando esse orçamento. Programas com buffers ou listas usam o backend seguro de pilha em qualquer nível `-O 0..6`; CFG/SSA escalar ainda não otimiza dados de memória estruturada. A análise Memory SSA foi adicionada na RS 0.20. Desde a RS 0.19, a entrada usa um cache compartilhado de 1.024 bytes no Linux e 256 bytes no Windows.
 
 **Ainda não há** empréstimos/referências, ponteiros, heap, slices, strings dinâmicas ou garantia de que uma escrita parcial de sistema seja refeita. As regras de propriedade, empréstimo compartilhado e mutável, aliasing e tempo de vida são apenas uma especificação futura. Consulte [buffers e plano de referências](docs/MEMORIA_TEXTO_RS_0_18.md).
 

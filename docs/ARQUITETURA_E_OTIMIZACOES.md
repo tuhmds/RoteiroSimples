@@ -53,3 +53,10 @@ Nao ativar otimizacoes de divisao por zero, overflow ou reordenacao de efeitos d
 ## Atualização RS 0.12 — SSA construída e validada
 
 A nova etapa `compilador/ssa.py` usa fronteiras de dominância, vivacidade e renomeação para construir nós `phi` completos. O verificador checa definições únicas e dominância dos operandos, inclusive nas retroarestas dos laços. **A SSA ainda não alimenta o backend de geração nativa**. Consulte `docs/SSA_RS_0_12.md`.
+
+## RS 0.20 — Memory SSA de análise
+
+A IR tipada e o CFG agora permitem modelar versões de memória por objeto local,
+`phi` em junções e retroarestas e encadeamento de E/S e falhas. Veja
+[Memory SSA da RS 0.20](MEMORY_SSA_RS_0_20.md). Não há alteração do backend
+nativo nem ativação de otimizações de memória baseadas nessa análise.
