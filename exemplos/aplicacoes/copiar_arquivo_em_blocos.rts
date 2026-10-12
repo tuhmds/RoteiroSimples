@@ -1,6 +1,6 @@
 // Copia binarios, inclusive bytes nulos, sem bibliotecas externas.
 // Configuracao: origem.bin -> copia.bin no diretorio de execucao.
-// IMPORTANTE: o destino precisa ser novo/vazio (grave_trecho nao trunca).
+// IMPORTANTE: nao substitui arquivos existentes; grave_trecho nao trunca.
 inicio {
     seja bloco: texto[4096]
     seja posicao = 0
@@ -8,6 +8,15 @@ inicio {
     seja gravacao = 0
     seja terminou = falso
     seja houve_erro = falso
+
+    // Como o motor RS ainda nao sabe truncar com seguranca,
+    // recusamos qualquer destino existente para nao deixar sobras.
+    carregue_trecho("copia.bin", bloco, 0, 1, gravacao)
+    se gravacao != -1 {
+        escreva("Destino existente ou inacessivel: remova antes de copiar")
+        houve_erro = verdadeiro
+        terminou = verdadeiro
+    }
 
     enquanto terminou == falso {
         carregue_trecho("origem.bin", bloco, posicao, 4096, leitura)
