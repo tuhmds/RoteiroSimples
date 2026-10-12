@@ -54,6 +54,8 @@ def montar_pe(g, mensagens):
                      'FlushFileBuffers'):
             if nome not in nomes:
                 nomes.append(nome)
+    if 'rs_publicar_arquivo' in g.rotulos and 'MoveFileExA' not in nomes:
+        nomes.append('MoveFileExA')
     importacoes, enderecos, inicio_iat, tamanho_iat = construir_importacoes(base_importacoes, nomes)
     base_dados = alinhar(base_importacoes + len(importacoes), 0x1000)
     dados = bytearray()

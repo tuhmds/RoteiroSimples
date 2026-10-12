@@ -154,7 +154,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     contexto = _contexto or ContextoSemantico(importa, assinaturas, registros)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'encerre', 'arquivo', 'abra_arquivo', 'grave_em', 'carregue_de', 'sincronize_arquivo', 'feche_arquivo', 'funcao', 'retorne', 'tipo'}
+    reservadas = {'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'encerre', 'arquivo', 'abra_arquivo', 'grave_em', 'carregue_de', 'sincronize_arquivo', 'feche_arquivo', 'publique_arquivo', 'bloqueie_arquivo', 'funcao', 'retorne', 'tipo'}
 
     def indice_lista(partes, linha):
         if '[' not in partes or partes[-1] != ']':
@@ -392,8 +392,24 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f'Linha {n}: adicione_byte exige buffer bytes[N].')
                 valor, _ = expressao_tipada(t[virgula+1:-1], n, 'inteiro')
                 adicionar(('adicione_byte', nome, valor), n, t)
+            elif t[0] == 'publique_arquivo' and t[1:2] == ['('] and t[-1:] == [')']:
+                grupos = argumentos_externos(t,n)
+                if len(grupos) != 3:
+                    raise ErroCompilacao(f'Linha {n}: use publique_arquivo("provisorio", "destino", estado).')
+                origem = validar_caminho(grupos[0],n)
+                destino = validar_caminho(grupos[1],n)
+                # Publica no diretorio de execução: restringir a um segmento
+                # impede renomeações entre diretorios e volumes diferentes.
+                for caminho in (origem,destino):
+                    if '/' in caminho or caminho in ('.','..') or not re.fullmatch(
+                            r'[A-Za-z0-9_-][A-Za-z0-9_.-]*',caminho,re.ASCII):
+                        raise ErroCompilacao(f'Linha {n}: publicacao exige nomes simples no mesmo diretorio.')
+                if origem == destino:
+                    raise ErroCompilacao(f'Linha {n}: origem e destino devem ser diferentes.')
+                estado = estado_nome(grupos[2],n)
+                adicionar(('publique_arquivo',origem,destino,estado),n,t)
             elif t[0] in ('abra_arquivo', 'feche_arquivo', 'sincronize_arquivo',
-                            'grave_em', 'carregue_de') and t[1:2] == ['('] and t[-1:] == [')']:
+                            'bloqueie_arquivo','grave_em', 'carregue_de') and t[1:2] == ['('] and t[-1:] == [')']:
                 grupos = argumentos_externos(t, n)
                 comando = str(t[0])
                 if comando == 'abra_arquivo':
@@ -413,13 +429,14 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     estado = estado_nome(grupos[3], n)
                     adicionar(('abra_recurso', caminho, recurso,
                                {'leitura':0,'alteracao':1,'novo':2}[modo], estado), n,t)
-                elif comando in ('feche_arquivo','sincronize_arquivo'):
+                elif comando in ('feche_arquivo','sincronize_arquivo','bloqueie_arquivo'):
                     if len(grupos) != 2:
                         raise ErroCompilacao(f'Linha {n}: use {comando}(recurso, estado).')
                     recurso = recurso_nome(grupos[0],n)
                     estado = estado_nome(grupos[1],n)
-                    adicionar(('feche_recurso' if comando == 'feche_arquivo'
-                              else 'sincronize_recurso',recurso,estado),n,t)
+                    adicionar(({'feche_arquivo':'feche_recurso',
+                               'sincronize_arquivo':'sincronize_recurso',
+                               'bloqueie_arquivo':'bloqueie_recurso'}[comando],recurso,estado),n,t)
                 else:
                     gravar = comando == 'grave_em'
                     if len(grupos) != (4 if gravar else 5):

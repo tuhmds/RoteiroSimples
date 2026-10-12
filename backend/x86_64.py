@@ -1,7 +1,7 @@
 """Emissão nativa de instruções AMD64, leitura/escrita e saltos."""
 import struct
 from compilador.erros import ErroCompilacao
-from . import listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros, arquivos_abertos
+from . import listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros, arquivos_abertos, publicacao_atomica
 from .base import Emissor, alinhar
 
 class Gerador(Emissor):
@@ -793,6 +793,10 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                     for t in tipos.values()) or any(
         isinstance(t, tuple) and t[0] == 'bytes'
         for f in g.funcoes.values() for t in f.programa.tipos.values())
+    tem_publicacao = any(op[0] == 'publique_arquivo'
+                        for op in percorrer_instrucoes(programa.instrucoes)) or any(
+        op[0] == 'publique_arquivo'
+        for f in g.funcoes.values() for op in percorrer_instrucoes(f.programa.instrucoes))
     tem_recursos = (any(t == 'arquivo' for t in tipos.values()) or
                     any(t == 'arquivo' for f in g.funcoes.values()
                         for t in f.programa.tipos.values()))
@@ -889,9 +893,12 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             elif op[0] == 'crie_recurso':
                 offset = deslocamento_variavel(variaveis, op[1], windows)
                 g.bytes(b'\x48\xC7\x85' + struct.pack('<i',offset) + b'\xFF\xFF\xFF\xFF')
-            elif op[0] in ('abra_recurso','feche_recurso','sincronize_recurso','grave_em','carregue_de'):
+            elif op[0] in ('abra_recurso','feche_recurso','sincronize_recurso','bloqueie_recurso','grave_em','carregue_de'):
                 arquivos_abertos.emitir_comando(g, op, variaveis, tipos, windows,
                     mensagens, _endereco_buffer, expressao)
+            elif op[0] == 'publique_arquivo':
+                publicacao_atomica.emitir_comando(
+                    g, op, variaveis, windows, mensagens, deslocamento_variavel)
             elif op[0] == 'leia_texto':
                 nome = op[1]
                 dados, comprimento, capacidade = _endereco_buffer(variaveis, nome, tipos, windows)
@@ -1217,6 +1224,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         arquivos.emitir_rotinas(g, windows)
     if tem_recursos:
         arquivos_abertos.emitir_rotinas(g, windows)
+    if tem_publicacao:
+        publicacao_atomica.emitir_rotina(g, windows, mensagens)
     if tem_arquivos_posicionais:
         arquivos_posicionais.emitir_rotinas(g, windows)
     imprime_inteiro(g, windows)
