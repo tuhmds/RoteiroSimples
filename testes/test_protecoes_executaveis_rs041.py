@@ -163,6 +163,41 @@ class TestesProtecoesExecutaveisRS041(unittest.TestCase):
                                       'Outra mensagem na secao de leitura\n'),
                                      r.stderr)
 
+    def test_linux_mapeia_dados_sem_execucao(self):
+        if sys.platform != 'linux' or os.uname().machine != 'x86_64':
+            self.skipTest('Exige Linux x86-64.')
+        fonte = """inicio {
+            seja resposta = 0
+            leia(resposta)
+            escreva("Dado constante isolado")
+        }"""
+        with tempfile.TemporaryDirectory() as pasta:
+            programa = Path(pasta)/'aplicacao'
+            programa.write_bytes(binario('linux', 8, fonte))
+            programa.chmod(0o700)
+            processo = subprocess.Popen([str(programa)], stdin=subprocess.PIPE,
+                                        stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                                        text=True,encoding='utf-8')
+            try:
+                regioes=[]
+                for tentativa in range(40):
+                    linhas=(Path('/proc')/str(processo.pid)/'maps').read_text().splitlines()
+                    regioes=[l for l in linhas if l.endswith(str(programa))]
+                    if len(regioes)>=2:
+                        break
+                    time.sleep(0.025)
+                permissoes={l.split()[1] for l in regioes}
+                self.assertIn('r-xp', permissoes, regioes)
+                self.assertIn('r--p', permissoes, regioes)
+                self.assertFalse(any('w' in p and 'x' in p for p in permissoes))
+                resposta,erro=processo.communicate('1\n',timeout=10)
+                self.assertEqual((processo.returncode,resposta),
+                                 (0,'Dado constante isolado\n'),erro)
+            finally:
+                if processo.poll() is None:
+                    processo.kill()
+                    processo.communicate()
+
     def test_windows_pe_posicionavel_com_realocacao_em_uso(self):
         for nivel in (0, 4, 8):
             with self.subTest(nivel=nivel):
