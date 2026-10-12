@@ -261,13 +261,13 @@ nativo. Não se promete segurança para aplicações de produção.
 1. Instale Python 3.10 ou posterior e confirme `py -3 --version`.
 2. Baixe ou clone este repositório e extraia o pacote em uma pasta.
 3. Execute **`INICIAR_RS.bat`** e escolha **1** para compilar e executar a demonstração
-   de registros aninhados. A opção **2** abre o mesmo exemplo no Bloco de Notas.
+   da Biblioteca Padrão RS 0.29. A opção **2** abre o mesmo exemplo no Bloco de Notas.
 4. Para executar os testes, escolha **3**.
 
 Via PowerShell:
 
 ```powershell
-py -3 compilar.py exemplos\espacos_nomes\principal.rts --alvo windows -O 8 -o roteiro_windows.exe
+py -3 compilar.py exemplos\biblioteca_padrao.rts --alvo windows -O 8 -o roteiro_windows.exe
 .\roteiro_windows.exe
 py -3 -m unittest discover -s testes -v
 ```
@@ -277,13 +277,13 @@ py -3 -m unittest discover -s testes -v
 Requer sistema Linux e processador x86-64:
 
 ```bash
-python3 compilar.py exemplos/espacos_nomes/principal.rts --alvo linux -O 8 -o roteiro_linux
+python3 compilar.py exemplos/biblioteca_padrao.rts --alvo linux -O 8 -o roteiro_linux
 ./roteiro_linux
 python3 -m unittest discover -s testes -v
 ```
 
 O compilador aceita os níveis históricos de otimização **`-O 0` até `-O 8`**;
-nenhum nível foi criado na RS 0.26. Para programas com escopos locais,
+nenhum nível foi criado na RS 0.29. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
