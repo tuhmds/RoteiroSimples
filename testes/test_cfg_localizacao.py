@@ -143,7 +143,7 @@ class TestesCFG(unittest.TestCase):
         self.assertIn('style="dashed"', g.para_dot())
 
     def test_cfg_e_so_analise_nao_muda_binarios(self):
-        fixture = json.loads((RAIZ/'testes/fixtures/rs0412_binarios_08.json').read_text(encoding='utf-8'))
+        fixture = json.loads((RAIZ/'testes/fixtures/rs0414_binarios_08.json').read_text(encoding='utf-8'))
         contador = 0
         for nome, esperados in fixture.items():
             if nome in ('entrada.rts', 'tipos.rts'):
