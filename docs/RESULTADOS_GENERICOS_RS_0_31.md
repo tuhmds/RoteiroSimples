@@ -19,7 +19,7 @@ instruções Python embutidas no executável nem dependência de bibliotecas din
 
 ## Exemplo
 
-\`\`\`text
+```text
 funcao dividir(a: inteiro, b: inteiro) -> resultado[inteiro] {
     se b == 0 {
         retorne falha[inteiro](1)
@@ -41,11 +41,11 @@ inicio {
     escreva(b.valido)
     escreva(b.codigo_erro)
 }
-\`\`\`
+```
 
 O programa imprime 15, 0 e 1 em linhas separadas.
 
-O comando \`propague nome\` é **explícito**: se nome.valido for falso, a função atual
+O comando `propague nome` é **explícito**: se nome.valido for falso, a função atual
 retorna falha[T](nome.codigo_erro), sendo T o tipo de retorno da função atual.
 Caso o resultado seja válido, a execução continua. Para acessar o valor,
 utilize nome.valor. O comando só é permitido dentro de uma função que
@@ -93,18 +93,18 @@ intencional; entretanto, ResultadoInteiro (RS 0.30) e resultado[inteiro] (RS 0.3
 
 Windows:
 
-\`\`\`powershell
+```powershell
 py -3 compilar.py exemplos\resultados_genericos.rts --alvo windows -O 8 -o roteiro_windows.exe
 .\roteiro_windows.exe
 py -3 -m unittest discover -s testes -v
-\`\`\`
+```
 
 Linux:
 
-\`\`\`bash
+```bash
 python3 compilar.py exemplos/resultados_genericos.rts --alvo linux -O 8 -o roteiro_linux
 ./roteiro_linux
 python3 -m unittest discover -s testes -v
-\`\`\`
+```
 
 A RS permanece experimental e não deve ser usada em produção.

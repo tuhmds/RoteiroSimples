@@ -15,7 +15,7 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 O sistema de tipos agora aceita **resultado[T]**, especializado na compilação para
 cada tipo concreto utilizado, inclusive **inteiros, lógicos, registros, textos e listas fixas**.
 
-\`\`\`text
+```text
 funcao dividir(a: inteiro, b: inteiro) -> resultado[inteiro] {
     se b == 0 {
         retorne falha[inteiro](1)
@@ -34,20 +34,20 @@ inicio {
     escreva(resposta.valido)
     escreva(resposta.valor)
 }
-\`\`\`
+```
 
 **Resultado:** 1 e 15, um por linha.
 
-- **resultado[T]** possui campos \`valido\`, \`valor\` e \`codigo_erro\`.
+- **resultado[T]** possui campos `valido`, `valor` e `codigo_erro`.
 - **sucesso[T](valor)** constrói um resultado válido.
 - **falha[T](codigo)** constrói um resultado inválido, com valor inicializado.
-- **propague nome** encaminha o erro de uma variável de resultado para a função atual quando \`valido\` é falso. Funciona apenas em funções com retorno \`resultado[T]\` e exige nome de variável explícito.
+- **propague nome** encaminha o erro de uma variável de resultado para a função atual quando `valido` é falso. Funciona apenas em funções com retorno `resultado[T]` e exige nome de variável explícito.
 - Tipos compostos e capacidades são conferidos estaticamente. **resultado[inteiro] e resultado[logico] são tipos diferentes**; não há conversão implícita.
 - Os registros da Biblioteca Padrão RS 0.30 continuam disponíveis e não são automaticamente convertidos para os novos resultados genéricos.
 
-**Escopo real:** o recurso é uma *especialização estática*, não uma implementação de funções genéricas arbitrárias ou exceções. Transbordamentos nativos e falhas de índices continuam encerrando a execução conforme a proteção anterior — \`propague\` não os captura.
+**Escopo real:** o recurso é uma *especialização estática*, não uma implementação de funções genéricas arbitrárias ou exceções. Transbordamentos nativos e falhas de índices continuam encerrando a execução conforme a proteção anterior — `propague` não os captura.
 
-**Exemplo novo:** [\`exemplos/resultados_genericos.rts\`](exemplos/resultados_genericos.rts). Veja a [documentação completa e limitações](docs/RESULTADOS_GENERICOS_RS_0_31.md). Nenhum nível de otimização foi acrescentado.
+**Exemplo novo:** [`exemplos/resultados_genericos.rts`](exemplos/resultados_genericos.rts). Veja a [documentação completa e limitações](docs/RESULTADOS_GENERICOS_RS_0_31.md). Nenhum nível de otimização foi acrescentado.
 
 ## Histórico: RS 0.30 — resultados tipados e erros explícitos
 
