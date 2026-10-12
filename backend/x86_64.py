@@ -609,6 +609,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     mensagens = {}
     tem_leitura = any(op[0] in ('leia_int', 'leia_indice', 'leia_texto') for op in percorrer_instrucoes(programa.instrucoes))
     tipos = getattr(programa, 'tipos', {})
+    tem_listas = any(isinstance(t, tuple) and t[0] == 'lista' for t in tipos.values())
     tem_textos = any(isinstance(t, tuple) and t[0] == 'texto' for t in tipos.values())
     tem_leitura_texto = any(op[0] == 'leia_texto' for op in percorrer_instrucoes(programa.instrucoes))
     slots = _total_slots(programa)
@@ -800,7 +801,11 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         g.marcar(rotulo)
         mensagens[indice] = msg
         if windows:
-            # Erros comunicados por saída padrão nesta fase, com código 1.
+            # Uma expressao pode ter deixado operandos no stack ao falhar.
+            # Antes de chamar WriteFile/ExitProcess restauramos o alinhamento
+            # obrigatorio de 16 bytes da ABI Windows x64.
+            if tem_listas:
+                g.bytes(b'\x48\x83\xE4\xF0')  # and rsp, -16
             escreve_literal(g, indice, msg, True)
             g.bytes(b'\xB9\x01\x00\x00\x00')
             g.relativo(b'\xFF\x15', 'ExitProcess')
@@ -812,6 +817,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         msg = 'Erro: índice fora dos limites da lista.\n'
         mensagens[indice] = msg
         g.marcar('erro_indice_lista')
+        if windows and tem_listas:
+            g.bytes(b'\x48\x83\xE4\xF0')  # and rsp, -16
         escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
         if windows:
             g.bytes(b'\xB9\x01\x00\x00\x00')
@@ -825,6 +832,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         ]:
             mensagens[indice] = msg
             g.marcar(rotulo)
+            if windows and tem_listas:
+                g.bytes(b'\x48\x83\xE4\xF0')  # and rsp, -16
             escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
             if windows:
                 g.bytes(b'\xB9\x01\x00\x00\x00')
@@ -840,6 +849,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             indice = len(mensagens)
             mensagens[indice] = msg
             g.marcar(rotulo)
+            if windows and tem_listas:
+                g.bytes(b'\x48\x83\xE4\xF0')  # and rsp, -16
             escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
             if windows:
                 g.bytes(b'\xB9\x01\x00\x00\x00')

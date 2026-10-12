@@ -52,6 +52,11 @@ py -3 compilar.py exemplos\memoria_otimizada.rts --alvo windows -O 6 -o memoria_
 py -3 compilar.py exemplos\memoria_otimizada.rts --alvo windows -O 7 -o memoria_o7.exe
 ```
 
+No Windows, os caminhos de erro nativo agora realinham a pilha antes de
+chamar o sistema operacional, inclusive se uma operacao falhar enquanto
+operandos temporarios ainda estao empilhados. Essa correcao pode alterar
+os bytes de executaveis antigos, sem alterar o comportamento correto esperado.
+
 Use `python3 -m unittest discover -s testes -v` para testes de equivalencia
 entre `-O 6` e `-O 7`, incluindo Windows e Linux. Tamanho menor nao comprova
 velocidade maior: medir tempos de execucao exige carga reproduzivel.
