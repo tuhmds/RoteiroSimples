@@ -19,7 +19,7 @@ def compilar(programa, alvo, otimizar=True, nivel=1):
                 return True
             if instrucao[0] == 'enquanto' and contem_copia_composta(instrucao[2]):
                 return True
-            if instrucao[0] == 'para' and contem_copia_composta(instrucao[6]):
+            if instrucao[0] == 'para' and contem_copia_composta(instrucao[5]):
                 return True
         return False
 
