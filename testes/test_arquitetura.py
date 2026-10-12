@@ -58,9 +58,9 @@ class TestesArquiteturaRS09(unittest.TestCase):
         self.assertEqual(normal.instrucoes[0].argumentos[0].operacao, 'bin')
         self.assertIn('IR v1', formatar_ir(otimizada))
 
-    def test_binarios_identicos_versao_08(self):
-        """Compara 36 binários: 9 programas x 2 sistemas x 2 níveis de otimização."""
-        fixture = json.loads((RAIZ / 'testes/fixtures/rs08_binarios.json').read_text(encoding='utf-8'))
+    def test_binarios_iguais_versao_041(self):
+        """Confere novas assinaturas PE/ELF, mantendo originais historicas: 9 programas x 2 sistemas x 2 níveis de otimização."""
+        fixture = json.loads((RAIZ / 'testes/fixtures/rs041_binarios_08.json').read_text(encoding='utf-8'))
         self.assertEqual(len(fixture), 9)
         comparados = 0
         for arquivo, esperados in fixture.items():
