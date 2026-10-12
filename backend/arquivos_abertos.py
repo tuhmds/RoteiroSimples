@@ -9,6 +9,7 @@ Rotinas recebem argumentos em registradores da convenção interna RS:
      -> bytes ou -2/-3.
 """
 import struct
+from . import politica_caminhos
 
 
 def _emitir(g, hexa):
@@ -279,13 +280,25 @@ def _rotina_abrir(g, windows):
         _emitir(g, '44 89 4D E8')
         _emitir(g, '48 8B 4D F8 45 31 C0 45 31 C9 48 83 EC 40')
         _emitir(g, '8B 45 E8 89 44 24 20')
-        _emitir(g, 'C7 44 24 28 80 00 00 00')
+        g.bytes(b'\xC7\x44\x24\x28' + politica_caminhos.atributos_windows())
         _emitir(g, '48 C7 44 24 30 00 00 00 00')
         g.relativo(b'\xFF\x15', 'CreateFileA')
         _emitir(g, '48 83 C4 40')
         _emitir(g, '48 83 F8 FF')
         fim = 'rs_abrir_fim'
-        g.salto(fim, 'jne')
+        g.salto(fim, 'je')
+        _emitir(g, '48 89 45 E8')  # identificador temporario
+        _emitir(g, '48 89 C7')
+        g.chamada('rs_verificar_arquivo_regular')
+        _emitir(g, '48 85 C0')
+        valido = 'rs_abrir_arquivo_validado'
+        g.salto(valido, 'jz')
+        _emitir(g, '48 8B 7D E8')
+        g.chamada('rs_fechar_recurso')
+        _emitir(g, '48 C7 C0 FF FF FF FF')
+        g.salto(fim)
+        g.marcar(valido)
+        _emitir(g, '48 8B 45 E8')
         g.marcar(fim)
     else:
         _emitir(g, 'B8 01 01 00 00 48 C7 C7 9C FF FF FF')
@@ -295,15 +308,15 @@ def _rotina_abrir(g, windows):
         chamar='rs_abrir_linux_chamar'
         _emitir(g, '48 83 7D F0 00')
         g.salto(leitura, 'je')
-        _emitir(g, 'BA 42 00 02 00') # O_RDWR | O_CREAT | O_NOFOLLOW
+        g.bytes(b'\xBA' + politica_caminhos.sinalizadores_linux('alteracao'))
         _emitir(g, '48 83 7D F0 02')
         g.salto(novo, 'je')
         g.salto(chamar)
         g.marcar(novo)
-        _emitir(g, 'BA C2 00 02 00') # + O_EXCL
+        g.bytes(b'\xBA' + politica_caminhos.sinalizadores_linux('novo'))
         g.salto(chamar)
         g.marcar(leitura)
-        _emitir(g, 'BA 00 00 02 00') # O_RDONLY | O_NOFOLLOW
+        g.bytes(b'\xBA' + politica_caminhos.sinalizadores_linux('leitura'))
         g.marcar(chamar)
         _emitir(g, '41 BA 80 01 00 00 0F 05 48 85 C0')
         ok='rs_abrir_linux_ok'

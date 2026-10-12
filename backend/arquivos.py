@@ -5,6 +5,7 @@ Ambas rotinas devolvem em RAX o número efetivo de bytes gravados/lidos.
 Erros encerram o processo com diagnóstico; nunca há truncamento silencioso.
 """
 import struct
+from . import politica_caminhos
 
 
 def _emitir(g, hexadecimais):
@@ -42,7 +43,8 @@ def _abrir_linux(g, gravar):
     _emitir(g, 'B8 01 01 00 00')  # openat
     _emitir(g, '48 C7 C7 9C FF FF FF')  # AT_FDCWD = -100
     _emitir(g, '48 8B 75 F8')  # path
-    _emitir(g, 'BA 41 02 00 00' if gravar else '31 D2')  # WRONLY|CREAT|TRUNC
+    g.bytes(b'\xBA' + politica_caminhos.sinalizadores_linux(
+        'gravacao_completa' if gravar else 'leitura'))
     _emitir(g, '41 BA 80 01 00 00')  # 0600
     _emitir(g, '0F 05 48 85 C0')
     g.salto('erro_arquivo_abrir', 'js')
@@ -54,14 +56,25 @@ def _abrir_windows(g, gravar):
     g.bytes(b'\xBA' + struct.pack('<I', 0x40000000 if gravar else 0x80000000))
     _emitir(g, '45 31 C0 45 31 C9')  # sem partilha, segurança NULL
     _emitir(g, '48 83 EC 40')
-    _emitir(g, 'C7 44 24 20 02 00 00 00' if gravar else
-                 'C7 44 24 20 03 00 00 00')  # CREATE_ALWAYS / OPEN_EXISTING
-    _emitir(g, 'C7 44 24 28 80 00 00 00')  # FILE_ATTRIBUTE_NORMAL
+    _emitir(g, 'C7 44 24 20 04 00 00 00' if gravar else
+                 'C7 44 24 20 03 00 00 00')  # OPEN_ALWAYS / OPEN_EXISTING (truncar apenas apos validar)
+    g.bytes(b'\xC7\x44\x24\x28' + politica_caminhos.atributos_windows())
     _emitir(g, '48 C7 44 24 30 00 00 00 00')  # handle modelo=NULL
     g.relativo(b'\xFF\x15', 'CreateFileA')
     _emitir(g, '48 83 C4 40 48 83 F8 FF')  # INVALID_HANDLE_VALUE
     g.salto('erro_arquivo_abrir', 'je')
     _emitir(g, '48 89 45 E0')  # HANDLE
+    _emitir(g, '48 89 C7')  # RDI = HANDLE
+    g.chamada('rs_verificar_arquivo_regular')
+    _emitir(g, '48 85 C0')
+    g.salto('erro_arquivo_abrir', 'jnz')
+    if gravar:
+        # OPEN_ALWAYS preserva o destino ate que a inspecao do
+        # identificador confirme que nao se trata de um link/reparse.
+        _emitir(g, '48 8B 4D E0 48 83 EC 20')
+        g.relativo(b'\xFF\x15', 'SetEndOfFile')
+        _emitir(g, '48 83 C4 20 85 C0')
+        g.salto('erro_arquivo_abrir', 'jz')
 
 
 def _abrir(g, windows, gravar):

@@ -5,6 +5,7 @@ Retorno: quantidade transferida >=0; -1 abrir; -2 transferência;
 -3 posição/argumentos; -4 fechamento. Não há transação ou fsync.
 """
 import struct
+from . import politica_caminhos
 
 
 def bytes_nativos(g, trecho):
@@ -70,12 +71,16 @@ def _abrir(g, windows, gravar, erro_abrir, erro_posicao):
         bytes_nativos(g, '45 31 C0 45 31 C9 48 83 EC 40')
         bytes_nativos(g, 'C7 44 24 20 04 00 00 00' if gravar else
                           'C7 44 24 20 03 00 00 00') # OPEN_ALWAYS/OPEN_EXISTING
-        bytes_nativos(g, 'C7 44 24 28 80 00 00 00')
+        g.bytes(b'\xC7\x44\x24\x28' + politica_caminhos.atributos_windows())
         bytes_nativos(g, '48 C7 44 24 30 00 00 00 00')
         g.relativo(b'\xFF\x15', 'CreateFileA')
         bytes_nativos(g, '48 83 C4 40 48 83 F8 FF')
         g.salto(erro_abrir, 'je')
         bytes_nativos(g, '48 89 45 D8')
+        bytes_nativos(g, '48 89 C7')
+        g.chamada('rs_verificar_arquivo_regular')
+        bytes_nativos(g, '48 85 C0')
+        g.salto(erro_posicao, 'jnz')  # rejeita identificador antes de transferir
         # HANDLE, LARGE_INTEGER deslocamento, saida nula, FILE_BEGIN
         bytes_nativos(g, '48 8B 4D D8 48 8B 55 E0 45 31 C0 45 31 C9')
         bytes_nativos(g, '48 83 EC 20')
@@ -85,7 +90,8 @@ def _abrir(g, windows, gravar, erro_abrir, erro_posicao):
     else:
         bytes_nativos(g, 'B8 01 01 00 00 48 C7 C7 9C FF FF FF')
         bytes_nativos(g, '48 8B 75 F8')
-        bytes_nativos(g, 'BA 41 00 00 00' if gravar else '31 D2')
+        g.bytes(b'\xBA' + politica_caminhos.sinalizadores_linux(
+            'gravacao_posicional' if gravar else 'leitura'))
         bytes_nativos(g, '41 BA 80 01 00 00 0F 05 48 85 C0')
         g.salto(erro_abrir, 'js')
         bytes_nativos(g, '48 89 45 D8')

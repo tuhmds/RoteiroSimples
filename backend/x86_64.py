@@ -1,7 +1,7 @@
 """Emissão nativa de instruções AMD64, leitura/escrita e saltos."""
 import struct
 from compilador.erros import ErroCompilacao
-from . import listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros, arquivos_abertos, publicacao_atomica
+from . import listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros, arquivos_abertos, publicacao_atomica, politica_caminhos
 from compilador.disposicao_tipos import palavras_tipo as _palavras_tipo
 from .base import Emissor, alinhar
 
@@ -1206,6 +1206,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     g.tipos_atual = tipos
     if tem_dinamicas:
         listas_dinamicas.emitir_rotinas(g, windows)
+    if windows and (tem_arquivos or tem_recursos or tem_arquivos_posicionais):
+        politica_caminhos.emitir_verificacao_windows(g)
     if tem_arquivos:
         arquivos.emitir_rotinas(g, windows)
     if tem_recursos:
