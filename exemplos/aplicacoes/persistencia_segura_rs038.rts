@@ -1,0 +1,72 @@
+// Aplicacao real escrita em RS: escreve, sincroniza, fecha e recupera
+// uma pequena sequencia binaria tipada, verificando todos os erros.
+// A assinatura e demonstrativa, nao e formato definitivo do Dados RS.
+importe "padrao/arquivos.rts" como arquivos
+
+inicio {
+    seja recurso: arquivo
+    seja dados: bytes[16]
+    seja estado = 0
+
+    adicione_byte(dados, 82)
+    adicione_byte(dados, 83)
+    adicione_byte(dados, 68)
+    adicione_byte(dados, 66)
+    adicione_byte(dados, 1)
+    adicione_byte(dados, 100)
+
+    // "novo" impede substituir silenciosamente um arquivo existente.
+    abra_arquivo("exemplo_seguro.rsd", recurso, "novo", estado)
+    seja abertura = arquivos.resultado_arquivo(estado)
+    se abertura.valido == falso {
+        escreva("Falha na abertura:")
+        escreva(abertura.codigo_erro)
+        encerre(1)
+    }
+
+    grave_em(recurso, dados, 4096, estado)
+    se estado != tamanho(dados) {
+        escreva("Falha na gravacao completa")
+        encerre(2)
+    }
+
+    sincronize_arquivo(recurso, estado)
+    se estado != 0 {
+        escreva("Falha na sincronizacao")
+        encerre(3)
+    }
+
+    feche_arquivo(recurso, estado)
+    se estado != 0 {
+        escreva("Falha no fechamento")
+        encerre(4)
+    }
+
+    abra_arquivo("exemplo_seguro.rsd", recurso, "leitura", estado)
+    se estado != 0 {
+        encerre(5)
+    }
+
+    limpe(dados)
+    carregue_de(recurso, dados, 4096, 6, estado)
+    se estado != 6 {
+        encerre(6)
+    }
+
+    feche_arquivo(recurso, estado)
+    se estado != 0 {
+        encerre(7)
+    }
+
+    se dados[0] != 82 {
+        encerre(8)
+    }
+    se dados[3] != 66 {
+        encerre(8)
+    }
+    se dados[5] != 100 {
+        encerre(8)
+    }
+    escreva("Dados recuperados e conferidos")
+    encerre(0)
+}

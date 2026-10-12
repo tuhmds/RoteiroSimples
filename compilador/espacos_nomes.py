@@ -13,7 +13,9 @@ IDENTIFICADOR = re.compile(r'[A-Za-z_][A-Za-z_0-9]*\Z')
 PREFIXO_INTERNO = 'SimboloInternoRS_'
 RESERVADOS = frozenset({'inicio', 'funcao', 'tipo', 'importe', 'publico', 'privado',
                         'como', 'seja', 'retorne', 'inteiro', 'logico', 'lista',
-                        'texto', 'bytes', 'adicione_byte', 'encerre', 'escreva', 'leia', 'para', 'se', 'senao', 'enquanto'})
+                        'texto', 'bytes', 'adicione_byte', 'encerre', 'arquivo', 'abra_arquivo',
+                        'feche_arquivo', 'sincronize_arquivo', 'grave_em',
+                        'carregue_de', 'escreva', 'leia', 'para', 'se', 'senao', 'enquanto'})
 
 
 @dataclass(frozen=True)

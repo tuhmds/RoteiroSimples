@@ -1,0 +1,40 @@
+// Biblioteca Padrão RS 0.38: adaptador dos estados nativos para resultado[inteiro].
+// Os comandos de E/S usam estado numerico por compatibilidade; use
+// resultado_arquivo(estado) quando o programa precisar de erros tipados.
+//
+// Codigos recuperaveis: 1 abertura, 2 transferencia, 3 argumento/recurso,
+// 4 fechamento, 5 ja aberto, 6 sincronizacao, 7 estado desconhecido.
+
+publico funcao resultado_arquivo(estado: inteiro) -> resultado[inteiro] {
+    se estado >= 0 {
+        retorne sucesso[inteiro](estado)
+    }
+    se estado < -6 {
+        retorne falha[inteiro](7)
+    }
+    retorne falha[inteiro](0 - estado)
+}
+
+publico funcao erro_arquivo_abrir() -> inteiro {
+    retorne 1
+}
+
+publico funcao erro_arquivo_transferir() -> inteiro {
+    retorne 2
+}
+
+publico funcao erro_arquivo_argumento() -> inteiro {
+    retorne 3
+}
+
+publico funcao erro_arquivo_fechar() -> inteiro {
+    retorne 4
+}
+
+publico funcao erro_arquivo_ja_aberto() -> inteiro {
+    retorne 5
+}
+
+publico funcao erro_arquivo_sincronizar() -> inteiro {
+    retorne 6
+}

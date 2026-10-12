@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.37
+# RoteiroSimples (RS) — versão experimental 0.38
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,39 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.38 — recursos de arquivo com sincronização
+
+Os novos comandos nativos permitem manter um arquivo aberto durante
+várias operações e verificar a persistência solicitada ao sistema:
+
+```text
+inicio {
+    seja arq: arquivo
+    seja estado = 0
+    seja dados: bytes[16]
+    adicione_byte(dados, 82)
+    abra_arquivo("arquivo.rsd", arq, "novo", estado)
+    se estado != 0 {
+        encerre(1)
+    }
+    grave_em(arq, dados, 0, estado)
+    sincronize_arquivo(arq, estado)
+    feche_arquivo(arq, estado)
+}
+```
+
+Há criação exclusiva (`novo`), modos de leitura/alteração,
+`grave_em`, `carregue_de`, `sincronize_arquivo` e
+`feche_arquivo`, além de fechamento automático ao sair de escopos e
+funções. Recursos `arquivo` não podem ser copiados. Falhas continuam
+recuperáveis por códigos inteiros; a biblioteca
+`importe "padrao/arquivos.rts"` fornece adaptação opcional a
+`resultado[inteiro]`.
+
+**Sincronizar não torna uma atualização atômica ou transacional.**
+Consulte [o contrato RS 0.38](docs/ARQUIVOS_ABERTOS_RS_0_38.md)
+e [a aplicação binária demonstrativa](exemplos/aplicacoes/persistencia_segura_rs038.rts).
 
 ## RS 0.37 — bytes seguros, persistência binária e saída de processo
 
@@ -575,7 +608,7 @@ nenhum nível foi criado na RS 0.29. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes até a RS 0.37
+## Recursos presentes até a RS 0.38
 
 | Recurso | Situação |
 |---|---|
@@ -600,6 +633,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Leitura e gravação de arquivos inteiros | Implementado na 0.34 |
 | Leitura e gravação binária por posição, com estado de erro recuperável | Implementado na 0.35 |
 | Tipo `bytes[N]`, limites binários e `encerre(codigo)` | Implementado na 0.37 |
+| Recursos `arquivo`, leitura/escrita posicional, sincronização e fechamento automático | Implementado na 0.38 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
 | Tipos reais/decimais, textos dinâmicos, empréstimos mutáveis, FFI e durabilidade de arquivos | Ainda não |
@@ -619,7 +653,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**RS 0.38 (planejamento):** identificadores de arquivo seguros, tratamento de erros tipados, sincronização durável (`fsync` e `FlushFileBuffers`) e políticas de acesso concorrente. O tipo `bytes[N]` foi introduzido na RS 0.37. Continuam pendentes a alocação dinâmica de bytes, operações atômicas, travamento e interface para bibliotecas externas; esses fundamentos antecedem o motor Dados RS.
+**RS 0.39 (planejamento):** nomes de arquivos parametrizáveis com validação rigorosa, atualização atômica por substituição, travas e testes com falhas injetadas. Os recursos de arquivo e a sincronização nativa chegaram à RS 0.38; ainda não temos isolamento, transações ou durabilidade absoluta. Antes do motor Dados RS, precisamos de bibliotecas externas, dados binários versionados e recuperação.
 
 O projeto ainda é experimental, não pronto para produção. Não estamos acrescentando níveis de otimização.
 
