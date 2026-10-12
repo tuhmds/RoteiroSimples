@@ -27,6 +27,15 @@ inicio {
             terminou = verdadeiro
         } senao {
             se leitura == 0 {
+                // Arquivo vazio tambem exige um destino existente e vazio.
+                se posicao == 0 {
+                    grave_trecho("copia.bin", bloco, 0, gravacao)
+                    se gravacao < 0 {
+                        escreva("Falha ao criar destino vazio")
+                        escreva(gravacao)
+                        houve_erro = verdadeiro
+                    }
+                }
                 terminou = verdadeiro
             } senao {
                 grave_trecho("copia.bin", bloco, posicao, gravacao)
