@@ -132,11 +132,11 @@ def _checar_indice(g, expr_indice, tamanho, variaveis, windows, pilha_extra=0):
 
 
 def _total_slots(programa):
-    return max((indice + (tipo[2] if isinstance(tipo, tuple) and tipo[0] == 'lista'
-                            else 1 + (tipo[1]+7)//8 if isinstance(tipo, tuple) and tipo[0] == 'texto'
-                            else 1)
-                for nome, indice in programa.variaveis.items()
-                for tipo in (getattr(programa, 'tipos', {}).get(nome, 'inteiro'),)), default=0)
+    """Calcula o fim real de cada valor, inclusive registros e temporários internos."""
+    registros = getattr(programa, 'registros', {})
+    tipos = getattr(programa, 'tipos', {})
+    return max((indice + _palavras_tipo(tipos.get(nome, 'inteiro'), registros)
+                for nome, indice in programa.variaveis.items()), default=0)
 
 
 def _palavras_tipo(tipo, registros):

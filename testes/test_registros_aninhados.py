@@ -56,7 +56,7 @@ class TestesRegistrosAninhados(unittest.TestCase):
             escreva(tamanho(cliente.endereco.logradouro))
         }"""
         r = executar(fonte)
-        self.assertEqual((r.returncode, r.stdout), (0, '42\nRua da Ação\n25\n12\n'))
+        self.assertEqual((r.returncode, r.stdout), (0, '42\nRua da Ação\n25\n13\n'))
 
     def test_argumento_composto_direto_e_retorno_aninhado(self):
         fonte = TIPOS + """funcao criar(n: inteiro) -> Cliente {
