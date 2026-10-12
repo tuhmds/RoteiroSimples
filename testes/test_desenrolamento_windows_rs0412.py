@@ -135,7 +135,7 @@ class TestesDesenrolamentoWindowsRS0412(unittest.TestCase):
         self.assertNotIn('.pdata',secoes)
 
     def test_recusa_metadados_de_prologo_incorreto(self):
-        programa=analisar_programa('inicio { escreva(12) }')
+        programa=analisar_programa('inicio {\n escreva(12)\n}')
         emissor,_=montar_codigo(programa,True)
         emissor.codigo[0]=0x90
         with self.assertRaisesRegex(ErroCompilacao,'Prologo Windows mudou'):
