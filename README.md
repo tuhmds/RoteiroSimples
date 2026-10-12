@@ -180,7 +180,7 @@ python3 -m unittest discover -s testes -v
 ```
 
 O compilador aceita os níveis históricos de otimização **`-O 0` até `-O 8`**;
-nenhum nível foi criado na RS 0.24. Para programas com escopos locais,
+nenhum nível foi criado na RS 0.26. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
@@ -192,11 +192,13 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | `escreva`, `leia`, condições, `enquanto`, `para`, `pare` e `continue` | Implementado |
 | Escopos léxicos e ocultação de nomes locais | Implementado desde 0.23 |
 | Funções, parâmetros e retornos numéricos e lógicos | Implementado desde 0.23 |
-| Tipos compostos com campos escalares e passagem por valor | **Novo na 0.24** |
-| Recursão direta e indireta com orçamento de pilha | **Novo na 0.24** |
+| Tipos compostos com campos escalares e passagem por valor | Implementado desde 0.24 |
+| Recursão direta e indireta com orçamento de pilha | Implementado desde 0.24 |
 | Listas fixas com índices verificados e buffers de texto UTF-8 | Implementado |
 | Memória dimensionada para quadros locais, sondagem de páginas | Implementado |
 | Representação intermediária tipada, fluxo de controle, versões únicas, memória versionada | Implementado para a parte já suportada da linguagem |
+| Registros aninhados, campos de listas e texto | Implementado na 0.26 |
+| Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
 | Tipos reais/decimais, módulos, dados dinâmicos, referências e empréstimos | Ainda não |
 
@@ -213,9 +215,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**RS 0.25:** suportar retornos de registros por valor, registros aninhados e
-passagem segura de listas e textos às funções, com regras explícitas de propriedade.
-Depois: sistema de módulos, tipos reais com semântica de precisão definida,
-memória dinâmica, referências emprestadas e análise de fluxo entre funções.
+**RS 0.27 (planejamento):** sistema de módulos e organização de programas em múltiplos arquivos, seguido de tipos reais e decimais com regras de precisão definidas.
+Depois: memória dinâmica e referências seguras com controle de propriedade e tempo de vida. Novos níveis de otimização não são prioridade.
 
 Ainda não foi escolhida uma licença para publicação do código.
