@@ -36,9 +36,11 @@ def gerar_desenrolamentos(gerador, base_codigo, base_xdados):
         comprimento = fim_prologo - inicio
         if not 12 <= comprimento <= 255:
             raise ErroCompilacao('Prologo Windows fora do limite de 255 bytes.')
-        if not (tamanho_quadro > 0 and tamanho_quadro % 8 == 0
+        if not (tamanho_quadro > 0 and tamanho_quadro % 16 == 8
                 and tamanho_quadro <= 0xFFFFFFFF):
-            raise ErroCompilacao('Quadro Windows nao representavel na tabela.')
+            raise ErroCompilacao(
+                'Quadro Windows deve manter alinhamento de 16 bytes '
+                'e tamanho representavel.')
         if gerador.codigo[inicio:inicio+5] != b'\x55\x48\x89\xE5\x53':
             raise ErroCompilacao(
                 'Prologo Windows mudou: regenerar regras de desenrolamento.')
