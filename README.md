@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.41.2
+# RoteiroSimples (RS) — versão experimental 0.41.3
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,27 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.41.3 — Sondagem própria e quadros grandes desenroláveis
+
+O gerador Windows agora sonda páginas de guarda em uma rotina folha
+inteiramente nativa (`rs_sondar_pilha`), que preserva `RAX` e `RSP`
+e usa apenas `R10`/`R11`, registradores voláteis. A reserva final
+ocorre em uma única instrução `sub rsp,rax`, representável na
+tabela de desenrolamento PE.
+
+Os quadros grandes passam a receber `.pdata`/`.xdata` reais,
+incluindo as duas formas de `UWOP_ALLOC_LARGE` quando necessárias.
+Os testes verificam prólogos e estrutura PE, além da execução nativa
+com quadros grandes, funções, entrada, listas e arquivos em
+diferentes níveis de otimização.
+
+**A cobertura ainda não é universal**: rotinas auxiliares precisam de
+auditoria própria, e `HIGH_ENTROPY_VA` continua desativado no Windows
+até comprovada correção da violação de acesso identificada antes.
+O Linux mantém ELF PIE, separação de código e dados e pilha NX.
+
+[Implementação, verificações e limitações](docs/SONDAGEM_PILHA_RS_0_41_3.md).
 
 ## RS 0.41.2 — Prólogos nativos e metadados de exceções Windows
 
