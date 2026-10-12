@@ -204,13 +204,14 @@ class TestesProtecoesExecutaveisRS041(unittest.TestCase):
                 imagem = binario('windows', nivel)
                 pe = ler_pe(imagem)
                 self.assertEqual(pe['maquina'], 0x8664)
-                self.assertEqual(pe['quantidade'], 4)
+                self.assertEqual(pe['quantidade'], 6)
                 self.assertEqual(pe['caracteristicas'] & 1, 0)
                 self.assertEqual(pe['protecoes'] & 0x140, 0x140)
                 self.assertEqual(pe['protecoes'] & 0x20, 0)  # alta entropia ainda não liberada
                 self.assertEqual(pe['base'], 0x140000000)
                 self.assertEqual(set(pe['secoes']),
-                                 {'.text', '.idata', '.rdata', '.reloc'})
+                                 {'.text', '.idata', '.rdata', '.reloc',
+                                  '.pdata', '.xdata'})
                 self.assertGreaterEqual(pe['tamanho_cabecalho'], 0x400)
                 self.assertGreater(pe['tamanho_imagem'], pe['secoes']['.reloc']['rva'])
                 self.assertEqual(pe['secoes']['.text']['flags'] & 0xA0000000,
