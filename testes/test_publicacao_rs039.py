@@ -204,6 +204,34 @@ class TestesRS039(unittest.TestCase):
             r=executar(construir(pasta,'comprimento',fonte),pasta)
             self.assertEqual((r.returncode,r.stdout),(0,'-3\n'),r.stderr)
 
+    def test_nomes_de_dispositivos_reservados_rejeitados_na_compilacao(self):
+        for nome in ('CON', 'nul.rsd', 'PrN.txt', 'aux', 'COM1', 'lpt9.rsd'):
+            with self.subTest(nome=nome):
+                fonte=f"""inicio {{
+                    seja arq: arquivo
+                    seja estado = 0
+                    abra_arquivo("{nome}", arq, "novo", estado)
+                }}"""
+                with self.assertRaises(ErroCompilacao):
+                    analisar_programa(fonte)
+
+    def test_nome_dinamico_de_dispositivo_reservado_no_windows(self):
+        if alvo() != 'windows':
+            self.skipTest('Dispositivos DOS são específicos do Windows.')
+        with tempfile.TemporaryDirectory() as pasta:
+            for indice,nome in enumerate(('NUL','con.rsd','COM1','lpt9.db','aux')):
+                with self.subTest(nome=nome):
+                    fonte=f"""inicio {{
+                        seja caminho: texto[40]
+                        copie(caminho, "{nome}")
+                        seja arq: arquivo
+                        seja estado = 0
+                        abra_arquivo(caminho, arq, "novo", estado)
+                        escreva(estado)
+                    }}"""
+                    r=executar(construir(pasta,f'device_{indice}',fonte),pasta)
+                    self.assertEqual((r.returncode,r.stdout),(0,'-3\n'),r.stderr)
+
     def test_bloqueio_com_recurso_aberto_e_fechamento(self):
         fonte = """inicio {
             seja arq: arquivo

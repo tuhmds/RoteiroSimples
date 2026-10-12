@@ -3,14 +3,15 @@
 // resultado_arquivo(estado) quando o programa precisar de erros tipados.
 //
 // Codigos recuperaveis: 1 abertura, 2 transferencia, 3 argumento/recurso,
-// 4 fechamento, 5 ja aberto, 6 sincronizacao, 7 estado desconhecido.
+// 4 fechamento, 5 ja aberto, 6 sincronizacao, 7 bloqueio,
+// 8 publicacao, 9 diretorio, 10 estado desconhecido.
 
 publico funcao resultado_arquivo(estado: inteiro) -> resultado[inteiro] {
     se estado >= 0 {
         retorne sucesso[inteiro](estado)
     }
-    se estado < -6 {
-        retorne falha[inteiro](7)
+    se estado < -9 {
+        retorne falha[inteiro](10)
     }
     retorne falha[inteiro](0 - estado)
 }
@@ -37,4 +38,20 @@ publico funcao erro_arquivo_ja_aberto() -> inteiro {
 
 publico funcao erro_arquivo_sincronizar() -> inteiro {
     retorne 6
+}
+
+publico funcao erro_arquivo_bloqueio() -> inteiro {
+    retorne 7
+}
+
+publico funcao erro_publicacao() -> inteiro {
+    retorne 8
+}
+
+publico funcao erro_sincronizacao_diretorio() -> inteiro {
+    retorne 9
+}
+
+publico funcao erro_arquivo_desconhecido() -> inteiro {
+    retorne 10
 }

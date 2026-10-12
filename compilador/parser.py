@@ -224,6 +224,14 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 or caminho.startswith('/') or caminho.endswith('/')
                 or any(item in ('','.','..') for item in caminho.split('/'))):
             raise ErroCompilacao(f'Linha {linha}: use caminho relativo ASCII, sem . ou .. como segmento.')
+        # Nomes DOS como NUL, CON e COM1 não são arquivos comuns no
+        # Windows, mesmo quando terminam com extensões (.rsd etc).
+        # Rejeitar também no Linux preserva semântica multiplataforma.
+        ultimo = caminho.split('/')[-1].split('.')[0].upper()
+        if ultimo in ('CON', 'PRN', 'AUX', 'NUL') or (
+                len(ultimo) == 4 and ultimo[:3] in ('COM', 'LPT')
+                and ultimo[3] in '123456789'):
+            raise ErroCompilacao(f'Linha {linha}: nome de dispositivo reservado: {ultimo}.')
         return caminho
 
     def recurso_nome(parte, linha):

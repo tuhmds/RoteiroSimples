@@ -53,7 +53,7 @@ class TestesBibliotecaArquivos(unittest.TestCase):
             escreva(c.codigo_erro)
             escreva(d.codigo_erro)
         }"""
-        esperado='1\n42\n0\n1\n0\n0\n6\n7\n'
+        esperado='1\n42\n0\n1\n0\n0\n6\n10\n'
         with tempfile.TemporaryDirectory() as pasta:
             for nivel in (0,4,8):
                 with self.subTest(nivel=nivel):
