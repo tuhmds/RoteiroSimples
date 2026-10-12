@@ -67,8 +67,9 @@ def construir_ir(programa, otimizar=True, nivel=1):
         impedimentos.append('funções não são representadas na IR atual')
     if getattr(programa, 'registros', None):
         impedimentos.append('registros não são representados na IR atual')
-    if getattr(programa, 'escopos_locais', False):
-        impedimentos.append('escopos locais não são representados na IR atual')
+    # Escopos com variáveis já renomeadas internamente podem ter
+    # uma IR útil para análise quando todas as operações são conhecidas.
+    # A seleção de código executável continua conservadora para escopos.
     if impedimentos:
         raise ErroCompilacao(
             'A representação intermediária não está disponível para este programa: '
