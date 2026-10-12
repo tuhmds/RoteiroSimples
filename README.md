@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.35
+# RoteiroSimples (RS) — versão experimental 0.36
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,35 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.36 — consolidação e aplicações de referência
+
+A RS 0.36 **não introduz outro nível de otimização**. Ela consolida a escolha
+entre o gerador conservador, a representação intermediária tipada e o
+backend SSA. A escolha agora vem de uma mesma decisão no compilador e
+na opção pública `--mostrar-estrategia`. Assim, um programa com
+funções, registros, listas dinâmicas ou arquivos nativos não é apresentado
+falsamente como otimizado via SSA só por ter sido compilado com `-O 8`.
+
+```bash
+python compilar.py exemplos/aplicacoes/analisar_entregas.rts --alvo linux -O 8 --mostrar-estrategia -o entregas
+```
+
+Há **duas aplicações executáveis escritas integralmente em RS**:
+
+- [Copiador binário em blocos de 4096 bytes](exemplos/aplicacoes/copiar_arquivo_em_blocos.rts):
+  lê `origem.bin` e cria `copia.bin`, preservando dados arbitrários,
+  inclusive arquivos vazios; informa falhas recuperáveis de leitura/gravação.
+  Por segurança, recusa um destino que já exista, pois a RS ainda não
+  dispõe de truncamento atômico; nomes são literais por enquanto.
+- [Analisador de 150 entregas](exemplos/aplicacoes/analisar_entregas.rts):
+  utiliza listas dinâmicas tipadas, registros, empréstimos e funções para
+  calcular quantidade e receita em centavos. **Este programa é apenas
+  em memória**; persistência estruturada será uma etapa posterior.
+
+[Documentação da RS 0.36 e matriz O0–O8](docs/CONSOLIDACAO_RS_0_36.md).
+Os testes executam os binários nativos, com resultados e arquivos
+conferidos independentemente, e não apenas comparam fontes ou ASTs.
 
 ## RS 0.35 — acesso binário posicional
 
