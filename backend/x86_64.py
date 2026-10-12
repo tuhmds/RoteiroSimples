@@ -45,35 +45,39 @@ def deslocamento_variavel(variaveis, nome, windows):
     return -(16 + indice*8) if windows else -(8 + indice*8)
 
 
-def expressao(g, expr, variaveis, windows):
+def expressao(g, expr, variaveis, windows, registradores=None):
     tipo = expr[0]
     if tipo in ('numero', 'logico'):
         carregar_numero(g, expr[1])
     elif tipo == 'var':
-        offset = deslocamento_variavel(variaveis, expr[1], windows)
-        g.bytes(b'\x48\x8B\x85' + struct.pack('<i', offset))
+        if registradores and expr[1] in registradores:
+            from .ssa_x86_64 import _emite_mov
+            _emite_mov(g, 'rax', registradores[expr[1]])
+        else:
+            offset = deslocamento_variavel(variaveis, expr[1], windows)
+            g.bytes(b'\x48\x8B\x85' + struct.pack('<i', offset))
     elif tipo == 'neg':
         if expr[1] == ('numero', 1 << 63):
             # Menor inteiro: o valor positivo 2^63 não cabe, mas sua negação sim.
             carregar_numero(g, -(1 << 63))
         else:
-            expressao(g, expr[1], variaveis, windows)
+            expressao(g, expr[1], variaveis, windows, registradores)
             g.bytes(b'\x48\xF7\xD8')  # neg rax
             g.salto('erro_overflow_aritmetico', 'jo')
     elif tipo == 'comparacao':
         _, op, esquerda, direita = expr
-        expressao(g, esquerda, variaveis, windows)
+        expressao(g, esquerda, variaveis, windows, registradores)
         g.bytes(b'\x50')  # salva o operando esquerdo
-        expressao(g, direita, variaveis, windows)
+        expressao(g, direita, variaveis, windows, registradores)
         g.bytes(b'\x59')  # rcx = operando esquerdo
         g.bytes(b'\x48\x39\xC1')  # cmp rcx, rax (inteiros com sinal)
         codigo = {'==': 0x94, '!=': 0x95, '<': 0x9C, '<=': 0x9E, '>': 0x9F, '>=': 0x9D}[op]
         g.bytes(bytes((0x0F, codigo, 0xC0)) + b'\x0F\xB6\xC0')  # setcc al; movzx eax,al
     elif tipo == 'bin':
         _, op, esquerda, direita = expr
-        expressao(g, esquerda, variaveis, windows)
+        expressao(g, esquerda, variaveis, windows, registradores)
         g.bytes(b'\x50')  # push rax
-        expressao(g, direita, variaveis, windows)
+        expressao(g, direita, variaveis, windows, registradores)
         g.bytes(b'\x59')  # pop rcx: esquerda
         if op == '+':
             g.bytes(b'\x48\x01\xC8')  # add rax, rcx
@@ -291,7 +295,7 @@ def ler_inteiro(g, windows):
     g.bytes(b'\x41\x5F\x41\x5E\x41\x5D\xC3')  # pop r15 r14 r13; ret
 
 
-def montar_codigo(programa, windows):
+def montar_codigo(programa, windows, emissor_alternativo=None):
     g = Gerador()
     variaveis = programa.variaveis
     mensagens = {}
@@ -398,7 +402,10 @@ def montar_codigo(programa, windows):
             else:
                 raise ValueError(f'Instrução interna desconhecida: {op!r}')
 
-    emitir_bloco(programa.instrucoes)
+    if emissor_alternativo is None:
+        emitir_bloco(programa.instrucoes)
+    else:
+        emissor_alternativo(g, mensagens, windows)
 
     if windows:
         g.bytes(b'\x31\xC9')

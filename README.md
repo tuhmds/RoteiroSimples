@@ -1,6 +1,32 @@
-# RoteiroSimples (RS) — versão experimental 0.13
+# RoteiroSimples (RS) — versão experimental 0.14
 
 Linguagem experimental em português brasileiro, com compilador em Python 3.10+ que **gera diretamente instruções de máquina x86-64**, em executáveis ELF64 (Linux) e PE32+ (Windows). Os programas gerados não dependem do Python para executar. **Não usar em produção.**
+
+## Novo na RS 0.14 — SSA executável e primeira alocação de registradores
+
+O nível experimental **`-O 4`** constrói a SSA sobre o CFG, aloca localizações físicas para cada versão e gera o próprio fluxo de controle com instruções nativas x86-64. Os nós `phi` deixam de ser somente uma análise: viram **cópias executáveis em cada aresta**, inclusive nas arestas de decisão e nos laços. Cópias paralelas com ciclos são resolvidas usando um espaço temporário reservado, sem destruir valores.
+
+- **Alocação por interferência/vivacidade:** as versões SSA mais usadas podem ficar em `r13`, `r14` e `r15`, preservados durante as rotinas de entrada/saída. As demais utilizam posições reutilizáveis na pilha, com limite conservador de 256 slots (incluindo um temporário adicional).
+- **Fluxo sem riscos aritméticos silenciosos:** `+`, `-`, `*`, `/`, `%` e negação preservam os testes de erro das versões anteriores. Em `para`, quando o incremento estoura, o contador mantém o valor anterior e o laço termina, preservando o comportamento já definido.
+- **Compatibilidade:** os níveis `-O 0` a `-O 3` continuam usando o backend legado. A nova opção é experimental e deve ser comparada com `-O 3` antes de uso intensivo.
+- **Tamanho e desempenho:** os exemplos medidos em Linux ficaram maiores no novo nível por conta de saltos adicionais entre blocos, embora o código agora use registradores para valores SSA. Não há promessa de ganho de velocidade. Melhorar disposição dos blocos e reduzir saltos será a próxima frente.
+- **Sem ponteiros, heap ou otimizações inseguras:** continua sendo um protótipo educacional.
+
+**Exemplo:** `exemplos/registradores.rts`. Windows:
+
+```powershell
+py -3 compilar.py exemplos\registradores.rts --alvo windows -O 4 --mostrar-alocacao --mostrar-copias-phi -o roteiro_windows.exe
+.\roteiro_windows.exe
+```
+
+Linux:
+
+```bash
+python3 compilar.py exemplos/registradores.rts --alvo linux -O 4 --mostrar-alocacao -o roteiro_linux
+./roteiro_linux
+```
+
+Confira a documentação [SSA e registradores RS 0.14](docs/SSA_BACKEND_RS_0_14.md).
 
 ## RS 0.13 — SSA agora otimiza código nativo com `-O 3`
 
@@ -236,4 +262,4 @@ Não temos ainda números decimais, entrada de textos, funções definidas pelo 
 - `exemplos/otimizacao.rts`: exemplo da RS 0.8; `tipos.rts` e demais exemplos preservados.
 - `docs/ARQUITETURA_E_OTIMIZACOES.md`: arquitetura e próximos passos.
 
-**Próxima prioridade após a RS 0.13:** baixar os nós `phi` em cópias nas arestas, testar equivalência e experimentar alocação de registradores. Buffers de entrada, tipos compostos e segurança de memória continuam pendentes. Licença ainda não definida.
+**Prioridades futuras após a RS 0.14:** baixar os nós `phi` em cópias nas arestas, testar equivalência e experimentar alocação de registradores. Buffers de entrada, tipos compostos e segurança de memória continuam pendentes. Licença ainda não definida.

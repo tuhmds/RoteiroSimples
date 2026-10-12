@@ -1,0 +1,18 @@
+inicio {
+    seja soma = 0
+    seja multiplicador = 2
+    seja ajuste = 1
+    escreva("RS 0.14 - SSA em registradores")
+    para i de 1 ate 6 {
+        se i % 2 == 0 {
+            ajuste = ajuste + multiplicador
+        } senao {
+            ajuste = ajuste + 1
+        }
+        soma = soma + i * ajuste
+    }
+    escreva("Resultado:")
+    escreva(soma)
+    escreva("Ajuste:")
+    escreva(ajuste)
+}

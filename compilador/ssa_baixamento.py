@@ -1,4 +1,4 @@
-"""RS 0.13: plano de copias nas arestas para futuro baixamento SSA.
+"""RS 0.14: plano de copias phi usado pelo backend SSA nativo -O 4.
 
 Uma instrucao phi e paralela: todos os destinos de uma mesma aresta recebem
 as fontes do predecessor de maneira simultanea. Este modulo apenas registra
@@ -35,7 +35,7 @@ def planejar_copias_phi(ssa):
 
 def formatar_copias_phi(ssa):
     planos = planejar_copias_phi(ssa)
-    linhas = ['RS 0.13 - plano de copias phi por aresta (ainda nao emitido no backend)']
+    linhas = ['RS 0.14 - plano de copias phi por aresta (emitido no backend com -O 4)']
     for (de, para), copias in planos.items():
         linhas.append(f'{de} -> {para} (copias paralelas):')
         for copia in copias:
