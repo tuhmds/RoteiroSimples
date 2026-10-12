@@ -1,0 +1,55 @@
+// RS 0.37: estrutura binaria verificavel, com versao e numero de registros.
+// Este cabecalho e didatico, NAO e o formato oficial do futuro Dados RS.
+inicio {
+    seja cabecalho: bytes[9]
+    seja quantidade = 100
+    seja estado = 0
+
+    // Identificacao ASCII "RSDB" seguida pela versao 1.
+    adicione_byte(cabecalho, 82)
+    adicione_byte(cabecalho, 83)
+    adicione_byte(cabecalho, 68)
+    adicione_byte(cabecalho, 66)
+    adicione_byte(cabecalho, 1)
+
+    // Contador em inteiro de 32 bits, ordem menor byte primeiro.
+    para indice de 0 ate 3 {
+        adicione_byte(cabecalho, quantidade % 256)
+        quantidade = quantidade / 256
+    }
+
+    grave_trecho("cabecalho_teste.rsd", cabecalho, 0, estado)
+    se estado != 9 {
+        escreva("Falha ao gravar os nove bytes")
+        encerre(2)
+    }
+
+    limpe(cabecalho)
+    carregue_trecho("cabecalho_teste.rsd", cabecalho, 0, 9, estado)
+    se estado != 9 {
+        escreva("Falha ao recuperar o cabecalho")
+        encerre(3)
+    }
+
+    se cabecalho[0] != 82 {
+        encerre(4)
+    }
+    se cabecalho[1] != 83 {
+        encerre(4)
+    }
+    se cabecalho[2] != 68 {
+        encerre(4)
+    }
+    se cabecalho[3] != 66 {
+        encerre(4)
+    }
+    se cabecalho[4] != 1 {
+        escreva("Versao desconhecida")
+        encerre(5)
+    }
+
+    seja numero_salvo = cabecalho[5] + cabecalho[6] * 256 + cabecalho[7] * 65536 + cabecalho[8] * 16777216
+    escreva("Quantidade recuperada:")
+    escreva(numero_salvo)
+    encerre(0)
+}
