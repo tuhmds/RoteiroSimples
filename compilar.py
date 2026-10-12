@@ -11,6 +11,11 @@ from backend import compilar
 
 
 def main(argv=None):
+    # Garante UTF-8 mesmo quando a saída é capturada ou redirecionada no
+    # Windows, evitando depender da codificação regional do computador.
+    for canal in (sys.stdout, sys.stderr):
+        if canal is not None and hasattr(canal, 'reconfigure'):
+            canal.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.22')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--alvo', choices=['windows', 'linux'], default='windows')
