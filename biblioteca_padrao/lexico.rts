@@ -1,0 +1,327 @@
+// Biblioteca lexico da RS. Retorna tokens ou um diagnostico sem encerrar o processo.
+// Os tokens se referem a posicoes no arquivo fonte emprestado, sem copiar texto.
+publico tipo UnidadeLexica {
+    classe: inteiro
+    inicio_byte: inteiro
+    comprimento_byte: inteiro
+    linha: inteiro
+    coluna: inteiro
+}
+
+// Erro tipado e copiavel: nao carrega dono e pode atravessar funcoes.
+publico tipo DiagnosticoLexico {
+    encontrado: logico
+    codigo: inteiro
+    posicao_byte: inteiro
+    linha: inteiro
+    coluna: inteiro
+}
+
+privado funcao letra(valor: inteiro) -> logico {
+    se valor >= 65 {
+        se valor <= 90 {
+            retorne verdadeiro
+        }
+    }
+    se valor >= 97 {
+        se valor <= 122 {
+            retorne verdadeiro
+        }
+    }
+    se valor == 95 {
+        retorne verdadeiro
+    }
+    retorne falso
+}
+
+privado funcao digito(valor: inteiro) -> logico {
+    se valor >= 48 {
+        se valor <= 57 {
+            retorne verdadeiro
+        }
+    }
+    retorne falso
+}
+
+privado funcao espaco(valor: inteiro) -> logico {
+    se valor == 32 {
+        retorne verdadeiro
+    }
+    se valor >= 9 {
+        se valor <= 13 {
+            retorne verdadeiro
+        }
+    }
+    retorne falso
+}
+
+privado funcao simbolo(valor: inteiro) -> logico {
+    se valor == 40 {
+        retorne verdadeiro
+    }
+    se valor == 41 {
+        retorne verdadeiro
+    }
+    se valor == 43 {
+        retorne verdadeiro
+    }
+    se valor == 45 {
+        retorne verdadeiro
+    }
+    se valor == 42 {
+        retorne verdadeiro
+    }
+    se valor == 47 {
+        retorne verdadeiro
+    }
+    se valor == 37 {
+        retorne verdadeiro
+    }
+    se valor == 61 {
+        retorne verdadeiro
+    }
+    se valor == 44 {
+        retorne verdadeiro
+    }
+    se valor == 59 {
+        retorne verdadeiro
+    }
+    se valor == 123 {
+        retorne verdadeiro
+    }
+    se valor == 125 {
+        retorne verdadeiro
+    }
+    se valor == 60 {
+        retorne verdadeiro
+    }
+    se valor == 62 {
+        retorne verdadeiro
+    }
+    se valor == 33 {
+        retorne verdadeiro
+    }
+    se valor == 58 {
+        retorne verdadeiro
+    }
+    se valor == 91 {
+        retorne verdadeiro
+    }
+    se valor == 93 {
+        retorne verdadeiro
+    }
+    se valor == 46 {
+        retorne verdadeiro
+    }
+    retorne falso
+}
+
+// Erros recuperaveis: -1 caractere nao aceito; -2 texto sem fechamento.
+// A lista pode conter tokens validos anteriores ao erro; o ultimo sera diagnostico.
+privado funcao sinalizar(tokens_parciais: lista[UnidadeLexica], codigo: inteiro, posicao: inteiro, linha_erro: inteiro, coluna_erro: inteiro) -> lista[UnidadeLexica] {
+    seja aviso: UnidadeLexica
+    aviso.classe = codigo
+    aviso.inicio_byte = posicao
+    aviso.comprimento_byte = 0
+    aviso.linha = linha_erro
+    aviso.coluna = coluna_erro
+    adicione(tokens_parciais, aviso)
+    retorne mova(tokens_parciais)
+}
+
+publico funcao primeiro_erro(unidades: emprestimo[lista[UnidadeLexica]]) -> inteiro {
+    seja indice = 0
+    enquanto indice < tamanho(unidades) {
+        seja unidade: UnidadeLexica = unidades[indice]
+        se unidade.classe < 0 {
+            retorne indice
+        }
+        indice = indice + 1
+    }
+    retorne -1
+}
+
+// Contrato experimental:
+// classe: 1 identificador, 2 numero, 3 texto, 4 simbolo, 5 operador duplo.
+// Um erro torna-se um token negativo; o chamador decide como tratar.
+// Converte o token de erro em registro tipado; nao encerra a aplicacao.
+// Quando encontrado=falso, os demais campos permanecem zero.
+publico funcao obter_diagnostico(unidades: emprestimo[lista[UnidadeLexica]]) -> DiagnosticoLexico {
+    seja resposta: DiagnosticoLexico
+    seja indice = primeiro_erro(unidades)
+    se indice < 0 {
+        retorne resposta
+    }
+    seja unidade: UnidadeLexica = unidades[indice]
+    resposta.encontrado = verdadeiro
+    resposta.codigo = unidade.classe
+    resposta.posicao_byte = unidade.inicio_byte
+    resposta.linha = unidade.linha
+    resposta.coluna = unidade.coluna
+    retorne resposta
+}
+
+publico funcao analisar(fonte: emprestimo[bytes]) -> lista[UnidadeLexica] {
+    seja encontrados: lista[UnidadeLexica]
+    seja indice = 0
+    seja linha = 1
+    seja coluna = 1
+    enquanto indice < tamanho(fonte) {
+        seja primeiro = fonte[indice]
+        se espaco(primeiro) {
+            se primeiro == 10 {
+                indice = indice + 1
+                linha = linha + 1
+                coluna = 1
+            } senao {
+                se primeiro == 13 {
+                    indice = indice + 1
+                    se indice < tamanho(fonte) {
+                        se fonte[indice] == 10 {
+                            indice = indice + 1
+                        }
+                    }
+                    linha = linha + 1
+                    coluna = 1
+                } senao {
+                    indice = indice + 1
+                    coluna = coluna + 1
+                }
+            }
+        } senao {
+            se primeiro == 47 {
+                se indice + 1 < tamanho(fonte) {
+                    se fonte[indice + 1] == 47 {
+                        enquanto indice < tamanho(fonte) {
+                            se fonte[indice] == 10 {
+                                pare
+                            }
+                            se fonte[indice] == 13 {
+                                pare
+                            }
+                            indice = indice + 1
+                        }
+                        continue
+                    }
+                }
+            }
+            seja inicio_byte = indice
+            seja coluna_inicio = coluna
+            seja classe = 0
+            se letra(primeiro) {
+                classe = 1
+                indice = indice + 1
+                seja continua = verdadeiro
+                enquanto continua {
+                    se indice >= tamanho(fonte) {
+                        continua = falso
+                    } senao {
+                        se letra(fonte[indice]) {
+                            indice = indice + 1
+                        } senao {
+                            se digito(fonte[indice]) {
+                                indice = indice + 1
+                            } senao {
+                                continua = falso
+                            }
+                        }
+                    }
+                }
+            } senao {
+                se digito(primeiro) {
+                    classe = 2
+                    indice = indice + 1
+                    enquanto indice < tamanho(fonte) {
+                        se digito(fonte[indice]) {
+                            indice = indice + 1
+                        } senao {
+                            pare
+                        }
+                    }
+                } senao {
+                    se primeiro == 34 {
+                        classe = 3
+                        indice = indice + 1
+                        seja escape_ativo = falso
+                        seja fechado = falso
+                        enquanto indice < tamanho(fonte) {
+                            seja atual = fonte[indice]
+                            se atual == 10 {
+                                retorne sinalizar(mova(encontrados), -2, inicio_byte, linha, coluna_inicio)
+                            }
+                            se atual == 13 {
+                                retorne sinalizar(mova(encontrados), -2, inicio_byte, linha, coluna_inicio)
+                            }
+                            se escape_ativo {
+                                escape_ativo = falso
+                            } senao {
+                                se atual == 92 {
+                                    escape_ativo = verdadeiro
+                                } senao {
+                                    se atual == 34 {
+                                        fechado = verdadeiro
+                                    }
+                                }
+                            }
+                            indice = indice + 1
+                            se fechado {
+                                pare
+                            }
+                        }
+                        se fechado == falso {
+                            retorne sinalizar(mova(encontrados), -2, inicio_byte, linha, coluna_inicio)
+                        }
+                    } senao {
+                        se simbolo(primeiro) {
+                            classe = 4
+                            indice = indice + 1
+                            se indice < tamanho(fonte) {
+                                se fonte[indice] == 61 {
+                                    se primeiro == 61 {
+                                        classe = 5
+                                    }
+                                    se primeiro == 33 {
+                                        classe = 5
+                                    }
+                                    se primeiro == 60 {
+                                        classe = 5
+                                    }
+                                    se primeiro == 62 {
+                                        classe = 5
+                                    }
+                                    se classe == 5 {
+                                        indice = indice + 1
+                                    }
+                                }
+                            }
+                        } senao {
+                            retorne sinalizar(mova(encontrados), -1, indice, linha, coluna)
+                        }
+                    }
+                }
+            }
+            // A coluna usa pontos de codigo Unicode, nao bytes UTF-8.
+            // Bytes de continuacao (0x80..0xBF) nao aumentam a coluna.
+            seja posicao_coluna = inicio_byte
+            enquanto posicao_coluna < indice {
+                seja atual = fonte[posicao_coluna]
+                se atual < 128 {
+                    coluna = coluna + 1
+                } senao {
+                    se atual >= 192 {
+                        coluna = coluna + 1
+                    }
+                }
+                posicao_coluna = posicao_coluna + 1
+            }
+            seja unidade: UnidadeLexica
+            unidade.classe = classe
+            unidade.inicio_byte = inicio_byte
+            unidade.comprimento_byte = indice - inicio_byte
+            unidade.linha = linha
+            unidade.coluna = coluna_inicio
+            adicione(encontrados, unidade)
+        }
+    }
+    retorne mova(encontrados)
+}
