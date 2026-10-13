@@ -146,6 +146,7 @@ class ProgramaSSA:
 
 def construir_ssa(cfg: GrafoCFG) -> ProgramaSSA:
     """Phi pruned via dominance frontiers; renomeação via árvore de dominadores."""
+    cfg.validar_para_ssa()
     fluxo = analisar_fluxo(cfg)
     alcancaveis = cfg.alcancaveis()
     preds = {b: set() for b in alcancaveis}
