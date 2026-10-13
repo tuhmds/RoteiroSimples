@@ -1,0 +1,68 @@
+// A segunda prova valida um RSD em outro processo por biblioteca RS compartilhada.
+importe "padrao/codificacao_binaria.rts" como binario
+
+funcao validar(dados: emprestimo[bytes]) -> inteiro {
+    // Todos os offsets seguintes sao seguros apos conferir o tamanho exato.
+    se tamanho(dados) != 1616 {
+        retorne -1
+    }
+    se dados[0] != 82 {
+        retorne -2
+    }
+    se dados[1] != 83 {
+        retorne -2
+    }
+    se dados[2] != 68 {
+        retorne -2
+    }
+    se dados[3] != 66 {
+        retorne -2
+    }
+    seja versao = binario.ler_u32(dados, 4)
+    se versao.valido == falso {
+        retorne -3
+    }
+    se versao.valor != 1 {
+        retorne -3
+    }
+    seja quantidade = binario.ler_u64_positivo(dados, 8)
+    se quantidade.valido == falso {
+        retorne -4
+    }
+    se quantidade.valor != 100 {
+        retorne -4
+    }
+    seja total = 0
+    para indice de 0 ate 99 {
+        seja posicao = 16 + indice * 16
+        seja codigo = binario.ler_u64_positivo(dados, posicao)
+        seja valor = binario.ler_u64_positivo(dados, posicao + 8)
+        se codigo.valido == falso {
+            retorne -5
+        }
+        se valor.valido == falso {
+            retorne -6
+        }
+        se codigo.valor != indice + 1 {
+            retorne -5
+        }
+        se valor.valor != codigo.valor * 10 {
+            retorne -6
+        }
+        total = total + valor.valor
+    }
+    retorne total
+}
+
+inicio {
+    seja dados: bytes
+    carregue_arquivo("entregas.rsd", dados)
+    seja total = validar(empreste(dados))
+    se total < 0 {
+        escreva("Erro: arquivo RSD invalido.")
+        escreva(total)
+        encerre(3)
+    }
+    escreva(100)
+    escreva(total)
+}

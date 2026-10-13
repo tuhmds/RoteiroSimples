@@ -1,0 +1,35 @@
+// Prova Dados RS: formato versionado, com codificacao reutilizavel da Biblioteca Padrão.
+importe "padrao/codificacao_binaria.rts" como binario
+
+inicio {
+    seja conteudo: bytes
+    adicione_byte(conteudo, 82)
+    adicione_byte(conteudo, 83)
+    adicione_byte(conteudo, 68)
+    adicione_byte(conteudo, 66)
+    seja versao = binario.codificar_u32(1)
+    se versao.valido == falso {
+        encerre(4)
+    }
+    junte(conteudo, versao.dados)
+    seja quantidade = binario.codificar_u64_positivo(100)
+    se quantidade.valido == falso {
+        encerre(4)
+    }
+    junte(conteudo, quantidade.dados)
+    para codigo de 1 ate 100 {
+        seja campo_codigo = binario.codificar_u64_positivo(codigo)
+        seja campo_valor = binario.codificar_u64_positivo(codigo * 10)
+        se campo_codigo.valido == falso {
+            encerre(4)
+        }
+        se campo_valor.valido == falso {
+            encerre(4)
+        }
+        junte(conteudo, campo_codigo.dados)
+        junte(conteudo, campo_valor.dados)
+    }
+    grave_arquivo("entregas.rsd", conteudo)
+    escreva(tamanho(conteudo))
+    escreva(100)
+}
