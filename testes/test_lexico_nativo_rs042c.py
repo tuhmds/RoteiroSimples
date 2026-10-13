@@ -16,6 +16,7 @@ sys.path.insert(0, str(RAIZ))
 
 from backend import compilar
 from compilador.lexico import tokens
+from compilador.modulos import carregar_fontes
 from compilador.parser import analisar_programa
 
 
@@ -61,7 +62,7 @@ class TestesLexicoEmRS(unittest.TestCase):
     def setUpClass(cls):
         cls.pasta = tempfile.TemporaryDirectory(prefix="rs_lexico_inicial_")
         cls.alvo = plataforma()
-        programa = analisar_programa(PROGRAMA.read_text(encoding="utf-8"))
+        programa = analisar_programa(carregar_fontes(PROGRAMA).texto)
         cls.executavel = Path(cls.pasta.name) / (
             "analisador.exe" if cls.alvo == "windows" else "analisador"
         )
