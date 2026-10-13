@@ -157,6 +157,7 @@ class ContextoSemantico:
             analisador = Expressao(self._renomear_tokens(partes), linha, self.variaveis, self.importa_matematica)
             analisador.tipos = self.tipos
             analisador.funcoes = self.funcoes
+            analisador.registros = self.registros
             arvore = analisador.analisar()
             tipo = tipo_expressao(arvore, self.tipos, linha, self.funcoes)
             arvore = self._preparar_argumentos_compostos(arvore)
