@@ -2,6 +2,7 @@
 import re
 from .erros import ErroCompilacao
 from .ast import NoExpressao
+from .propriedade import eh_proprietario
 
 class Expressao:
     def __init__(self, tokens, linha, variaveis, importa):
@@ -69,6 +70,13 @@ class Expressao:
                 raise ErroCompilacao(f'Linha {self.linha}: número inteiro fora do limite de 64 bits.')
             return NoExpressao(('numero', numero), getattr(token, 'origem', None))
         if re.fullmatch(r'[^\W\d]\w*', token, re.UNICODE):
+            if token == 'mova' and self.olhar() == '(':
+                self.consumir('(')
+                nome = self.consumir()
+                self.consumir(')')
+                if not eh_proprietario(getattr(self, 'tipos', {}).get(nome)):
+                    raise ErroCompilacao(f'Linha {self.linha}: mova(origem) exige lista dinamica proprietaria com dono unico.')
+                return NoExpressao(('mova_valor_dinamico', str(nome)), getattr(token, 'origem', None))
             if token == 'empreste' and self.olhar() == '(':
                 self.consumir('(')
                 nome = self.consumir()

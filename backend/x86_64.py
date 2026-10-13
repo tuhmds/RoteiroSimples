@@ -1,10 +1,12 @@
 """Emissão nativa de instruções AMD64, leitura/escrita e saltos."""
 import struct
 from compilador.erros import ErroCompilacao
-from . import listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros, arquivos_abertos, publicacao_atomica, politica_caminhos
+from compilador.propriedade import eh_proprietario
+from . import valores_dinamicos, listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros, arquivos_abertos, publicacao_atomica, politica_caminhos
 from compilador.disposicao_tipos import palavras_tipo as _palavras_tipo
 from .base import Emissor, alinhar
 from .desenrolamento_windows import registrar_quadro_empilhado
+from .convencao_funcoes import LIMITE_PILHA_SEGURA, custo_quadro, tamanho_quadro
 
 # Salvamentos anteriores a RBP preservam os deslocamentos dos locais.
 SALVAMENTOS_WINDOWS = bytes.fromhex('56 57 41 54 41 55 41 56 41 57')
@@ -124,8 +126,7 @@ def carregar_numero(g, numero):
 
 def deslocamento_variavel(variaveis, nome, windows):
     """Posicao da variavel local na pilha do programa (em bytes)."""
-    indice = variaveis[nome]
-    return -(16 + indice*8) if windows else -(8 + indice*8)
+    return valores_dinamicos.deslocamento_local(variaveis, nome, windows)
 
 
 def _checar_indice(g, expr_indice, tamanho, variaveis, windows, pilha_extra=0):
@@ -147,7 +148,7 @@ def _total_slots(programa):
 
 
 def _composto(tipo, registros):
-    return (isinstance(tipo, str) and tipo in registros) or (
+    return eh_proprietario(tipo) or (isinstance(tipo, str) and tipo in registros) or (
         isinstance(tipo, tuple) and tipo[0] in ('registro', 'lista', 'texto', 'bytes'))
 
 
@@ -183,6 +184,22 @@ def _copiar_para_retorno(g, origem, quantidade, windows=False):
     g.salto(rotulo, 'jnz')
 
 
+def _carregar_uso_pilha(g, variaveis, windows):
+    if '__rs_uso_pilha' in variaveis:
+        offset = deslocamento_variavel(variaveis, '__rs_uso_pilha', windows)
+        g.bytes(b'\x48\x8B\x85' + struct.pack('<i', offset))
+    else:
+        carregar_numero(g, g.custo_pilha_principal)
+
+
+def _somar_uso_pilha(g, custo):
+    if custo > 0x7FFFFFFF:
+        g.salto('erro_recursao_limite')
+    elif custo:
+        g.bytes(b'\x48\x05' + struct.pack('<I', custo))
+        g.salto('erro_recursao_limite', 'jo')
+
+
 def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, destino_composto=None):
     tipo = expr[0]
     if tipo in ('numero', 'logico'):
@@ -201,12 +218,34 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
         palavras = sum(_palavras_tipo(t, g.registros) for _, t in assinatura)
         ocultas = 1 + int(composto_retorno)  # orçamento de pilha e destino opcional
         ajustar = (pilha_extra + palavras + ocultas) % 2
+        custo_chamada = 8 * (pilha_extra + palavras + ocultas + ajustar)
+        # Validar antes de avaliar argumentos evita tanto copiar um valor
+        # grande sem espaço quanto consumir donos numa chamada inviável.
+        _carregar_uso_pilha(g, variaveis, windows)
+        _somar_uso_pilha(g, custo_chamada + custo_quadro(g.quadros_funcoes[nome]))
+        g.bytes(b'\x48\x3D' + struct.pack('<I', LIMITE_PILHA_SEGURA))
+        g.salto('erro_recursao_limite', 'ja')
         if ajustar:
             g.bytes(b'\x48\x83\xEC\x08')
         empilhados = 0
         for argumento, (_, tipo_parametro) in zip(argumentos, assinatura):
             quantidade = _palavras_tipo(tipo_parametro, g.registros)
-            if _composto(tipo_parametro, g.registros):
+            if eh_proprietario(tipo_parametro):
+                if argumento[0] == 'temporario_composto':
+                    origem = argumento[1]
+                    if g.tipos_atual.get(origem) != tipo_parametro:
+                        raise ErroCompilacao('Temporario dinamico possui tipo incompatível com o parametro.')
+                    expressao(g, argumento[2], variaveis, windows, registradores,
+                             pilha_extra + ajustar + empilhados,
+                             destino_composto=origem)
+                elif argumento[0] == 'mova_valor_dinamico':
+                    origem = argumento[1]
+                else:
+                    raise ErroCompilacao('Parametro proprietario exige mova(origem) ou chamada com retorno proprietario.')
+                if g.tipos_atual.get(origem) != tipo_parametro:
+                    raise ErroCompilacao('Transferencia de argumento exige o mesmo tipo dinamico.')
+                valores_dinamicos.empilhar_transferencia(g, variaveis, origem, windows)
+            elif _composto(tipo_parametro, g.registros):
                 if argumento[0] == 'temporario_composto':
                     expressao(g, argumento[2], variaveis, windows, registradores,
                              pilha_extra + ajustar + empilhados,
@@ -239,11 +278,8 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
                 destino = deslocamento_variavel(variaveis, destino_composto, windows)
                 g.bytes(b'\x48\x8D\x85' + struct.pack('<i', destino))
             g.bytes(b'\x50')
-        if '__rs_uso_pilha' in variaveis:
-            offset = deslocamento_variavel(variaveis, '__rs_uso_pilha', windows)
-            g.bytes(b'\x48\x8B\x85' + struct.pack('<i', offset))
-        else:
-            carregar_numero(g, 0)
+        _carregar_uso_pilha(g, variaveis, windows)
+        _somar_uso_pilha(g, custo_chamada)
         g.bytes(b'\x50')  # consumo de pilha acumulado
         g.chamada(f'funcao_{nome}')
         limpar = 8 * (palavras + ocultas + ajustar)
@@ -252,6 +288,8 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
                 g.bytes(b'\x48\x83\xC4' + struct.pack('<B', limpar))
             else:
                 g.bytes(b'\x48\x81\xC4' + struct.pack('<I', limpar))
+    elif tipo == 'mova_valor_dinamico':
+        raise ErroCompilacao('Transferencia dinamica exige parametro, retorno ou declaracao proprietaria.')
     elif tipo == 'empreste_lista_dinamica':
         listas_dinamicas.emprestar(g, variaveis, expr[1], windows)
     elif tipo == 'quantidade_lista_emprestada':
@@ -259,13 +297,17 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
     elif tipo == 'capacidade_lista_emprestada':
         listas_dinamicas.quantidade_emprestada(g, variaveis, expr[1], windows, capacidade=True)
     elif tipo == 'indice_lista_emprestada':
-        listas_dinamicas.ler_indice(g, variaveis, expr[1], expr[2], windows, expressao, emprestada=True)
+        listas_dinamicas.ler_indice(g, variaveis, expr[1], expr[2], windows,
+            lambda gerador, indice, locais, alvo: expressao(
+                gerador, indice, locais, alvo, registradores, pilha_extra), emprestada=True)
     elif tipo == 'quantidade_lista_dinamica':
         listas_dinamicas.quantidade(g, variaveis, expr[1], windows)
     elif tipo == 'capacidade_lista_dinamica':
         listas_dinamicas.quantidade(g, variaveis, expr[1], windows, capacidade=True)
     elif tipo == 'indice_lista_dinamica':
-        listas_dinamicas.ler_indice(g, variaveis, expr[1], expr[2], windows, expressao)
+        listas_dinamicas.ler_indice(g, variaveis, expr[1], expr[2], windows,
+            lambda gerador, indice, locais, alvo: expressao(
+                gerador, indice, locais, alvo, registradores, pilha_extra))
     elif tipo in ('tamanho_texto', 'tamanho_bytes'):
         offset = deslocamento_variavel(variaveis, expr[1], windows)
         g.bytes(b'\x48\x8B\x85' + struct.pack('<i', offset))
@@ -279,6 +321,8 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
         offset = deslocamento_variavel(variaveis, nome, windows)
         g.bytes(b'\x48\x8B\x84\xC5' + struct.pack('<i', offset))  # mov rax,[rbp+rax*8+disp]
     elif tipo == 'var':
+        if eh_proprietario(getattr(g, 'tipos_atual', {}).get(expr[1])):
+            raise ErroCompilacao('Valor dinamico proprietario nao admite copia implicita.')
         if registradores and expr[1] in registradores:
             from .ssa_x86_64 import _emite_mov
             _emite_mov(g, 'rax', registradores[expr[1]])
@@ -808,6 +852,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     g.desenrolamentos = []  # contratos reais para .pdata/.xdata
     g.exige_sondagem_pilha = False
     g.funcoes = getattr(programa, 'funcoes', {})
+    g.quadros_funcoes = {nome: tamanho_quadro(_total_slots(funcao.programa) + 1, windows)
+                        for nome, funcao in g.funcoes.items()}
     g.registros = getattr(programa, 'registros', {})
     g.campos_atual = getattr(programa, 'campos_registro', {})
     funcao_atual = None
@@ -851,9 +897,11 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     tem_leitura_texto = any(op[0] == 'leia_texto' for op in percorrer_instrucoes(programa.instrucoes))
     slots = _total_slots(programa)
     memoria_cache = ((256 if windows else TAMANHO_CACHE_ENTRADA) + 16) if tem_leitura else 0
+    frame = tamanho_quadro(slots, windows, memoria_cache)
+    g.custo_pilha_principal = custo_quadro(frame)
+    if g.custo_pilha_principal > LIMITE_PILHA_SEGURA:
+        raise ErroCompilacao('Quadro principal excede o limite seguro de pilha de 768 KiB.')
     if windows:
-        n = slots
-        frame = ((8 * n + memoria_cache + 0x38 + 15) // 16) * 16 + 8
         g.marcar('rs_inicio_principal')
         g.bytes(SALVAMENTOS_WINDOWS)
         g.bytes(b'\x53\x55\x48\x89\xE5')  # push rbx; push rbp; mov rbp,rsp
@@ -879,7 +927,6 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             g.relativo(b'\xFF\x15', 'GetStdHandle')
             g.bytes(b'\x49\x89\xC4')  # R12 = stdin handle
     else:
-        frame = alinhar(slots * 8 + memoria_cache, 16)
         g.bytes(b'\x55\x48\x89\xE5')
         if frame:
             reservar_pilha(g, frame, windows)
@@ -963,6 +1010,21 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 g.bytes(b'\x48\x89\x85' + struct.pack('<i', comprimento))
             elif op[0] == 'crie_lista_dinamica':
                 listas_dinamicas.criar(g, variaveis, op[1], windows)
+            elif op[0] == 'receba_valor_dinamico':
+                destino, origem = op[1:]
+                if not eh_proprietario(tipos.get(destino)):
+                    raise ErroCompilacao('Recebimento dinamico exige destino proprietario.')
+                if origem[0] == 'mova_valor_dinamico':
+                    if tipos.get(origem[1]) != tipos[destino] or origem[1] == destino:
+                        raise ErroCompilacao('Transferencia dinamica exige donos distintos do mesmo tipo.')
+                    listas_dinamicas.mover(g, variaveis, destino, origem[1], windows,
+                                           listas_dinamicas.largura_elemento(g, tipos[destino]))
+                elif origem[0] == 'chamada':
+                    if g.funcoes[origem[1]].retorno != tipos[destino]:
+                        raise ErroCompilacao('Retorno dinamico possui tipo incompatível com o destino.')
+                    expressao(g, origem, variaveis, windows, destino_composto=destino)
+                else:
+                    raise ErroCompilacao('Recebimento dinamico exige transferencia ou chamada proprietaria.')
             elif op[0] == 'mova_lista_dinamica':
                 listas_dinamicas.mover(g, variaveis, op[1], op[2], windows,
                                        listas_dinamicas.largura_elemento(g, tipos[op[1]]))
@@ -1060,6 +1122,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                         g.salto(rotulo, 'jnz')
             elif op[0] == 'copie_composto':
                 destino, origem = op[1], op[2]
+                if eh_proprietario(tipos.get(destino)):
+                    raise ErroCompilacao('Copia composta nao pode duplicar um proprietario dinamico.')
                 if origem[0] == 'chamada':
                     expressao(g, origem, variaveis, windows, destino_composto=destino)
                 elif origem[0] in ('indice_lista_dinamica', 'indice_lista_emprestada'):
@@ -1143,7 +1207,21 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             elif op[0] == 'retorne':
                 if funcao_atual is None:
                     raise ValueError('Retorno fora de função (erro interno).')
-                if _composto(g.funcoes[funcao_atual].retorno, g.registros):
+                tipo_retorno = g.funcoes[funcao_atual].retorno
+                if eh_proprietario(tipo_retorno):
+                    if op[1][0] == 'mova_valor_dinamico':
+                        if tipos.get(op[1][1]) != tipo_retorno:
+                            raise ErroCompilacao('Retorno proprietario exige transferencia do mesmo tipo.')
+                        valores_dinamicos.transferir_para_retorno(
+                            g, variaveis, op[1][1], windows)
+                    elif op[1][0] == 'chamada':
+                        if g.funcoes[op[1][1]].retorno != tipo_retorno:
+                            raise ErroCompilacao('Retorno proprietario exige chamada do mesmo tipo.')
+                        expressao(g, op[1], variaveis, windows,
+                                 destino_composto='__rs_retorno_externo')
+                    else:
+                        raise ErroCompilacao('Retorno proprietario exige mova(origem) ou chamada proprietaria.')
+                elif _composto(tipo_retorno, g.registros):
                     if op[1][0] == 'chamada':
                         expressao(g, op[1], variaveis, windows,
                                  destino_composto='__rs_retorno_externo')
@@ -1206,25 +1284,23 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         n_slots = _total_slots(funcao.programa)
         variaveis['__rs_uso_pilha'] = n_slots
         g.marcar(f'funcao_{nome}')
+        n_frame = g.quadros_funcoes[nome]
         if windows:
-            n_frame = (((n_slots+1)*8 + 0x38 + 15)//16)*16+8
             g.bytes(SALVAMENTOS_WINDOWS)
             g.bytes(b'\x53\x55\x48\x89\xE5')
         else:
-            n_frame = alinhar((n_slots+1)*8, 16)
             g.bytes(b'\x55\x48\x89\xE5')
         # A profundidade é limitada por bytes acumulados de quadros; o
         # controle ocorre ANTES de reservar a pilha da chamada atual.
         g.bytes(b'\x48\x8B\x45' + bytes((72 if windows else 16,)))
-        custo = n_frame + 128  # margem conservadora para CALL, argumentos e temporários
+        custo = custo_quadro(n_frame)
         if custo > 0x7FFFFFFF:
             g.salto('erro_recursao_limite')
         else:
             g.bytes(b'\x48\x05' + struct.pack('<I', custo))
             g.salto('erro_recursao_limite', 'jo')
-            if funcao.recursiva:
-                g.bytes(b'\x48\x3D' + struct.pack('<I', 1024 * 1024))
-                g.salto('erro_recursao_limite', 'ja')
+            g.bytes(b'\x48\x3D' + struct.pack('<I', LIMITE_PILHA_SEGURA))
+            g.salto('erro_recursao_limite', 'ja')
         reservar_pilha(g, n_frame, windows)
         if windows:
             rotulo_prologo = f'rs_fim_prologo_funcao_{nome}'
@@ -1236,6 +1312,12 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 'quadro': n_frame,
                 'prologo': 'usuario_preservado',
             })
+        # A sondagem Windows carrega o tamanho da reserva em RAX. Recuperar
+        # o orçamento após ela impede que quadros grandes reiniciem a conta.
+        # Os inicializadores de donos também alteram RAX: salvar antes deles.
+        if windows and n_frame >= 4096 and custo <= 0x7FFFFFFF:
+            g.bytes(b'\x48\x8B\x45\x48\x48\x05' + struct.pack('<I', custo))
+        g.bytes(b'\x48\x89\x85' + struct.pack('<i', deslocamento_variavel(variaveis, '__rs_uso_pilha', windows)))
         if tem_dinamicas:
             listas_dinamicas.inicializar_inativas(g, variaveis, tipos, windows)
         if tem_recursos:
@@ -1243,7 +1325,6 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 if tipo == 'arquivo':
                     offset = deslocamento_variavel(variaveis, recurso_nome, windows)
                     g.bytes(b'\x48\xC7\x85' + struct.pack('<i',offset) + b'\xFF\xFF\xFF\xFF')
-        g.bytes(b'\x48\x89\x85' + struct.pack('<i', deslocamento_variavel(variaveis, '__rs_uso_pilha', windows)))
         total_palavras = sum(_palavras_tipo(t, g.registros) for _, t in funcao.parametros)
         base_argumentos = 32 if _composto(funcao.retorno, g.registros) else 24
         if windows:
@@ -1330,7 +1411,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
     if getattr(programa, 'funcoes', {}):
         indice = len(mensagens)
-        msg = 'Erro: limite seguro de pilha em chamada recursiva.\n'
+        msg = 'Erro: limite seguro de pilha em chamada de função.\n'
         mensagens[indice] = msg
         g.marcar('erro_recursao_limite')
         if windows:

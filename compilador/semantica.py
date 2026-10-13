@@ -5,6 +5,7 @@ from .lexico import Token
 from .ast import NoExpressao
 from .tipos import MAX_VARIAVEIS, tipo_expressao
 from .disposicao_tipos import palavras_tipo
+from .propriedade import eh_proprietario, contrato_valor
 
 
 class ContextoSemantico:
@@ -102,9 +103,14 @@ class ContextoSemantico:
                 if (argumento[0] == 'chamada' and
                         ((isinstance(tipo_parametro, str) and tipo_parametro in self.registros) or
                          isinstance(tipo_parametro, tuple))):
+                    capacidades = contrato_valor(tipo_parametro, self.registros)
+                    if not capacidades.pode_copiar and not eh_proprietario(tipo_parametro):
+                        raise ErroCompilacao('Emprestimos e recursos nao podem ser armazenados em temporario composto.')
+                    # Chamadas proprietárias usam os mesmos slots, mas o
+                    # backend consome e inativa o descritor em vez de copiá-lo.
                     nome_temp = f'__rs_temporario_composto_{self.contador + 1}'
                     self.contador += 1
-                    tamanho = self._espacos_tipo(tipo_parametro)
+                    tamanho = capacidades.palavras
                     if (self.total_slots + tamanho) * 8 >= 0x7FFF0000:
                         raise ErroCompilacao('Quadro de execução excede endereço de 32 bits.')
                     tipo_real = (('registro', tipo_parametro, self.registros[tipo_parametro])
@@ -126,8 +132,8 @@ class ContextoSemantico:
         if tag == 'neg':
             return NoExpressao(('neg', self._preparar_argumentos_compostos(arvore[1])),
                                getattr(arvore, 'origem', None))
-        if tag == 'indice_bytes':
-            return NoExpressao(('indice_bytes', arvore[1],
+        if tag in ('indice_bytes', 'indice_lista_dinamica', 'indice_lista_emprestada'):
+            return NoExpressao((tag, arvore[1],
                                 self._preparar_argumentos_compostos(arvore[2])),
                                getattr(arvore, 'origem', None))
         if tag == 'indice':

@@ -527,7 +527,8 @@ def _vetor_memoria(indice, base, deslocamento, carregar):
             + struct.pack('<i', deslocamento))
 
 
-def wrapper_chamada(windows, alvo, entradas=None, argumento=7, envenenar=False):
+def wrapper_chamada(windows, alvo, entradas=None, argumento=7, envenenar=False,
+                    argumentos_pilha=None):
     """Wrapper com metadados próprios, oito GPR e dez XMM sentinelas.
 
     Originais do chamador ctypes são salvos e restaurados. Os SAVE_XMM128
@@ -550,8 +551,15 @@ def wrapper_chamada(windows, alvo, entradas=None, argumento=7, envenenar=False):
                           + struct.pack('<H', deslocamento // 16)))
     comprimento = len(codigo)
     codigo += b'\x48\x89\x4c\x24\x50'  # resultado RCX guardado no quadro
-    codigo += b'\x48\xc7\x04\x24\0\0\0\0'  # orçamento RS
-    codigo += b'\x48\xc7\x44\x24\x08' + struct.pack('<i', argumento)
+    if argumentos_pilha is None:
+        codigo += b'\x48\xc7\x04\x24\0\0\0\0'  # orçamento RS
+        codigo += b'\x48\xc7\x44\x24\x08' + struct.pack('<i', argumento)
+    else:
+        if not 1 <= len(argumentos_pilha) <= 10:
+            raise ValueError('Ensaio aceita de uma a dez palavras de argumentos.')
+        for indice, valor in enumerate(argumentos_pilha):
+            codigo += _mov_imediato('Rax', valor & ((1 << 64) - 1))
+            codigo += b'\x48\x89\x44\x24' + bytes((indice * 8,))
     vetores = ct.create_string_buffer(SENTINELAS_VETORIAIS)
     codigo += _mov_imediato('Rax', ct.addressof(vetores))
     for i in range(6, 16):
@@ -607,9 +615,10 @@ def verificar_sentinelas(resultado, entradas=None):
     assert ct.string_at(ct.addressof(resultado) + 88, 160) == SENTINELAS_VETORIAIS
 
 
-def chamar_com_sentinelas(windows, alvo, entradas=None, argumento=7, envenenar=False):
+def chamar_com_sentinelas(windows, alvo, entradas=None, argumento=7, envenenar=False,
+                         argumentos_pilha=None):
     resultado = (ct.c_uint64 * 31)()
-    imagem, _ = wrapper_chamada(windows, alvo, entradas, argumento, envenenar)
+    imagem, _ = wrapper_chamada(windows, alvo, entradas, argumento, envenenar, argumentos_pilha)
     with imagem:
         ct.WINFUNCTYPE(ct.c_uint64, ct.c_void_p)(imagem.base + 0x1000)(resultado)
     verificar_sentinelas(resultado, entradas)

@@ -78,3 +78,63 @@ publico funcao substituir_cinco(valores: lista[5], antigo: inteiro, novo: inteir
     }
     retorne resultado
 }
+
+// RS 0.42A: consultas de tamanho arbitrario por emprestimo de leitura.
+// O conteudo da colecao nao e copiado para chamar estas funcoes.
+publico funcao buscar(valores: emprestimo[lista[inteiro]], procurado: inteiro) -> inteiro {
+    seja quantidade = tamanho(valores)
+    seja indice = 0
+    enquanto indice < quantidade {
+        se valores[indice] == procurado {
+            retorne indice
+        }
+        indice = indice + 1
+    }
+    retorne -1
+}
+
+publico funcao contar(valores: emprestimo[lista[inteiro]], procurado: inteiro) -> inteiro {
+    seja quantidade = tamanho(valores)
+    seja encontrados = 0
+    seja indice = 0
+    enquanto indice < quantidade {
+        se valores[indice] == procurado {
+            encontrados = encontrados + 1
+        }
+        indice = indice + 1
+    }
+    retorne encontrados
+}
+
+publico funcao contem(valores: emprestimo[lista[inteiro]], procurado: inteiro) -> logico {
+    retorne buscar(valores, procurado) >= 0
+}
+
+publico funcao crescente(valores: emprestimo[lista[inteiro]]) -> logico {
+    seja quantidade = tamanho(valores)
+    seja indice = 1
+    enquanto indice < quantidade {
+        se valores[indice] < valores[indice - 1] {
+            retorne falso
+        }
+        indice = indice + 1
+    }
+    retorne verdadeiro
+}
+
+// A selecao cria outra colecao, cuja propriedade pertence ao chamador.
+publico funcao selecionar_intervalo(valores: emprestimo[lista[inteiro]], minimo: inteiro, maximo: inteiro) -> lista[inteiro] {
+    seja selecionados: lista[inteiro]
+    seja quantidade = tamanho(valores)
+    seja indice = 0
+    enquanto indice < quantidade {
+        seja valor = valores[indice]
+        se valor >= minimo {
+            se valor <= maximo {
+                adicione(selecionados, valor)
+            }
+        }
+        indice = indice + 1
+    }
+    retorne mova(selecionados)
+}

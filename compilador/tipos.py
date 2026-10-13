@@ -1,7 +1,34 @@
 """Tipos simples e checagem estática de expressões."""
 from .erros import ErroCompilacao
+from .propriedade import eh_proprietario, eh_emprestimo
 
 MAX_VARIAVEIS = 256  # sem sondagem de pilha/stack probing na versão atual
+
+
+def _validar_consumos_chamada(expr, linha):
+    """Uma árvore de chamada não pode consumir ou emprestar o mesmo dono.
+
+    A verificação inclui argumentos aninhados, independentemente da ordem
+    de avaliação, sem inventar empréstimos persistentes ou copiar donos.
+    """
+    consumidos, emprestados = set(), set()
+    pendentes = [expr]
+    while pendentes:
+        no = pendentes.pop()
+        if not isinstance(no, (tuple, list)):
+            continue
+        if no and no[0] == 'mova_valor_dinamico':
+            nome = no[1]
+            if nome in consumidos:
+                raise ErroCompilacao(f'Linha {linha}: lista {nome!r} consumida mais de uma vez na mesma chamada.')
+            consumidos.add(nome)
+        elif no and no[0] == 'empreste_lista_dinamica':
+            emprestados.add(no[1])
+        pendentes.extend(filho for filho in no if isinstance(filho, (tuple, list)))
+    conflitos = consumidos & emprestados
+    if conflitos:
+        nome = sorted(conflitos)[0]
+        raise ErroCompilacao(f'Linha {linha}: nao pode emprestar e mover o mesmo dono {nome!r} na mesma chamada.')
 
 
 def tipo_expressao(expr, tipos, linha, funcoes=None):
@@ -21,11 +48,21 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
         parametros, retorno = assinatura
         if len(argumentos) != len(parametros):
             raise ErroCompilacao(f'Linha {linha}: função {nome!r} espera {len(parametros)} argumentos; recebeu {len(argumentos)}.')
+        _validar_consumos_chamada(expr, linha)
         for posicao, (argumento, esperado) in enumerate(zip(argumentos, parametros), 1):
             recebido = tipo_expressao(argumento, tipos, linha, funcoes)
+            if eh_proprietario(esperado) and argumento[0] not in ('mova_valor_dinamico', 'chamada'):
+                raise ErroCompilacao(f'Linha {linha}: argumento {posicao} de {nome!r} exige mova(origem) ou resultado proprietario de funcao; copiar dono unico nao e permitido.')
             if recebido != esperado:
                 raise ErroCompilacao(f'Linha {linha}: argumento {posicao} de {nome!r} exige {esperado}, recebeu {recebido}.')
         return retorno
+    if categoria == 'mova_valor_dinamico':
+        tipo = tipos.get(expr[1])
+        if not eh_proprietario(tipo):
+            raise ErroCompilacao(f'Linha {linha}: mova(origem) exige lista dinamica proprietaria.')
+        return tipo
+    if categoria == 'temporario_composto':
+        return tipos[expr[1]]
     if categoria == 'var':
         tipo = tipos[expr[1]]
         if isinstance(tipo, tuple) and tipo[0] == 'registro':
@@ -98,8 +135,9 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
             if a != 'inteiro' or b != 'inteiro':
                 raise ErroCompilacao(f'Linha {linha}: operação {op} exige dois inteiros; recebeu {a} e {b}.')
             return 'inteiro'
-        if ((isinstance(a, tuple) and a[0] == 'lista_emprestada') or
-                (isinstance(b, tuple) and b[0] == 'lista_emprestada')):
+        if eh_proprietario(a) or eh_proprietario(b):
+            raise ErroCompilacao(f'Linha {linha}: lista proprietaria com dono unico nao admite comparacao nem copia.')
+        if eh_emprestimo(a) or eh_emprestimo(b):
             raise ErroCompilacao(f'Linha {linha}: emprestimos nao podem ser comparados diretamente.')
         if a == 'arquivo' or b == 'arquivo':
             raise ErroCompilacao(f'Linha {linha}: recurso arquivo nao admite comparacao nem copia.')

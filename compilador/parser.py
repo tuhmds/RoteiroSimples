@@ -6,6 +6,7 @@ from .erros import ErroCompilacao
 from .lexico import tokens
 from .semantica import ContextoSemantico
 from .validacao_caminhos import validar_literal_arquivo
+from .propriedade import eh_proprietario, contrato_valor
 
 def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _retorno=None, _registros=None):
     # O analisador público também compreende resultados genéricos, e não só
@@ -80,6 +81,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             nome = str(partes[0])
             if nome in ('inteiro', 'logico') or nome in registros:
                 return nome
+        if partes == ['lista', '[', ']']:
+            return ('lista_dinamica', 'inteiro')
         if len(partes) == 4 and partes == ['emprestimo', '[', 'lista', ']']:
             return ('lista_emprestada', 'inteiro')
         if (len(partes) == 7 and partes[:4] == ['emprestimo', '[', 'lista', '[']
@@ -108,7 +111,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if len(cabecalho) < 8 or cabecalho[2] != '(' or ')' not in cabecalho:
                 raise ErroCompilacao(f'Linha {n}: cabeçalho de função inválido.')
             nome = str(cabecalho[1])
-            if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', nome) or nome in ('inicio', 'seja', 'funcao', 'retorne', 'empreste', 'emprestimo'):
+            if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', nome) or nome in ('inicio', 'seja', 'funcao', 'retorne', 'empreste', 'emprestimo', 'mova'):
                 raise ErroCompilacao(f'Linha {n}: nome de função inválido.')
             fim_par = cabecalho.index(')', 3)
             if cabecalho[fim_par+1:fim_par+3] != ['-', '>'] or cabecalho[-1] != '{':
@@ -116,8 +119,6 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             retorno = ler_tipo(cabecalho[fim_par+3:-1], n)
             if isinstance(retorno, tuple) and retorno[0] == 'lista_emprestada':
                 raise ErroCompilacao(f'Linha {n}: emprestimo[lista] so pode aparecer em parametros; nao pode ser retornado.')
-            if isinstance(retorno, tuple) and retorno[0] == 'lista_dinamica':
-                raise ErroCompilacao(f'Linha {n}: lista dinamica proprietaria nao pode ser retornada por valor.')
             partes = cabecalho[3:fim_par]
             parametros = []
             if partes:
@@ -133,8 +134,6 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     if grupo[0] in (x[0] for x in parametros):
                         raise ErroCompilacao(f'Linha {n}: parâmetro duplicado: {grupo[0]}.')
                     tipo_parametro = ler_tipo(grupo[2:], n)
-                    if isinstance(tipo_parametro, tuple) and tipo_parametro[0] == 'lista_dinamica':
-                        raise ErroCompilacao(f'Linha {n}: use emprestimo[lista[Tipo]] para receber listas, nao transferencia implicita.')
                     parametros.append((str(grupo[0]), tipo_parametro))
             if nome in assinaturas or nome in registros:
                 raise ErroCompilacao(f'Linha {n}: função {nome!r} já foi declarada.')
@@ -264,7 +263,9 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 if len(t) == 1:
                     raise ErroCompilacao(f'Linha {n}: retorne exige um valor.')
                 valor, _ = expressao_tipada(t[1:], n, _retorno)
-                if eh_composto(_retorno) and valor[0] not in ('var', 'chamada'):
+                if eh_proprietario(_retorno) and valor[0] not in ('mova_valor_dinamico', 'chamada'):
+                    raise ErroCompilacao(f'Linha {n}: retorno proprietario exige mova(origem) ou chamada de funcao; copiar dono unico nao e permitido.')
+                if not eh_proprietario(_retorno) and eh_composto(_retorno) and valor[0] not in ('var', 'chamada'):
                     raise ErroCompilacao(f'Linha {n}: retorno composto exige variável ou função do mesmo tipo.')
                 adicionar(('retorne', valor), n, t)
                 i += 1
@@ -536,16 +537,16 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 operacao = str(t[0])
                 conteudo = t[2:-1]
                 if operacao == 'adicione':
-                    if conteudo.count(',') != 1:
+                    grupos = argumentos_externos(t, n)
+                    if len(grupos) != 2:
                         raise ErroCompilacao(f'Linha {n}: use adicione(lista, valor).')
-                    virgula = conteudo.index(',')
-                    nome_parte = conteudo[:virgula]
+                    nome_parte, valor_parte = grupos
                     if len(nome_parte) != 1:
                         raise ErroCompilacao(f'Linha {n}: adicione exige nome de lista proprietaria.')
                     nome = contexto.resolver(str(nome_parte[0]))
                     if not isinstance(tipos.get(nome), tuple) or tipos[nome][0] != 'lista_dinamica':
                         raise ErroCompilacao(f'Linha {n}: adicione exige lista dinamica proprietaria.')
-                    valor, _ = expressao_tipada(conteudo[virgula+1:], n, tipos[nome][1])
+                    valor, _ = expressao_tipada(valor_parte, n, tipos[nome][1])
                     if tipos[nome][1] in registros and valor[0] != 'var':
                         raise ErroCompilacao(f'Linha {n}: adicione com registro exige variavel de mesmo tipo.')
                     adicionar(('adicione_lista_dinamica', nome, valor), n, t)
@@ -567,15 +568,29 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' duplicada ou reservada.")
                 if len(t) >= 4 and t[2:4] == [':', 'emprestimo']:
                     raise ErroCompilacao(f'Linha {n}: emprestimo[lista] so e permitido como parametro de funcao.')
-                if (t[2:5] == [':', 'lista', '['] and t[-1:] == [']']
-                        and ((len(t) == 6 and t[5] == ']') or
-                             (len(t) == 7 and (t[5] in ('inteiro', 'logico') or t[5] in registros)))):
-                    elemento = 'inteiro' if len(t) == 6 else str(t[5])
-                    interno = registrar(str(nome), ('lista_dinamica', elemento), n)
-                    donos_locais.append(interno)
-                    adicionar(('crie_lista_dinamica', interno), n, t)
-                    i += 1
-                    continue
+                if t[2:5] == [':', 'lista', '['] and len(t) >= 6:
+                    fim_tipo = None
+                    if t[5] == ']':
+                        elemento, fim_tipo = 'inteiro', 6
+                    elif (len(t) >= 7 and t[6] == ']' and
+                          (t[5] in ('inteiro', 'logico') or t[5] in registros)):
+                        elemento, fim_tipo = str(t[5]), 7
+                    if fim_tipo is not None:
+                        tipo_dono = ('lista_dinamica', elemento)
+                        valor = None
+                        if len(t) != fim_tipo:
+                            if len(t) <= fim_tipo + 1 or t[fim_tipo] != '=':
+                                raise ErroCompilacao(f'Linha {n}: declaracao de lista proprietaria invalida.')
+                            valor, _ = expressao_tipada(t[fim_tipo+1:], n, tipo_dono)
+                            if valor[0] not in ('mova_valor_dinamico', 'chamada'):
+                                raise ErroCompilacao(f'Linha {n}: lista[] tem dono unico; copiar propriedade nao e permitido, use mova(origem) ou funcao.')
+                        interno = registrar(str(nome), tipo_dono, n)
+                        donos_locais.append(interno)
+                        adicionar(('crie_lista_dinamica', interno), n, t)
+                        if valor is not None:
+                            adicionar(('receba_valor_dinamico', interno, valor), n, t)
+                        i += 1
+                        continue
                 if t[2:] == [':', 'arquivo']:
                     interno = registrar(str(nome), 'arquivo', n)
                     donos_locais.append(interno)
@@ -664,10 +679,19 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f"Linha {n}: use 'seja nome = valor' ou 'seja nome: inteiro = valor'.")
                 if inferido == 'arquivo':
                     raise ErroCompilacao(f'Linha {n}: recursos arquivo nao podem ser copiados; declare seja nome: arquivo.')
-                if isinstance(inferido, tuple) and inferido[0] == 'lista_dinamica':
-                    raise ErroCompilacao(f'Linha {n}: lista[] tem dono unico; copiar ou inferir propriedade nao e permitido.')
+                if eh_proprietario(inferido):
+                    if arvore[0] not in ('mova_valor_dinamico', 'chamada'):
+                        raise ErroCompilacao(f'Linha {n}: lista[] tem dono unico; copiar ou inferir propriedade nao e permitido.')
+                    interno = registrar(str(nome), inferido, n)
+                    donos_locais.append(interno)
+                    adicionar(('crie_lista_dinamica', interno), n, t)
+                    adicionar(('receba_valor_dinamico', interno, arvore), n, t)
+                    i += 1
+                    continue
                 if isinstance(inferido, tuple) and inferido[0] == 'lista_emprestada':
                     raise ErroCompilacao(f'Linha {n}: emprestimo[lista] nao pode ser armazenado em variavel local.')
+                if not contrato_valor(inferido, registros).pode_copiar:
+                    raise ErroCompilacao(f'Linha {n}: tipo sem capacidade de copia implicita.')
                 tipo_armazenado = ('registro', inferido, registros[inferido]) if isinstance(inferido, str) and inferido in registros else inferido
                 interno = registrar(str(nome), tipo_armazenado, n)
                 if eh_composto(inferido):
@@ -759,68 +783,26 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                                          _contexto=ctx, _assinaturas=assinaturas,
                                          _retorno=retorno, _registros=registros)
         programa.funcoes[nome] = Funcao(nome, tuple(internos), retorno, corpo_funcao)
-    # Chamadas recursivas serão introduzidas com controle explícito de
-    # profundidade e sondagem dos quadros em cada chamada. Nesta etapa,
-    # rejeitamos ciclos, inclusive indiretos, em vez de arriscar esgotar pilha.
-    def chamadas_expressao(expr):
-        if not isinstance(expr, tuple):
-            return set()
-        tag = expr[0]
-        if tag == 'temporario_composto':
-            return chamadas_expressao(expr[2])
-        if tag == 'chamada':
-            nomes = {expr[1]}
-            for argumento in expr[2]:
-                nomes |= chamadas_expressao(argumento)
-            return nomes
-        if tag == 'neg':
-            return chamadas_expressao(expr[1])
-        if tag in ('bin', 'comparacao'):
-            return chamadas_expressao(expr[2]) | chamadas_expressao(expr[3])
-        if tag == 'indice':
-            return chamadas_expressao(expr[2])
-        return set()
+    def chamadas_arvore(arvore):
+        """Percorre todos os nós, incluindo índices, acréscimos e movimentos.
 
-    def chamadas_bloco(bloco):
-        nomes = set()
-        for instrucao in bloco:
-            tag = instrucao[0]
-            if tag in ('atribua', 'copie_composto', 'atribua_indice', 'imprima_num', 'retorne'):
-                expressoes = ((instrucao[2],) if tag in ('atribua', 'copie_composto') else
-                             (instrucao[2], instrucao[3]) if tag == 'atribua_indice' else
-                             (instrucao[1],))
-                for expressao in expressoes:
-                    nomes |= chamadas_expressao(expressao)
-            if tag in ('grave_em', 'carregue_de'):
-                expressoes = ((instrucao[3],) if tag == 'grave_em'
-                             else (instrucao[3], instrucao[4]))
-                for expr in expressoes:
-                    nomes |= chamadas_expressao(expr)
-            if tag in ('encerre', 'adicione_byte', 'atribua_byte'):
-                argumentos = ((instrucao[1],) if tag == 'encerre' else
-                              (instrucao[2],) if tag == 'adicione_byte' else
-                              (instrucao[2], instrucao[3]))
-                for argumento in argumentos:
-                    nomes |= chamadas_expressao(argumento)
-            if tag in ('grave_trecho', 'carregue_trecho'):
-                expressoes = ((instrucao[3],) if tag == 'grave_trecho'
-                             else (instrucao[3], instrucao[4]))
-                for expressao in expressoes:
-                    nomes |= chamadas_expressao(expressao)
-            if tag in ('se', 'enquanto', 'para'):
-                expressoes = ((instrucao[1],) if tag != 'para' else (instrucao[2], instrucao[3]))
-                for expressao in expressoes:
-                    nomes |= chamadas_expressao(expressao)
-                if tag == 'se':
-                    nomes |= chamadas_bloco(instrucao[2]) | chamadas_bloco(instrucao[3])
-                else:
-                    nomes |= chamadas_bloco(instrucao[2] if tag == 'enquanto' else instrucao[5])
+        Novas expressões não podem ocultar chamadas do controle de pilha.
+        Literais e tipos não são executados nem interpretados como código.
+        """
+        nomes, pendentes = set(), [arvore]
+        while pendentes:
+            no = pendentes.pop()
+            if not isinstance(no, (tuple, list)):
+                continue
+            if no and no[0] == 'chamada':
+                nomes.add(no[1])
+            pendentes.extend(filho for filho in no if isinstance(filho, (tuple, list)))
         return nomes
 
-    dependencias = {nome: chamadas_bloco(funcao.programa.instrucoes)
+    dependencias = {nome: chamadas_arvore(funcao.programa.instrucoes)
                     for nome, funcao in programa.funcoes.items()}
-    # Detecta ciclos diretos e indiretos e habilita proteção de pilha
-    # somente nas funções realmente recursivas.
+    # Mantém a classificação de ciclos diretos e indiretos para análises.
+    # O backend verifica o orçamento de pilha em todas as chamadas.
     for nome in dependencias:
         pendentes = list(dependencias[nome])
         visitados = set()

@@ -159,7 +159,8 @@ class TestesListasDinamicas(unittest.TestCase):
                 retorne 1
             }
             inicio {
-                escreva(1)
+                seja valores: lista[]
+                escreva(receber(valores))
             }""",
         ]
         for fonte in proibidos:
@@ -704,7 +705,8 @@ class TestesListasDinamicas(unittest.TestCase):
                 retorne 1
             }
             inicio {
-                escreva(1)
+                seja entregas: lista[Entrega]
+                escreva(tomar(entregas))
             }""",
             """tipo Entrega {
                 numero: inteiro
