@@ -1,5 +1,9 @@
 # RoteiroSimples (RS) — versão experimental 0.42A.3
 
+## RS 0.42D — Campos dinamicos com dono em registros locais
+
+A RS permite, em marco experimental, campos `texto`, `bytes`, `lista[inteiro]` e `lista[logico]` dentro de registros locais, com gerenciamento automatico de seus descritores, transferencia explicita por `mova` e preservacao da geracao nativa. Copias implicitas, parametros e retornos por valor e colecoes de registros proprietarios permanecem rejeitados ate existir transferencia segura do agregado completo. A implementacao e os testes estao na [PR #8](https://github.com/tuhmds/RoteiroSimples/pull/8), com contrato em `docs/REGISTROS_PROPRIETARIOS_RS_0_42D.md`.
+
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
 (ELF64), sem etapa intermediária obrigatória em C, LLVM ou montador externo. Os
