@@ -11,6 +11,7 @@ from pathlib import Path
 from .erros import ErroCompilacao
 from .lexico import tokens
 from .modulos import FontesReunidas, OrigemLinha
+from .propriedade import contrato_valor
 
 
 TIPOS_PRIMITIVOS = frozenset(('inteiro', 'logico'))
@@ -69,11 +70,11 @@ def _separar_generico(itens, indice, linha):
     raise ErroCompilacao(f'Linha {linha}: colchete não fechado em resultado genérico.')
 
 
-def _montar_tipos_e_funcoes(especializacoes):
+def _montar_tipos_e_funcoes(especializacoes, declaracoes_usuario):
     tipos = []
     funcoes = []
     for chave, tipo in especializacoes.items():
-        nome, sucesso, falha = _nomes(chave)
+        nome, _, _ = _nomes(chave)
         tipos.extend((
             f'tipo {nome} {{',
             '    valido: logico',
@@ -81,13 +82,34 @@ def _montar_tipos_e_funcoes(especializacoes):
             '    codigo_erro: inteiro',
             '}',
         ))
+    # Resolver só as declarações concretas com a análise comum. Assim,
+    # registros aninhados/importados usam o mesmo contrato de propriedade
+    # do restante da linguagem, sem outro reconhecedor de tipos/donos.
+    from .parser import analisar_programa
+    from .modulos import apresentar_erro
+    origens_tipos = list(declaracoes_usuario) + [
+        OrigemLinha(Path('<resultados_genericos>'), pos + 1, texto)
+        for pos, texto in enumerate(tipos)
+    ]
+    fonte_tipos = '\n'.join(origem.texto for origem in origens_tipos)
+    try:
+        registros = analisar_programa(fonte_tipos + '\ninicio {\n escreva(0)\n}\n').registros
+    except ErroCompilacao as erro:
+        mensagem, _, _ = apresentar_erro(erro, origens_tipos)
+        raise ErroCompilacao(mensagem) from erro
+    for chave, tipo in especializacoes.items():
+        nome, sucesso, falha = _nomes(chave)
+        proprietario = not contrato_valor(nome, registros).pode_copiar
+        receber = ('    mova(resposta.valor, valor)' if proprietario
+                   else '    resposta.valor = valor')
+        devolver = '    retorne mova(resposta)' if proprietario else '    retorne resposta'
         funcoes.extend((
             f'funcao {sucesso}(valor: {tipo}) -> {nome} {{',
             f'    seja resposta: {nome}',
             '    resposta.valido = verdadeiro',
-            '    resposta.valor = valor',
+            receber,
             '    resposta.codigo_erro = 0',
-            '    retorne resposta',
+            devolver,
             '}',
             f'funcao {falha}(codigo: inteiro) -> {nome} {{',
             f'    seja resposta: {nome}',
@@ -96,7 +118,7 @@ def _montar_tipos_e_funcoes(especializacoes):
             '    se resposta.codigo_erro == 0 {',
             '        resposta.codigo_erro = 2',
             '    }',
-            '    retorne resposta',
+            devolver,
             '}',
         ))
     return tipos, funcoes
@@ -201,12 +223,6 @@ def preparar_resultados_genericos(fontes):
     if not usou_recurso:
         return fontes
 
-    declaracoes, construtores = _montar_tipos_e_funcoes(especiais)
-    tipos = [OrigemLinha(Path('<resultados_genericos>'), pos+1, linha)
-             for pos, linha in enumerate(declaracoes)]
-    funcoes = [OrigemLinha(Path('<resultados_genericos>'), pos+1, linha)
-               for pos, linha in enumerate(construtores)]
-
     # O parser exige todos os tipos antes da primeira função/inicio.
     # Inserimos especializações depois das declarações do usuário.
     corte_tipos = None
@@ -217,6 +233,11 @@ def preparar_resultados_genericos(fontes):
             break
     if corte_tipos is None:
         raise ErroCompilacao('Programa não contém função nem bloco inicio.')
+    declaracoes, construtores = _montar_tipos_e_funcoes(especiais, saida[:corte_tipos])
+    tipos = [OrigemLinha(Path('<resultados_genericos>'), pos+1, linha)
+             for pos, linha in enumerate(declaracoes)]
+    funcoes = [OrigemLinha(Path('<resultados_genericos>'), pos+1, linha)
+               for pos, linha in enumerate(construtores)]
     saida[corte_tipos:corte_tipos] = tipos + funcoes
     return FontesReunidas('\n'.join(x.texto for x in saida) + '\n',
                           tuple(saida), fontes.arquivos)

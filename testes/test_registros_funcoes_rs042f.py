@@ -336,11 +336,11 @@ inicio {
 }''', encoding='utf-8')
             self.verificar(carregar_fontes(principal).texto, 'Ação RS\n1\n258\n')
 
-    def test_resultados_com_donos_continuam_rejeitados(self):
-        with self.assertRaisesRegex(ErroCompilacao, 'campo proprietario nao pode receber atribuicao implicita'):
+    def test_resultado_com_dono_rejeita_construcao_por_copia_implicita(self):
+        with self.assertRaisesRegex(ErroCompilacao, 'exige mova'):
             analisar_programa(CABECALHO + '''inicio {
     seja origem = criar(1)
-    seja resposta: resultado[Documento] = sucesso[Documento](mova(origem))
+    seja resposta: resultado[Documento] = sucesso[Documento](origem)
 }''')
 
     def test_falha_de_alocacao_em_fabrica_de_registro_e_controlada(self):
