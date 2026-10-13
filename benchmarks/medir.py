@@ -9,6 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 import platform
+import random
 import statistics
 import subprocess
 import sys
@@ -23,14 +24,22 @@ from compilador.estrategia import decidir_estrategia
 from compilador.modulos import carregar_fontes
 
 
-def medir(fonte, alvo, repeticoes=7, niveis=tuple(range(9))):
-    if repeticoes < 2 or not niveis or any(not 0 <= nivel <= 8 for nivel in niveis):
-        raise ValueError('Use pelo menos duas repetições e níveis entre 0 e 8.')
+def medir(fonte, alvo, repeticoes=7, niveis=tuple(range(9)), semente=420110):
+    niveis = tuple(niveis)
+    if (repeticoes < 2 or not niveis or len(set(niveis)) != len(niveis)
+            or any(not 0 <= nivel <= 8 for nivel in niveis)):
+        raise ValueError('Use pelo menos duas repetições e níveis distintos entre 0 e 8.')
     programa = analisar_programa(fonte)
     registros = []
     binarios = {}
     arquivos_esperados = None
+    resultado_esperado = None
+    ordens = []
+    gerador_ordem = random.Random(semente)
     with tempfile.TemporaryDirectory(prefix='rs_benchmark_') as pasta:
+        executaveis = {}
+        por_nivel = {}
+        # Compila todos os níveis antes de cronometrar o primeiro processo.
         for nivel in niveis:
             executavel = Path(pasta) / ('teste_%s.exe' % nivel if alvo == 'windows'
                                          else 'teste_%s' % nivel)
@@ -42,14 +51,27 @@ def medir(fonte, alvo, repeticoes=7, niveis=tuple(range(9))):
             executavel.write_bytes(binario)
             if alvo == 'linux':
                 executavel.chmod(0o755)
-            tempos = []
-            esperado = None
-            for rodada in range(repeticoes + 1):  # primeira execução: aquecimento
+            executaveis[nivel] = executavel
+            registro = {'nivel': nivel, 'bytes': len(binario),
+                        'gerador': estrategia.gerador, 'nivel_ir': estrategia.nivel_ir,
+                        'otimiza': estrategia.otimiza, 'motivos': estrategia.motivos,
+                        'sha256': resumo_binario, 'mesmo_binario_que': binarios.get(resumo_binario),
+                        'compilacao_ms': round(compilacao_ms, 3), 'tempos_ms': []}
+            registros.append(registro)
+            por_nivel[nivel] = registro
+            binarios.setdefault(resumo_binario, nivel)
+        # Uma execução de cada nível por rodada. Evita confundir a evolução
+        # temporal do hospedeiro com uma série fixa O0, O1, ... O8.
+        for rodada in range(repeticoes + 1):  # rodada zero: aquecimento de todos
+            ordem = list(niveis)
+            gerador_ordem.shuffle(ordem)
+            ordens.append(ordem)
+            for nivel in ordem:
                 # Preparação e leitura de arquivos ficam fora do cronômetro.
                 # Cada execução recebe diretório vazio, sem estado da anterior.
                 with tempfile.TemporaryDirectory(dir=pasta, prefix='rodada_') as trabalho:
                     inicio = time.perf_counter_ns()
-                    resultado = subprocess.run([str(executavel)], cwd=trabalho, input='', capture_output=True,
+                    resultado = subprocess.run([str(executaveis[nivel])], cwd=trabalho, input='', capture_output=True,
                                               text=True, encoding='utf-8', timeout=30)
                     duracao = (time.perf_counter_ns() - inicio) / 1_000_000
                     arquivos = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
@@ -61,37 +83,32 @@ def medir(fonte, alvo, repeticoes=7, niveis=tuple(range(9))):
                 elif arquivos != arquivos_esperados:
                     raise AssertionError('Arquivos divergentes entre execuções do benchmark.')
                 resultado_tupla = (resultado.returncode, resultado.stdout, resultado.stderr)
-                if esperado is None:
-                    esperado = resultado_tupla
-                elif resultado_tupla != esperado:
-                    raise AssertionError('Saída inconsistente nas repetições de -O %d' % nivel)
+                if resultado_esperado is None:
+                    resultado_esperado = resultado_tupla
+                elif resultado_tupla != resultado_esperado:
+                    raise AssertionError('Saídas ou códigos de retorno distintos entre os níveis medidos.')
                 if rodada:
-                    tempos.append(duracao)
-            registros.append({'nivel': nivel, 'bytes': len(binario),
-                              'gerador': estrategia.gerador, 'nivel_ir': estrategia.nivel_ir,
-                              'otimiza': estrategia.otimiza, 'motivos': estrategia.motivos,
-                              'sha256': resumo_binario, 'mesmo_binario_que': binarios.get(resumo_binario),
-                              'compilacao_ms': round(compilacao_ms, 3),
-                              'mediana_ms': round(statistics.median(tempos), 3),
-                              'mínimo_ms': round(min(tempos), 3),
-                              'máximo_ms': round(max(tempos), 3),
-                              'tempos_ms': [round(t, 3) for t in tempos],
-                              'resultado': esperado})
-            binarios.setdefault(resumo_binario, nivel)
-    if any(r['resultado'] != registros[0]['resultado'] for r in registros[1:]):
-        raise AssertionError('Saídas ou códigos de retorno distintos entre os níveis medidos.')
-    return {'versao': 'RS 0.42J', 'alvo': alvo, 'sistema': platform.platform(), 'cpu': platform.processor(),
+                    por_nivel[nivel]['tempos_ms'].append(duracao)
+    for registro in registros:
+        tempos = registro['tempos_ms']
+        registro.update({'mediana_ms': round(statistics.median(tempos), 3),
+                         'mínimo_ms': round(min(tempos), 3), 'máximo_ms': round(max(tempos), 3),
+                         'tempos_ms': [round(t, 3) for t in tempos], 'resultado': resultado_esperado})
+    return {'versao': 'RS 0.42K', 'alvo': alvo, 'sistema': platform.platform(), 'cpu': platform.processor(),
             'python': platform.python_version(), 'fonte_sha256': hashlib.sha256(fonte.encode('utf-8')).hexdigest(),
             'medida': 'tempo do processo nativo, incluindo sua inicialização; compilação separada',
+            'amostragem': 'rodadas intercaladas; ordem embaralhada com semente fixa; rodada zero aquece',
+            'semente': semente, 'ordem_rodadas': ordens,
             'arquivos_sha256': arquivos_esperados,
             'repeticoes': repeticoes, 'resultados': registros}
 
 
 def main():
-    p = argparse.ArgumentParser(description='Comparação nativa RS 0.42J, O0–O8 e gerador efetivo')
+    p = argparse.ArgumentParser(description='Comparação nativa RS 0.42K, O0–O8 e gerador efetivo')
     p.add_argument('--fonte', type=Path, default=RAIZ / 'benchmarks' / 'lacos.rts')
     p.add_argument('--repeticoes', type=int, default=7)
     p.add_argument('--niveis', default='0,1,2,3,4,5,6,7,8')
+    p.add_argument('--semente', type=int, default=420110, help='semente da ordem intercalada de execução')
     p.add_argument('--json', type=Path, help='salvar relatório com tempos individuais')
     a = p.parse_args()
     if not 2 <= a.repeticoes <= 1000:
@@ -104,7 +121,7 @@ def main():
         p.error('Benchmark exige Windows ou Linux em x86-64.')
     try:
         niveis = tuple(int(nivel) for nivel in a.niveis.split(','))
-        res = medir(carregar_fontes(a.fonte).texto, alvo, a.repeticoes, niveis)
+        res = medir(carregar_fontes(a.fonte).texto, alvo, a.repeticoes, niveis, a.semente)
     except (ValueError, OSError, AssertionError) as erro:
         p.error(str(erro))
     for r in res['resultados']:
