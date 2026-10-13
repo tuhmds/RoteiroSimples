@@ -75,7 +75,12 @@ class Expressao:
                 self.consumir('(')
                 nome = self.consumir()
                 self.consumir(')')
-                if not eh_proprietario(getattr(self, 'tipos', {}).get(nome)):
+                tipo_nome = getattr(self, 'tipos', {}).get(nome)
+                if (isinstance(tipo_nome, tuple) and tipo_nome[0] == 'registro'):
+                    from .propriedade import contrato_valor
+                    if not contrato_valor(tipo_nome).pode_copiar:
+                        return NoExpressao(('mova_registro_proprietario', str(nome)), getattr(token, 'origem', None))
+                if not eh_proprietario(tipo_nome):
                     raise ErroCompilacao(f'Linha {self.linha}: mova(origem) exige valor dinamico proprietario com dono unico.')
                 return NoExpressao(('mova_valor_dinamico', str(nome)), getattr(token, 'origem', None))
             if token == 'empreste' and self.olhar() == '(':
