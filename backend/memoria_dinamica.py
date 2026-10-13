@@ -145,4 +145,3 @@ def emitir_rotinas(g, windows):
     _emitir(g, '4C 8B 55 F8 48 8B 45 D8 49 89 02 48 8B 45 E0 49 89 42 F0')
     g.marcar(nome + '_fim')
     _terminar(g, windows, nome)
-

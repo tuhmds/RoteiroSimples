@@ -40,6 +40,7 @@ _INDICES = frozenset((
 _CONTAGENS = frozenset(('tamanho_texto', 'tamanho_bytes'))
 _CONSULTAS_DINAMICAS = frozenset((
     'tamanho_texto_dinamico', 'capacidade_texto_dinamico', 'caracteres_texto', 'empreste_texto_dinamico',
+    'tamanho_bytes_dinamicos', 'capacidade_bytes_dinamicos', 'empreste_bytes_dinamicos',
     'quantidade_lista_dinamica',
     'quantidade_lista_emprestada', 'capacidade_lista_dinamica',
     'capacidade_lista_emprestada', 'empreste_lista_dinamica',
@@ -106,10 +107,10 @@ def efeito_instrucao_arvore(no):
         return _gravar(no[1])
     if operacao in ('limpe_texto', 'limpe_bytes'):
         return _gravar(no[1])
-    if operacao in ('modifique_texto', 'modifique_texto_dinamico'):
+    if operacao in ('modifique_texto', 'modifique_texto_dinamico', 'modifique_bytes'):
         _, modo, nome, origem = no
         e = (_propriedade('modificar', nome, falha=True)
-             if operacao == 'modifique_texto_dinamico' else _gravar(nome))
+             if operacao in ('modifique_texto_dinamico', 'modifique_bytes') else _gravar(nome))
         if modo == 'junte':
             e = e.combinar(_ler(nome))
         if origem[0] == 'buffer':
@@ -121,6 +122,13 @@ def efeito_instrucao_arvore(no):
         return efeito_expressao_arvore(no[1]).combinar(Efeitos(saida=True))
     if operacao in ('leia_int', 'leia_texto', 'leia_texto_dinamico'):
         return _gravar(no[1]).combinar(Efeitos(entrada=True, pode_falhar=True))
+    if operacao == 'atribua_byte_dinamico':
+        return (_propriedade('alterar', no[1], falha=True)
+                .combinar(efeito_expressao_arvore(no[2]))
+                .combinar(efeito_expressao_arvore(no[3])))
+    if operacao == 'adicione_byte_dinamico':
+        return (_propriedade('alterar', no[1], falha=True)
+                .combinar(efeito_expressao_arvore(no[2])))
     if operacao in ('atribua_indice', 'atribua_byte',
                     'atribua_indice_dinamico'):
         return (_ler(no[1]).combinar(_gravar(no[1]))
@@ -153,7 +161,7 @@ def efeito_instrucao_arvore(no):
         return _propriedade('alterar', no[1], falha=True)
     if operacao in ('libere_lista_dinamica', 'libere_valor_dinamico'):
         return _propriedade('liberar', no[1], falha=True)
-    if operacao == 'limpe_texto_dinamico':
+    if operacao in ('limpe_texto_dinamico', 'limpe_bytes_dinamicos'):
         return _propriedade('limpar', no[1], falha=True)
     if operacao == 'libere_escopo_listas':
         e = Efeitos()
@@ -163,7 +171,7 @@ def efeito_instrucao_arvore(no):
                                        arquivo=True, falha=True))
         return e
 
-    if operacao == 'carregue_texto_dinamico':
+    if operacao in ('carregue_texto_dinamico', 'carregue_bytes_dinamicos'):
         return _propriedade('preencher', no[2], arquivo=True, falha=True)
     if operacao in ('grave_arquivo', 'carregue_arquivo'):
         _, caminho, nome = no

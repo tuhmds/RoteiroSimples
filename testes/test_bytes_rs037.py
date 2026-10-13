@@ -284,7 +284,7 @@ class TestesBytesRS037(unittest.TestCase):
             '''inicio {
                 seja bloco: bytes[6]
                 seja texto_buffer: texto[6]
-                grave_arquivo("x", bloco)
+                copie(texto_buffer, bloco)
             }''',
         ]
         for codigo in invalidos:

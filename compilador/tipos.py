@@ -1,6 +1,7 @@
 """Tipos simples e checagem estática de expressões."""
 from .erros import ErroCompilacao
 from .propriedade import eh_proprietario, eh_emprestimo, eh_texto, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO
+from .propriedade import eh_bytes, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
 
 MAX_VARIAVEIS = 256  # sem sondagem de pilha/stack probing na versão atual
 
@@ -22,7 +23,7 @@ def _validar_consumos_chamada(expr, linha):
             if nome in consumidos:
                 raise ErroCompilacao(f'Linha {linha}: lista {nome!r} consumida mais de uma vez na mesma chamada.')
             consumidos.add(nome)
-        elif no and no[0] in ('empreste_lista_dinamica', 'empreste_texto_dinamico'):
+        elif no and no[0] in ('empreste_lista_dinamica', 'empreste_texto_dinamico', 'empreste_bytes_dinamicos'):
             emprestados.add(no[1])
         pendentes.extend(filho for filho in no if isinstance(filho, (tuple, list)))
     conflitos = consumidos & emprestados
@@ -63,6 +64,14 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
         return tipo
     if categoria == 'temporario_composto':
         return tipos[expr[1]]
+    if categoria == 'empreste_bytes_dinamicos':
+        if tipos.get(expr[1]) != TIPO_BYTES_DINAMICOS:
+            raise ErroCompilacao(f'Linha {linha}: empreste() exige bytes proprietarios.')
+        return TIPO_BYTES_EMPRESTADOS
+    if categoria in ('tamanho_bytes_dinamicos', 'capacidade_bytes_dinamicos'):
+        if tipos.get(expr[1]) not in (TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS):
+            raise ErroCompilacao(f'Linha {linha}: consulta exige descritor de bytes.')
+        return 'inteiro'
     if categoria == 'empreste_texto_dinamico':
         if tipos.get(expr[1]) != TIPO_TEXTO_DINAMICO:
             raise ErroCompilacao(f'Linha {linha}: empreste() exige texto proprietario.')
@@ -115,8 +124,8 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
         return 'inteiro'
     if categoria == 'indice_bytes':
         nome, indice = expr[1:]
-        if not isinstance(tipos.get(nome), tuple) or tipos[nome][0] != 'bytes':
-            raise ErroCompilacao(f'Linha {linha}: indice exige bytes[N].')
+        if not eh_bytes(tipos.get(nome)):
+            raise ErroCompilacao(f'Linha {linha}: indice exige bytes.')
         if tipo_expressao(indice, tipos, linha, funcoes) != 'inteiro':
             raise ErroCompilacao(f'Linha {linha}: indice de bytes deve ser inteiro.')
         return 'inteiro'

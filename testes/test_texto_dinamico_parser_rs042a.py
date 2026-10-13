@@ -99,7 +99,6 @@ class TestesTextoDinamicoParserRS042A(unittest.TestCase):
     def test_donos_em_registros_e_listas_permanecem_rejeitados(self):
         self.rejeitar('tipo Pessoa {\n nome: texto\n}\ninicio {\n escreva(1)\n}')
         self.rejeitar('inicio {\n seja nomes: lista[texto]\n}')
-        self.rejeitar('inicio {\n seja dados: bytes\n}')
 
     def test_passo_compartilhado_preserva_limite_historico_de_registros(self):
         campos = '\n'.join(f'campo{indice}: bytes[268000000]' for indice in range(10))

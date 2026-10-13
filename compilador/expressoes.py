@@ -3,6 +3,7 @@ import re
 from .erros import ErroCompilacao
 from .ast import NoExpressao
 from .propriedade import eh_proprietario, eh_texto, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO
+from .propriedade import eh_bytes, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
 
 class Expressao:
     def __init__(self, tokens, linha, variaveis, importa):
@@ -83,6 +84,8 @@ class Expressao:
                 self.consumir(')')
                 if getattr(self, 'tipos', {}).get(nome) == TIPO_TEXTO_DINAMICO:
                     return NoExpressao(('empreste_texto_dinamico', nome), getattr(token, 'origem', None))
+                if getattr(self, 'tipos', {}).get(nome) == TIPO_BYTES_DINAMICOS:
+                    return NoExpressao(('empreste_bytes_dinamicos', nome), getattr(token, 'origem', None))
                 if (not isinstance(getattr(self, 'tipos', {}).get(nome), tuple) or
                         self.tipos[nome][0] != 'lista_dinamica'):
                     raise ErroCompilacao(f'Linha {self.linha}: empreste() exige lista[] com propriedade.')
@@ -94,6 +97,8 @@ class Expressao:
                 tipo = getattr(self, 'tipos', {}).get(nome)
                 if tipo in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO):
                     return NoExpressao(('tamanho_texto_dinamico', nome), getattr(token, 'origem', None))
+                if tipo in (TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS):
+                    return NoExpressao(('tamanho_bytes_dinamicos', nome), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'lista_dinamica':
                     return NoExpressao(('quantidade_lista_dinamica', nome), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'lista_emprestada':
@@ -112,6 +117,8 @@ class Expressao:
                 tipo = getattr(self, 'tipos', {}).get(nome)
                 if tipo in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO):
                     return NoExpressao(('capacidade_texto_dinamico', nome), getattr(token, 'origem', None))
+                if tipo in (TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS):
+                    return NoExpressao(('capacidade_bytes_dinamicos', nome), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'lista_dinamica':
                     return NoExpressao(('capacidade_lista_dinamica', nome), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'lista_emprestada':
@@ -165,7 +172,7 @@ class Expressao:
                     return NoExpressao(('indice_lista_dinamica', token, indice), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'lista_emprestada':
                     return NoExpressao(('indice_lista_emprestada', token, indice), getattr(token, 'origem', None))
-                if isinstance(tipo, tuple) and tipo[0] == 'bytes':
+                if eh_bytes(tipo):
                     return NoExpressao(('indice_bytes', token, indice), getattr(token, 'origem', None))
                 if not isinstance(tipo, tuple) or tipo[0] != 'lista':
                     raise ErroCompilacao(f'Linha {self.linha}: {token} não é uma lista ou bytes[N].')

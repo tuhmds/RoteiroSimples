@@ -1,0 +1,47 @@
+// Produz, transfere, grava e recupera conteudo binario variavel inteiramente em RS.
+// A soma e apenas uma verificacao demonstrativa, sem uso criptografico.
+importe "padrao/binarios.rts" como binarios
+
+funcao construir(quantidade: inteiro) -> bytes {
+    seja dados: bytes
+    seja indice = 0
+    enquanto indice < quantidade {
+        adicione_byte(dados, indice % 256)
+        indice = indice + 1
+    }
+    retorne mova(dados)
+}
+
+funcao concluir(dados: bytes) -> bytes {
+    adicione_byte(dados, 0)
+    adicione_byte(dados, 255)
+    retorne mova(dados)
+}
+
+funcao recuperar() -> bytes {
+    seja dados: bytes
+    carregue_arquivo("dados_variaveis.bin", dados)
+    retorne mova(dados)
+}
+
+inicio {
+    seja dados = concluir(construir(8193))
+    seja soma_original = binarios.soma_verificacao(empreste(dados))
+    grave_arquivo("dados_variaveis.bin", dados)
+    seja recebido = recuperar()
+    se binarios.iguais(empreste(dados), empreste(recebido)) == falso {
+        escreva("Erro: arquivo recuperado difere do conteudo original.")
+        encerre(1)
+    }
+    se binarios.soma_verificacao(empreste(recebido)) != soma_original {
+        escreva("Erro: soma de verificacao divergente.")
+        encerre(2)
+    }
+    seja copia = binarios.duplicar(empreste(recebido))
+    copia[0] = 255
+    escreva("Arquivo binario gravado e recuperado.")
+    escreva(tamanho(recebido))
+    escreva(soma_original)
+    escreva(recebido[0])
+    escreva(copia[0])
+}

@@ -1,8 +1,8 @@
 """Emissão nativa de instruções AMD64, leitura/escrita e saltos."""
 import struct
 from compilador.erros import ErroCompilacao
-from compilador.propriedade import eh_proprietario, eh_texto, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO
-from . import valores_dinamicos, memoria_dinamica, textos_dinamicos, listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros, arquivos_abertos, publicacao_atomica, politica_caminhos
+from compilador.propriedade import eh_proprietario, eh_emprestimo, eh_texto, eh_bytes, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
+from . import valores_dinamicos, memoria_dinamica, sequencias_dinamicas, textos_dinamicos, listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros, arquivos_abertos, publicacao_atomica, politica_caminhos
 from compilador.disposicao_tipos import palavras_tipo as _palavras_tipo
 from .base import Emissor, alinhar
 from .desenrolamento_windows import registrar_quadro_empilhado
@@ -290,11 +290,14 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
                 g.bytes(b'\x48\x81\xC4' + struct.pack('<I', limpar))
     elif tipo == 'mova_valor_dinamico':
         raise ErroCompilacao('Transferencia dinamica exige parametro, retorno ou declaracao proprietaria.')
-    elif tipo == 'empreste_texto_dinamico':
+    elif tipo in ('empreste_texto_dinamico', 'empreste_bytes_dinamicos'):
         valores_dinamicos.verificar_vivo(g, variaveis, expr[1], windows)
         g.bytes(b'\x48\x8D\x85' + struct.pack('<i', deslocamento_variavel(variaveis, expr[1], windows)))
     elif tipo in ('tamanho_texto_dinamico', 'capacidade_texto_dinamico', 'caracteres_texto'):
         textos_dinamicos.consulta(g, tipo, expr[1], variaveis, g.tipos_atual, windows, pilha_extra)
+    elif tipo in ('tamanho_bytes_dinamicos', 'capacidade_bytes_dinamicos'):
+        sequencias_dinamicas.vista(g, variaveis, g.tipos_atual, expr[1], windows)
+        g.bytes(bytes.fromhex('48 89 D0' if tipo == 'tamanho_bytes_dinamicos' else '49 8B 40 F0'))
     elif tipo == 'byte_texto':
         expressao(g, expr[2], variaveis, windows, registradores, pilha_extra)
         g.bytes(b'\x50')
@@ -880,9 +883,9 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     variaveis = programa.variaveis
     mensagens = {}
     tem_leitura = any(op[0] in ('leia_int', 'leia_indice', 'leia_indice_dinamico', 'leia_texto', 'leia_texto_dinamico') for op in percorrer_instrucoes(programa.instrucoes))
-    tem_arquivos = (any(op[0] in ('grave_arquivo', 'carregue_arquivo', 'carregue_texto_dinamico')
+    tem_arquivos = (any(op[0] in ('grave_arquivo', 'carregue_arquivo', 'carregue_texto_dinamico', 'carregue_bytes_dinamicos')
                         for op in percorrer_instrucoes(programa.instrucoes))
-                    or any(op[0] in ('grave_arquivo', 'carregue_arquivo', 'carregue_texto_dinamico')
+                    or any(op[0] in ('grave_arquivo', 'carregue_arquivo', 'carregue_texto_dinamico', 'carregue_bytes_dinamicos')
                         for f in g.funcoes.values() for op in percorrer_instrucoes(f.programa.instrucoes)))
     tem_arquivos_posicionais = (any(op[0] in ('grave_trecho', 'carregue_trecho')
                         for op in percorrer_instrucoes(programa.instrucoes))
@@ -901,15 +904,13 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             consultas_utf8 = True
         pendentes.extend(f for f in no if isinstance(f, (tuple, list)))
     tem_texto_novo = consultas_utf8 or any(t in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO) for t in tipos_do_programa)
-    tem_dinamicas = tem_texto_novo or any(eh_proprietario(t) for t in tipos_do_programa)
+    tem_sequencias_dinamicas = tem_texto_novo or any(t in (TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS) for t in tipos_do_programa)
+    tem_dinamicas = tem_sequencias_dinamicas or any(eh_proprietario(t) or eh_emprestimo(t) for t in tipos_do_programa)
     tem_listas_dinamicas = any(listas_dinamicas.eh_lista_dinamica(t) for t in tipos_do_programa)
     tem_listas = tem_listas_dinamicas or any(
-        isinstance(t, tuple) and t[0] == 'lista' for t in tipos_do_programa)
+        isinstance(t, tuple) and t[0] in ('lista', 'lista_emprestada') for t in tipos_do_programa)
     tem_textos = any(eh_texto(t) for t in tipos_do_programa)
-    tem_bytes = any(isinstance(t, tuple) and t[0] == 'bytes'
-                    for t in tipos.values()) or any(
-        isinstance(t, tuple) and t[0] == 'bytes'
-        for f in g.funcoes.values() for t in f.programa.tipos.values())
+    tem_bytes = any(eh_bytes(t) for t in tipos_do_programa)
     tem_publicacao = any(op[0] == 'publique_arquivo'
                         for op in percorrer_instrucoes(programa.instrucoes)) or any(
         op[0] == 'publique_arquivo'
@@ -1001,17 +1002,19 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 _copiar_para_buffer(g, nome, origem, modo=='junte', variaveis, tipos, windows, mensagens)
             elif op[0] == 'modifique_texto_dinamico':
                 textos_dinamicos.modificar(g, op[1], op[2], op[3], variaveis, tipos, windows, mensagens)
-            elif op[0] == 'limpe_texto_dinamico':
+            elif op[0] == 'modifique_bytes':
+                bytes_seguros.modificar(g, op[1], op[2], op[3][1], variaveis, tipos, windows, deslocamento_variavel)
+            elif op[0] in ('limpe_texto_dinamico', 'limpe_bytes_dinamicos'):
                 textos_dinamicos.limpar(g, op[1], variaveis, windows)
             elif op[0] == 'libere_valor_dinamico':
                 valores_dinamicos.liberar(g, variaveis, op[1], windows, explicito=True)
             elif op[0] in ('limpe_texto', 'limpe_bytes'):
                 comprimento = deslocamento_variavel(variaveis, op[1], windows)
                 g.bytes(b'\x31\xC0\x48\x89\x85' + struct.pack('<i', comprimento))
-            elif op[0] == 'adicione_byte':
+            elif op[0] in ('adicione_byte', 'adicione_byte_dinamico'):
                 bytes_seguros.acrescentar(g, op[1], op[2], variaveis, tipos,
                     windows, expressao, deslocamento_variavel)
-            elif op[0] == 'atribua_byte':
+            elif op[0] in ('atribua_byte', 'atribua_byte_dinamico'):
                 bytes_seguros.substituir(g, op[1], op[2], op[3], variaveis, tipos,
                     windows, expressao, deslocamento_variavel)
             elif op[0] == 'imprima_texto':
@@ -1022,7 +1025,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 msg_indice = len(mensagens)
                 mensagens[msg_indice] = '\n'
                 escreve_literal(g, msg_indice, '\n', windows)
-            elif op[0] in ('grave_arquivo', 'carregue_arquivo', 'carregue_texto_dinamico'):
+            elif op[0] in ('grave_arquivo', 'carregue_arquivo', 'carregue_texto_dinamico', 'carregue_bytes_dinamicos'):
                 arquivos.emitir_comando(g, op, variaveis, tipos, windows, mensagens,
                                         _endereco_buffer, deslocamento_variavel)
             elif op[0] in ('grave_trecho', 'carregue_trecho'):
@@ -1415,12 +1418,14 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             listas_dinamicas.emitir_rotinas(g, windows)
         else:
             memoria_dinamica.emitir_rotinas(g, windows)
+    if tem_sequencias_dinamicas:
+        sequencias_dinamicas.emitir_rotinas(g, windows)
     if tem_texto_novo:
         textos_dinamicos.emitir_rotinas(g, windows, tem_leitura_dinamica)
     if windows and (tem_arquivos or tem_recursos or tem_arquivos_posicionais):
         politica_caminhos.emitir_verificacao_windows(g)
     if tem_arquivos:
-        arquivos.emitir_rotinas(g, windows, tem_texto_novo)
+        arquivos.emitir_rotinas(g, windows, tem_sequencias_dinamicas, tem_texto_novo)
     if tem_recursos:
         arquivos_abertos.emitir_rotinas(g, windows)
     if tem_publicacao:
