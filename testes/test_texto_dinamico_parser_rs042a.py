@@ -96,8 +96,9 @@ class TestesTextoDinamicoParserRS042A(unittest.TestCase):
         self.rejeitar('inicio {\n seja nome: texto\n nome[0] = 65\n}')
         self.rejeitar('inicio {\n seja nome: texto\n escreva(nome[0])\n}')
 
-    def test_donos_em_registros_e_listas_permanecem_rejeitados(self):
-        self.rejeitar('tipo Pessoa {\n nome: texto\n}\ninicio {\n escreva(1)\n}')
+    def test_registro_local_com_dono_permitido_lista_de_donos_proibida(self):
+        programa = analisar_programa('tipo Pessoa {\n nome: texto\n}\ninicio {\n seja p: Pessoa\n copie(p.nome, "ok")\n}')
+        self.assertEqual(programa.registros['Pessoa'][0][1], ('texto_dinamico', 'utf8'))
         self.rejeitar('inicio {\n seja nomes: lista[texto]\n}')
 
     def test_passo_compartilhado_preserva_limite_historico_de_registros(self):
