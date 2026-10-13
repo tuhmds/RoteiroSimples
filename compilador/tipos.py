@@ -1,6 +1,6 @@
 """Tipos simples e checagem estática de expressões."""
 from .erros import ErroCompilacao
-from .propriedade import eh_proprietario, eh_emprestimo
+from .propriedade import eh_proprietario, eh_emprestimo, eh_texto, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO
 
 MAX_VARIAVEIS = 256  # sem sondagem de pilha/stack probing na versão atual
 
@@ -22,7 +22,7 @@ def _validar_consumos_chamada(expr, linha):
             if nome in consumidos:
                 raise ErroCompilacao(f'Linha {linha}: lista {nome!r} consumida mais de uma vez na mesma chamada.')
             consumidos.add(nome)
-        elif no and no[0] == 'empreste_lista_dinamica':
+        elif no and no[0] in ('empreste_lista_dinamica', 'empreste_texto_dinamico'):
             emprestados.add(no[1])
         pendentes.extend(filho for filho in no if isinstance(filho, (tuple, list)))
     conflitos = consumidos & emprestados
@@ -63,6 +63,18 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
         return tipo
     if categoria == 'temporario_composto':
         return tipos[expr[1]]
+    if categoria == 'empreste_texto_dinamico':
+        if tipos.get(expr[1]) != TIPO_TEXTO_DINAMICO:
+            raise ErroCompilacao(f'Linha {linha}: empreste() exige texto proprietario.')
+        return TIPO_TEXTO_EMPRESTADO
+    if categoria in ('tamanho_texto_dinamico', 'capacidade_texto_dinamico', 'caracteres_texto', 'byte_texto'):
+        if not eh_texto(tipos.get(expr[1])):
+            raise ErroCompilacao(f'Linha {linha}: consulta exige texto UTF-8.')
+        if categoria in ('tamanho_texto_dinamico', 'capacidade_texto_dinamico') and tipos[expr[1]] not in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO):
+            raise ErroCompilacao(f'Linha {linha}: consulta dinamica exige descritor de texto.')
+        if categoria == 'byte_texto' and tipo_expressao(expr[2], tipos, linha, funcoes) != 'inteiro':
+            raise ErroCompilacao(f'Linha {linha}: byte_em exige indice inteiro em bytes.')
+        return 'inteiro'
     if categoria == 'var':
         tipo = tipos[expr[1]]
         if isinstance(tipo, tuple) and tipo[0] == 'registro':
@@ -127,7 +139,7 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
         if filho != 'inteiro':
             raise ErroCompilacao(f'Linha {linha}: sinal negativo exige inteiro; recebeu {filho}.')
         return 'inteiro'
-    if categoria in ('bin', 'comparacao'):
+    if categoria in ('bin', 'comparacao', 'comparacao_texto'):
         _, op, esquerdo, direito = expr
         a = tipo_expressao(esquerdo, tipos, linha, funcoes)
         b = tipo_expressao(direito, tipos, linha, funcoes)
@@ -135,6 +147,12 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
             if a != 'inteiro' or b != 'inteiro':
                 raise ErroCompilacao(f'Linha {linha}: operação {op} exige dois inteiros; recebeu {a} e {b}.')
             return 'inteiro'
+        if (eh_texto(a) and eh_texto(b) and
+                (a in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO) or
+                 b in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO))):
+            if op not in ('==', '!=') or esquerdo[0] != 'var' or direito[0] != 'var':
+                raise ErroCompilacao(f'Linha {linha}: compare textos por == ou != usando variaveis; nao ha ordenacao Unicode implicita.')
+            return 'logico'
         if eh_proprietario(a) or eh_proprietario(b):
             raise ErroCompilacao(f'Linha {linha}: lista proprietaria com dono unico nao admite comparacao nem copia.')
         if eh_emprestimo(a) or eh_emprestimo(b):

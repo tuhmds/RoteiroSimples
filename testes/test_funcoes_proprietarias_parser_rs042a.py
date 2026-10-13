@@ -166,7 +166,7 @@ inicio {
 }
 inicio {
  escreva(1)
-}''', 'mova.*proprietaria')
+}''', 'mova.*proprietari[oa]')
 
     def test_tipos_dos_elementos_precisam_coincidir(self):
         self.rejeitar(fonte('seja itens: lista[logico]\nescreva(consumir(mova(itens)))', CONSUMIDOR),

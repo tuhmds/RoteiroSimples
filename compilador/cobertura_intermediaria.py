@@ -61,10 +61,10 @@ def analisar_cobertura(programa):
         expressoes[nome] += 1
         if nome == 'neg':
             expressao(no[1])
-        elif nome in ('bin', 'comparacao'):
+        elif nome in ('bin', 'comparacao', 'comparacao_texto'):
             expressao(no[2])
             expressao(no[3])
-        elif nome in ('indice', 'indice_bytes'):
+        elif nome in ('indice', 'indice_bytes', 'byte_texto'):
             expressao(no[2])
         elif nome == 'chamada':
             for argumento in no[2]:

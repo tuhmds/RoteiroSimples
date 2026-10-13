@@ -1,0 +1,37 @@
+// Nome sem capacidade fixa, documento construido em RS e recuperado do arquivo.
+// grave_arquivo substitui o conteudo de um destino regular, conforme a API historica.
+funcao preparar(nome: emprestimo[texto]) -> texto {
+    seja documento: texto = "Pessoa: "
+    junte(documento, nome)
+    retorne mova(documento)
+}
+
+funcao concluir(documento: texto) -> texto {
+    junte(documento, "\nDocumento criado em RoteiroSimples.\n")
+    retorne mova(documento)
+}
+
+funcao recuperar() -> texto {
+    seja documento: texto
+    carregue_arquivo("pessoa_utf8.txt", documento)
+    retorne mova(documento)
+}
+
+inicio {
+    escreva("Nome completo:")
+    seja nome: texto
+    leia(nome)
+    se caracteres(nome) == 0 {
+        escreva("Erro: informe um nome.")
+        encerre(1)
+    }
+    seja documento = concluir(preparar(empreste(nome)))
+    grave_arquivo("pessoa_utf8.txt", documento)
+    seja recuperado = recuperar()
+    se documento != recuperado {
+        escreva("Erro: o documento recuperado difere do gravado.")
+        encerre(2)
+    }
+    escreva(recuperado)
+    escreva("Documento gravado e recuperado.")
+}

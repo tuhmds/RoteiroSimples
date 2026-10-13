@@ -369,7 +369,7 @@ def tamanho_primeira_instrucao(codigo, pos):
     pos += 1
     if 0xB8 <= op <= 0xBF:
         return pos - original + (8 if rex & 8 else 4)
-    if op in (0x89, 0x8B, 0x8D, 0x31, 0x85, 0x83, 0x81, 0xC7):
+    if op in (0x89, 0x8B, 0x8D, 0x31, 0x85, 0x83, 0x81, 0xC7, 0x6B):
         modrm = codigo[pos]
         pos += 1
         modo, rm = modrm >> 6, modrm & 7
@@ -384,7 +384,7 @@ def tamanho_primeira_instrucao(codigo, pos):
             pos += 1
         elif modo == 2:
             pos += 4
-        if op == 0x83:
+        if op in (0x83, 0x6B):
             pos += 1
         elif op in (0x81, 0xC7):
             pos += 4

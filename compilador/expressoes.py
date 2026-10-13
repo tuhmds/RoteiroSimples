@@ -2,7 +2,7 @@
 import re
 from .erros import ErroCompilacao
 from .ast import NoExpressao
-from .propriedade import eh_proprietario
+from .propriedade import eh_proprietario, eh_texto, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO
 
 class Expressao:
     def __init__(self, tokens, linha, variaveis, importa):
@@ -75,12 +75,14 @@ class Expressao:
                 nome = self.consumir()
                 self.consumir(')')
                 if not eh_proprietario(getattr(self, 'tipos', {}).get(nome)):
-                    raise ErroCompilacao(f'Linha {self.linha}: mova(origem) exige lista dinamica proprietaria com dono unico.')
+                    raise ErroCompilacao(f'Linha {self.linha}: mova(origem) exige valor dinamico proprietario com dono unico.')
                 return NoExpressao(('mova_valor_dinamico', str(nome)), getattr(token, 'origem', None))
             if token == 'empreste' and self.olhar() == '(':
                 self.consumir('(')
                 nome = self.consumir()
                 self.consumir(')')
+                if getattr(self, 'tipos', {}).get(nome) == TIPO_TEXTO_DINAMICO:
+                    return NoExpressao(('empreste_texto_dinamico', nome), getattr(token, 'origem', None))
                 if (not isinstance(getattr(self, 'tipos', {}).get(nome), tuple) or
                         self.tipos[nome][0] != 'lista_dinamica'):
                     raise ErroCompilacao(f'Linha {self.linha}: empreste() exige lista[] com propriedade.')
@@ -90,6 +92,8 @@ class Expressao:
                 nome = self.consumir()
                 self.consumir(')')
                 tipo = getattr(self, 'tipos', {}).get(nome)
+                if tipo in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO):
+                    return NoExpressao(('tamanho_texto_dinamico', nome), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'lista_dinamica':
                     return NoExpressao(('quantidade_lista_dinamica', nome), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'lista_emprestada':
@@ -106,6 +110,8 @@ class Expressao:
                 nome = self.consumir()
                 self.consumir(')')
                 tipo = getattr(self, 'tipos', {}).get(nome)
+                if tipo in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO):
+                    return NoExpressao(('capacidade_texto_dinamico', nome), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'lista_dinamica':
                     return NoExpressao(('capacidade_lista_dinamica', nome), getattr(token, 'origem', None))
                 if isinstance(tipo, tuple) and tipo[0] == 'lista_emprestada':
@@ -113,6 +119,18 @@ class Expressao:
                 if not isinstance(tipo, tuple) or tipo[0] not in ('texto', 'bytes'):
                     raise ErroCompilacao(f'Linha {self.linha}: capacidade() exige texto, bytes ou lista dinamica.')
                 return NoExpressao(('numero', tipo[1]), getattr(token, 'origem', None))
+            if token in ('caracteres', 'byte_em') and self.olhar() == '(' and token not in getattr(self, 'funcoes', {}):
+                self.consumir('(')
+                nome = self.consumir()
+                if not eh_texto(getattr(self, 'tipos', {}).get(nome)):
+                    raise ErroCompilacao(f'Linha {self.linha}: {token} exige variavel de texto UTF-8.')
+                if token == 'byte_em':
+                    self.consumir(',')
+                    indice = self.comparacao()
+                    self.consumir(')')
+                    return NoExpressao(('byte_texto', nome, indice), getattr(token, 'origem', None))
+                self.consumir(')')
+                return NoExpressao(('caracteres_texto', nome), getattr(token, 'origem', None))
             if self.olhar() == '(' and token in getattr(self, 'funcoes', {}):
                 self.consumir('(')
                 argumentos = []

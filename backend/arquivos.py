@@ -5,7 +5,8 @@ Ambas rotinas devolvem em RAX o número efetivo de bytes gravados/lidos.
 Erros encerram o processo com diagnóstico; nunca há truncamento silencioso.
 """
 import struct
-from . import politica_caminhos
+from . import politica_caminhos, textos_dinamicos, valores_dinamicos
+from compilador.propriedade import TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO
 from .desenrolamento_windows import (
     registrar_quadro_auxiliar, emitir_prologo_auxiliar,
     emitir_epilogo_auxiliar,
@@ -19,6 +20,18 @@ def _emitir(g, hexadecimais):
 def emitir_comando(g, instrucao, variaveis, tipos, windows, mensagens,
                     endereco_buffer, deslocamento_variavel):
     modo, caminho, nome = instrucao
+    if tipos[nome] in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO):
+        if modo == 'grave_arquivo':
+            textos_dinamicos.vista(g, variaveis, tipos, nome, windows)
+        else:
+            valores_dinamicos.verificar_vivo(g, variaveis, nome, windows)
+            valores_dinamicos.endereco_descritor(g, variaveis, nome, windows)
+            _emitir(g, '48 89 FE')
+        numero = len(mensagens)
+        mensagens[numero] = caminho + '\x00'
+        g.relativo(b'\x48\x8D\x3D', f'mensagem_{numero}')
+        g.chamada('rs_arquivo_gravar' if modo == 'grave_arquivo' else 'rs_arquivo_carregar_dinamico')
+        return
     dados, comprimento, capacidade = endereco_buffer(variaveis, nome, tipos, windows)
     numero = len(mensagens)
     mensagens[numero] = caminho + '\x00'
@@ -119,6 +132,7 @@ def _leitura_windows(g, limite):
 def _escrita_windows(g):
     _emitir(g, '48 8B 4D E0 48 8B 55 F0 48 03 55 D8')
     _emitir(g, '4C 8B 45 E8 4C 2B 45 D8')
+    _limitar_transferencia(g, 'r8')
     _emitir(g, '4C 8D 4D D0 48 83 EC 30')
     _emitir(g, '48 C7 44 24 20 00 00 00 00')
     g.relativo(b'\xFF\x15', 'WriteFile')
@@ -141,7 +155,18 @@ def _escrita_linux(g):
     _emitir(g, 'B8 01 00 00 00 48 8B 7D E0')  # write(fd...)
     _emitir(g, '48 8B 75 F0 48 03 75 D8')
     _emitir(g, '48 8B 55 E8 48 2B 55 D8')
+    _limitar_transferencia(g, 'rdx')
     _emitir(g, '0F 05')
+
+
+def _limitar_transferencia(g, registrador):
+    numero = g.proxima_condicao
+    g.proxima_condicao += 1
+    rotulo = f'arquivo_limite_transferencia_{numero}'
+    _emitir(g, '49 81 F8 00 00 10 00' if registrador == 'r8' else '48 81 FA 00 00 10 00')
+    g.salto(rotulo, 'jbe')
+    _emitir(g, '41 B8 00 00 10 00' if registrador == 'r8' else 'BA 00 00 10 00')
+    g.marcar(rotulo)
 
 
 def _rotina(g, windows, gravar):
@@ -197,10 +222,72 @@ def _rotina(g, windows, gravar):
     _fecho(g, windows)
 
 
-def emitir_rotinas(g, windows):
+def emitir_rotinas(g, windows, dinamico=False):
     _rotina(g, windows, True)
     if windows:
         registrar_quadro_auxiliar(g, 'rs_arquivo_gravar')
     _rotina(g, windows, False)
     if windows:
         registrar_quadro_auxiliar(g, 'rs_arquivo_carregar')
+    if dinamico:
+        _carregar_dinamico(g, windows)
+
+
+def _carregar_dinamico(g, windows):
+    nome = 'rs_arquivo_carregar_dinamico'
+    g.marcar(nome)
+    _prologo(g, windows)
+    _emitir(g, '48 89 75 B0 48 83 7E F8 00')
+    g.salto('erro_valor_inativo', 'jl')
+    _emitir(g, '48 C7 46 F8 00 00 00 00')
+    _abrir(g, windows, False)
+    g.marcar(nome + '_volta')
+    _emitir(g, '4C 8B 55 B0 49 8B 02 48 89 45 F0 49 8B 42 F0 48 2B 45 D8')
+    _emitir(g, '48 85 C0')
+    g.salto(nome + '_provar', 'jz')
+    _emitir(g, '48 3D 00 00 10 00')
+    g.salto(nome + '_limite', 'jbe')
+    _emitir(g, 'B8 00 00 10 00')
+    g.marcar(nome + '_limite')
+    _emitir(g, '48 03 45 D8 48 89 45 E8')
+    if windows:
+        _leitura_windows(g, False)
+    else:
+        _leitura_linux(g, False)
+        _emitir(g, '48 83 F8 FC')
+        g.salto(nome + '_volta', 'je')
+        _emitir(g, '48 85 C0')
+        g.salto('erro_arquivo_leitura', 'js')
+    _emitir(g, '48 85 C0')
+    g.salto(nome + '_fim', 'jz')
+    _emitir(g, '48 01 45 D8')
+    g.salto('erro_lista_memoria', 'jo')
+    _emitir(g, '4C 8B 55 B0 48 8B 45 D8 49 89 42 F8')
+    g.salto(nome + '_volta')
+    g.marcar(nome + '_provar')
+    # Provar EOF antes de crescer evita alocação para arquivo vazio e
+    # evita duplicar capacidade quando o arquivo termina exatamente nela.
+    if windows:
+        _leitura_windows(g, True)
+    else:
+        _leitura_linux(g, True)
+        _emitir(g, '48 83 F8 FC')
+        g.salto(nome + '_provar', 'je')
+        _emitir(g, '48 85 C0')
+        g.salto('erro_arquivo_leitura', 'js')
+    _emitir(g, '48 85 C0')
+    g.salto(nome + '_fim', 'jz')
+    _emitir(g, '48 8B 7D B0 48 8B 75 D8 48 FF C6')
+    g.salto('erro_lista_memoria', 'jo')
+    _emitir(g, 'BA 01 00 00 00')
+    g.chamada('rs_valor_reservar')
+    _emitir(g, '4C 8B 55 B0 49 8B 3A 48 8B 45 D8 0F B6 4D C8 88 0C 07')
+    _emitir(g, '48 FF C0 48 89 45 D8 49 89 42 F8')
+    g.salto(nome + '_volta')
+    g.marcar(nome + '_fim')
+    _fechar(g, windows)
+    _emitir(g, '4C 8B 55 B0 49 8B 32 49 8B 52 F8')
+    g.chamada('rs_validar_utf8')
+    _fecho(g, windows)
+    if windows:
+        registrar_quadro_auxiliar(g, nome)
