@@ -62,7 +62,7 @@ class TestesQuadrosAuxiliaresRS0414(unittest.TestCase):
         }
         self.assertTrue(obrigatorios <= nomes, obrigatorios - nomes)
         aux = [d for d in g.desenrolamentos
-               if d.get('prologo') == 'auxiliar_sem_rbx']
+               if d.get('prologo') == 'auxiliar_preservado']
         self.assertGreaterEqual(len(aux), 9)
         for d in aux:
             with self.subTest(nome=d['inicio']):
@@ -71,8 +71,8 @@ class TestesQuadrosAuxiliaresRS0414(unittest.TestCase):
                 fim = g.rotulos[d['fim']]
                 self.assertTrue(ini < pos < fim)
                 self.assertEqual(d['quadro'] % 16, 0)
-                self.assertEqual(bytes(g.codigo[fim-5:fim]),
-                                 b'\x48\x89\xEC\x5D\xC3')
+                self.assertEqual(bytes(g.codigo[fim-8:fim]),
+                                 bytes.fromhex('48 8D 65 00 5D 5E 5F C3'))
 
         tabela, infos = gerar_desenrolamentos(g, 0x1000, 0xA000)
         self.assertEqual(len(tabela), len(g.desenrolamentos) * 12)

@@ -7,7 +7,10 @@ A memória cresce geometricamente e é devolvida ao sistema operacional.
 """
 import struct
 from compilador.disposicao_tipos import palavras_tipo
-from .desenrolamento_windows import registrar_quadro_auxiliar
+from .desenrolamento_windows import (
+    registrar_quadro_auxiliar, registrar_quadro_empilhado,
+    emitir_prologo_auxiliar, emitir_epilogo_auxiliar,
+)
 
 TIPO_LISTA_DINAMICA = ('lista_dinamica', 'inteiro')
 
@@ -220,17 +223,16 @@ def liberar_todas(g, variaveis, tipos, windows, preservar_retorno=False):
 
 
 def emitir_rotinas(g, windows):
-    """Emite as três rotinas nativas e valida chamadas das APIs do SO."""
+    """Emite as cinco rotinas nativas e valida chamadas das APIs do SO."""
     g.marcar('rs_lista_alocar')
     if windows:
         # Entrada: RDI=tamanho em bytes; saída: RAX=ponteiro.
+        g.bytes(b'\x48\x83\xEC\x28')  # reserva fixa desde o prologo
         g.bytes(b'\x48\x89\xFA')     # mov rdx,rdi
         g.bytes(b'\x31\xC9')         # xor ecx,ecx
         g.bytes(b'\x41\xB8\x00\x30\x00\x00')  # r8d=MEM_COMMIT|MEM_RESERVE
         g.bytes(b'\x41\xB9\x04\x00\x00\x00')  # r9d=PAGE_READWRITE
-        g.bytes(b'\x48\x83\xEC\x28')         # 32 bytes shadow, alinhamento
         g.relativo(b'\xFF\x15', 'VirtualAlloc')
-        g.bytes(b'\x48\x83\xC4\x28')
         g.bytes(b'\x48\x85\xC0')
         g.salto('erro_lista_memoria', 'jz')
     else:
@@ -245,29 +247,36 @@ def emitir_rotinas(g, windows):
         g.bytes(b'\x48\x3D\x01\xF0\xFF\xFF') # cmp rax,-4095 (sign extended)
         # Trata retornos negativos da faixa de errno como falha.
         g.salto('erro_lista_memoria', 'jae')
+    if windows:
+        g.bytes(b'\x48\x83\xC4\x28')
     g.bytes(b'\xC3')
+    if windows:
+        registrar_quadro_empilhado(g, 'rs_lista_alocar', (), 40)
 
     g.marcar('rs_lista_desalocar')
     if windows:
         # Entrada: RDI=ponteiro; RSI=bytes (Windows ignora tamanho).
+        g.bytes(b'\x48\x83\xEC\x28')
         g.bytes(b'\x48\x89\xF9')   # mov rcx,rdi
         g.bytes(b'\x31\xD2')       # xor edx,edx
         g.bytes(b'\x41\xB8\x00\x80\x00\x00')  # r8d=MEM_RELEASE
-        g.bytes(b'\x48\x83\xEC\x28')
         g.relativo(b'\xFF\x15', 'VirtualFree')
-        g.bytes(b'\x48\x83\xC4\x28')
         g.bytes(b'\x85\xC0')
         g.salto('erro_lista_memoria', 'jz')
     else:
         g.bytes(b'\xB8\x0B\x00\x00\x00\x0F\x05')  # munmap
         g.bytes(b'\x48\x85\xC0')
         g.salto('erro_lista_memoria', 'jnz')
+    if windows:
+        g.bytes(b'\x48\x83\xC4\x28')
     g.bytes(b'\xC3')
+    if windows:
+        registrar_quadro_empilhado(g, 'rs_lista_desalocar', (), 40)
 
     g.marcar('rs_lista_liberar_descritor')
     # RDI aponta para [ponteiro, quantidade, capacidade] em ordem descendente.
     # Se explicitamente liberada, quantidade=-1; saída normal sempre limpa.
-    g.bytes(b'\x55\x48\x89\xE5\x48\x83\xEC\x20')
+    emitir_prologo_auxiliar(g, windows, 32)
     g.bytes(b'\x48\x89\x7D\xF8\x48\x89\x75\xF0')  # descritor e largura
     fim = 'rs_lista_liberar_descritor_fim'
     marcar = 'rs_lista_liberar_descritor_marcar'
@@ -289,14 +298,14 @@ def emitir_rotinas(g, windows):
     g.bytes(b'\x48\xC7\xC0\xFF\xFF\xFF\xFF')
     g.bytes(b'\x48\x89\x47\xF8')
     g.marcar(fim)
-    g.bytes(b'\x48\x89\xEC\x5D\xC3')
+    emitir_epilogo_auxiliar(g, windows)
 
     if windows:
         registrar_quadro_auxiliar(g, 'rs_lista_liberar_descritor')
 
     g.marcar('rs_lista_mover_descritor')
     # RDI=destino, RSI=origem. Verifica antes de liberar o destino.
-    g.bytes(b'\x55\x48\x89\xE5\x48\x83\xEC\x20')
+    emitir_prologo_auxiliar(g, windows, 32)
     g.bytes(b'\x48\x89\x7D\xF8\x48\x89\x75\xF0\x48\x89\x55\xE8')
     g.bytes(b'\x48\x8B\x46\xF8\x48\x85\xC0')
     g.salto('erro_lista_liberada', 'js')
@@ -308,14 +317,14 @@ def emitir_rotinas(g, windows):
     g.bytes(b'\x48\x8B\x46\xF0\x48\x89\x47\xF0')
     g.bytes(b'\x31\xC0\x48\x89\x06\x48\x89\x46\xF0')
     g.bytes(b'\x48\xC7\x46\xF8\xFF\xFF\xFF\xFF')
-    g.bytes(b'\x48\x89\xEC\x5D\xC3')
+    emitir_epilogo_auxiliar(g, windows)
 
     if windows:
         registrar_quadro_auxiliar(g, 'rs_lista_mover_descritor')
 
     g.marcar('rs_lista_acrescentar')
     # RDI=descritor, RSI=ponteiro fonte, RDX=palavras por elemento.
-    g.bytes(b'\x55\x48\x89\xE5\x48\x83\xEC\x40')
+    emitir_prologo_auxiliar(g, windows, 64)
     g.bytes(b'\x48\x89\x7D\xF8\x48\x89\x75\xF0\x48\x89\x55\xD8')
     g.bytes(b'\x4C\x8B\x55\xF8')
     g.bytes(b'\x49\x8B\x42\xF8') # quantidade
@@ -378,6 +387,6 @@ def emitir_rotinas(g, windows):
     g.salto(numero,'jnz')
     g.bytes(b'\x4C\x8B\x55\xF8')
     g.bytes(b'\x49\xFF\x42\xF8')
-    g.bytes(b'\x48\x89\xEC\x5D\xC3')
+    emitir_epilogo_auxiliar(g, windows)
     if windows:
         registrar_quadro_auxiliar(g, 'rs_lista_acrescentar')

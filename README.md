@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.41.4
+# RoteiroSimples (RS) — versão experimental 0.41.5
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,35 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.41.5 — Desenrolamento comprovado pelo Windows
+
+Os testes agora consultam `RtlLookupFunctionEntry` e `RtlVirtualUnwind`
+com o código e os metadados reais do compilador. Eles percorrem prólogos
+parciais, corpos com operandos temporários na pilha e etapas dos epílogos.
+Exceções reais, isoladas em processos de teste, verificam a recuperação
+de quadros, oito registradores inteiros e dez vetoriais preservados pela ABI,
+sem exigir SDK ou compilador externo.
+
+O ensaio revelou uma falha concreta: salvar `RBX` depois de estabelecer
+`RBP` permitia restaurar `RBX` do endereço errado quando havia temporários
+na pilha. Os salvamentos agora precedem o estabelecimento do quadro.
+Funções Windows preservam os oito registradores inteiros não voláteis,
+e os retornos compostos acompanham os novos deslocamentos dos argumentos.
+
+As descrições foram ampliadas para **22 rotinas auxiliares**, incluindo
+E/S, cache de entrada, alocação, liberação, fechamento, sincronização,
+verificação de arquivos e bloqueio. Epílogos Windows usam sequências
+reconhecidas pelo sistema, com validação dos bytes emitidos. A impressão
+zera ponteiros nulos completos de 64 bits, e diagnósticos de texto e lista
+também são emitidos quando esses tipos aparecem somente em funções.
+
+**Limites:** os blocos fatais que realinham a pilha e encerram o processo
+não são rotinas retornáveis cobertas pela tabela. A RS ainda não oferece
+um mecanismo próprio de exceções nem garantias formais de segurança.
+`HIGH_ENTROPY_VA` continua desativado.
+
+[Ensaios, correções e limites da revisão](docs/DESENROLAMENTO_REAL_WINDOWS_RS_0_41_5.md).
 
 ## RS 0.41.4 — Auditoria da ABI e metadados das rotinas auxiliares Windows
 

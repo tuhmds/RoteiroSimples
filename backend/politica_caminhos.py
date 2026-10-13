@@ -9,6 +9,10 @@ ATENÇÃO: isso NÃO confina diretórios ancestrais não confiáveis.
 
 
 import struct
+from .desenrolamento_windows import (
+    registrar_quadro_auxiliar, emitir_prologo_auxiliar,
+    emitir_epilogo_auxiliar,
+)
 
 
 # Linux x86-64: O_NOFOLLOW (0x20000), O_CLOEXEC (0x80000).
@@ -47,7 +51,7 @@ def emitir_verificacao_windows(g):
     Não usa bibliotecas de execução externas.
     """
     g.marcar('rs_verificar_arquivo_regular')
-    g.bytes(bytes.fromhex('55 48 89 E5 48 83 EC 40'))
+    emitir_prologo_auxiliar(g, True, 64)
     g.bytes(bytes.fromhex('48 89 F9'))             # rcx = handle
     g.bytes(bytes.fromhex('BA 09 00 00 00'))       # edx = FileAttributeTagInfo
     g.bytes(bytes.fromhex('4C 8D 45 F8'))          # r8 = &informacoes
@@ -63,4 +67,5 @@ def emitir_verificacao_windows(g):
     g.marcar('rs_verificar_rejeitado')
     g.bytes(bytes.fromhex('48 C7 C0 FF FF FF FF')) # -1
     g.marcar('rs_verificar_fim')
-    g.bytes(bytes.fromhex('48 89 EC 5D C3'))
+    emitir_epilogo_auxiliar(g, True)
+    registrar_quadro_auxiliar(g, 'rs_verificar_arquivo_regular')

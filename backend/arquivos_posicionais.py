@@ -6,7 +6,10 @@ Retorno: quantidade transferida >=0; -1 abrir; -2 transferência;
 """
 import struct
 from . import politica_caminhos
-from .desenrolamento_windows import registrar_quadro_auxiliar
+from .desenrolamento_windows import (
+    registrar_quadro_auxiliar, emitir_prologo_auxiliar,
+    emitir_epilogo_auxiliar,
+)
 
 
 def bytes_nativos(g, trecho):
@@ -144,7 +147,7 @@ def _rotina(g, windows, gravar):
     fim = f'{nome}_fim'
 
     g.marcar(nome)
-    bytes_nativos(g, '55 48 89 E5 48 83 EC 60')
+    emitir_prologo_auxiliar(g, windows, 96)
     # nome, buffer, quantidade, posicao: -8,-16,-24,-32
     bytes_nativos(g, '48 89 7D F8 48 89 75 F0 48 89 55 E8 48 89 4D E0')
     bytes_nativos(g, '48 C7 45 D0 00 00 00 00') # progresso -48
@@ -192,7 +195,7 @@ def _rotina(g, windows, gravar):
     g.marcar(falha_argumentos)
     bytes_nativos(g, '48 C7 C0 FD FF FF FF') # -3
     g.marcar(fim)
-    bytes_nativos(g, '48 89 EC 5D C3')
+    emitir_epilogo_auxiliar(g, windows)
 
 
 def emitir_rotinas(g, windows):
