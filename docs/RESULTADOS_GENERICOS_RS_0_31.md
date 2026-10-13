@@ -1,5 +1,8 @@
 # Resultados genéricos e propagação explícita — RS 0.31
 
+Esta nota descreve a entrega original, com valores copiáveis. A
+[RS 0.42G acrescentou resultados com texto, bytes e registros proprietários](RESULTADOS_PROPRIETARIOS_RS_0_42G.md), com transferência explícita e descarte dos donos.
+
 ## O que realmente foi implementado
 
 A sintaxe de resultados genéricos é reconhecida na etapa de compilação e especializada

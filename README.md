@@ -1,6 +1,21 @@
-# RoteiroSimples (RS) — versão experimental 0.42F
+# RoteiroSimples (RS) — versão experimental 0.42G
 
-## RS 0.42F — Registros proprietários em funções
+## RS 0.42G — Resultados com propriedade
+
+`resultado[texto]`, `resultado[bytes]` e resultados de registros proprietários
+agora transportam donos. `sucesso[T](mova(valor))` recebe o conteúdo sem
+duplicá-lo; `falha[T](codigo)` devolve um valor vazio sem alocar conteúdo.
+`propague` preserva o código de erro e descarta os donos restantes ao retornar.
+Para retirar o valor de um sucesso, use `mova(resposta.valor)`. Resultados de
+valores copiáveis mantêm seu comportamento histórico.
+
+A [biblioteca de documentos em RS](biblioteca_padrao/documentos.rts) compõe
+validação de título e conteúdo, criação e alteração de documentos com
+falhas recuperáveis. O [exemplo](exemplos/aplicacoes/documento_resultado_rs042g.rts)
+rejeita uma entrada e continua processando outra no mesmo executável.
+[Contrato, testes e limites](docs/RESULTADOS_PROPRIETARIOS_RS_0_42G.md).
+
+## Histórico: RS 0.42F — Registros proprietários em funções
 
 Funções agora recebem e devolvem registros com campos `texto`, `bytes`, listas
 dinâmicas e subregistros proprietários. Use `mova(origem)` ou uma chamada que
@@ -13,8 +28,8 @@ O [exemplo de documento](exemplos/aplicacoes/documento_registro_rs042f.rts)
 exercita criação, alteração, encaminhamento e consumo. O
 [contrato e os limites](docs/REGISTROS_EM_FUNCOES_RS_0_42F.md) descrevem as
 verificações nativas, incluindo ABI e desenrolamento real no Windows.
-Coleções de registros proprietários e `resultado[T]` com donos ainda dependem
-de contratos próprios de transferência e descarte.
+Resultados com donos foram acrescentados na 0.42G. Coleções de registros
+proprietários ainda dependem de transferência e descarte por elemento.
 
 ## Histórico: RS 0.42E — Movimentacao de registros proprietarios completos
 
@@ -956,7 +971,7 @@ nenhum nível foi criado na RS 0.29. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes na RS 0.42F
+## Recursos presentes na RS 0.42G
 
 | Recurso | Situação |
 |---|---|
@@ -985,6 +1000,8 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Codificação binária em RS e prova `.rsd` com 100 registros | Implementado; ainda não é um motor de banco |
 | Campos dinâmicos em registros aninhados e movimento do agregado | Implementado na 0.42D/0.42E |
 | Parâmetros e retornos de registros proprietários | Implementado na 0.42F |
+| Resultados com texto, bytes e registros proprietários | Implementado na 0.42G |
+| Biblioteca de validação e composição de documentos em RS | Implementado na 0.42G |
 | Consultas gerais e seleção de listas em RS | Acrescentadas na 0.42A.1 |
 | ABI e desenrolamento Windows com ensaios reais | Consolidado na 0.41.5; regressões mantidas |
 | Contrato comum de disposição, efeitos e propriedade | Consolidado nas revisões 0.40 e neste marco |
@@ -996,7 +1013,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Publicação por renomeação, bloqueio não bloqueante e basename variável verificado | Implementado na 0.39 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
-| Coleções de registros proprietários, resultados com donos, empréstimos mutáveis, reais/decimais e FFI | Ainda não |
+| Coleções de registros proprietários, resultados aninhados/de listas dinâmicas, empréstimos mutáveis, reais/decimais e FFI | Ainda não |
 
 ## Organização atual
 
@@ -1017,9 +1034,9 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**Continuidade da propriedade:** resultados com donos e coleções de registros
-proprietários precisam de regras de transferência e descarte por elemento.
-Registros com texto, bytes e listas já atravessam funções; esse suporte serve
+**Continuidade da propriedade:** coleções de registros proprietários precisam
+de regras de transferência e descarte por elemento. Resultados com donos e
+registros com texto, bytes e listas já atravessam funções; esse suporte serve
 à construção de bibliotecas em RS, do compilador em RS e do Dados RS.
 Em paralelo, o léxico em RS permite iniciar a análise sintática, e a prova
 binária permite especificar um primeiro armazenamento de registros variáveis.

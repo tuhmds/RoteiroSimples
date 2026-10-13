@@ -1,5 +1,7 @@
 # RS 0.42F — Registros proprietários em funções
 
+Esta nota descreve o marco 0.42F. A [0.42G acrescentou resultados com donos](RESULTADOS_PROPRIETARIOS_RS_0_42G.md); os limites abaixo relativos a resultados descrevem a entrega original.
+
 ## Contrato da entrega
 
 Registros com folhas `texto`, `bytes`, `lista[inteiro]` e `lista[logico]`

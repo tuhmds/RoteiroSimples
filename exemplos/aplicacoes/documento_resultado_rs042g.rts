@@ -1,0 +1,37 @@
+importe "padrao/documentos.rts" como documentos
+
+funcao criar_titulo() -> texto {
+    seja titulo: texto
+    copie(titulo, "Relatório RS")
+    retorne mova(titulo)
+}
+
+funcao criar_conteudo() -> bytes {
+    seja conteudo: bytes
+    adicione_byte(conteudo, 0)
+    adicione_byte(conteudo, 255)
+    retorne mova(conteudo)
+}
+
+funcao conferir() -> resultado[documentos.Documento] {
+    seja recebido = documentos.criar(criar_titulo(), criar_conteudo(), 128, 4096)
+    propague recebido
+    seja documento = mova(recebido.valor)
+    retorne sucesso[documentos.Documento](mova(documento))
+}
+
+inicio {
+    seja vazio: texto
+    seja rejeitado = documentos.criar(mova(vazio), criar_conteudo(), 128, 4096)
+    escreva(rejeitado.valido)
+    escreva(rejeitado.codigo_erro)
+
+    seja aprovado = conferir()
+    se aprovado.valido {
+        seja documento = mova(aprovado.valor)
+        escreva(documento.titulo)
+        escreva(tamanho(documento.conteudo))
+        escreva(documento.conteudo[0])
+        escreva(documento.conteudo[1])
+    }
+}

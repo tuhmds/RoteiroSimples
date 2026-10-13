@@ -1,0 +1,49 @@
+// Documento com donos variaveis e validacao recuperavel inteiramente em RS.
+// As funcoes consomem seus parametros, inclusive quando devolvem uma falha.
+publico tipo Documento {
+    titulo: texto
+    conteudo: bytes
+}
+
+// 1: titulo vazio; 2: limite invalido ou titulo acima do limite em bytes.
+publico funcao validar_titulo(titulo: texto, limite: inteiro) -> resultado[texto] {
+    se tamanho(titulo) == 0 {
+        retorne falha[texto](1)
+    }
+    se limite < 1 {
+        retorne falha[texto](2)
+    }
+    se tamanho(titulo) > limite {
+        retorne falha[texto](2)
+    }
+    retorne sucesso[texto](mova(titulo))
+}
+
+// 3: limite invalido ou conteudo acima do limite em bytes. Vazio e valido.
+publico funcao validar_conteudo(conteudo: bytes, limite: inteiro) -> resultado[bytes] {
+    se limite < 0 {
+        retorne falha[bytes](3)
+    }
+    se tamanho(conteudo) > limite {
+        retorne falha[bytes](3)
+    }
+    retorne sucesso[bytes](mova(conteudo))
+}
+
+publico funcao criar(titulo: texto, conteudo: bytes, limite_titulo: inteiro, limite_conteudo: inteiro) -> resultado[Documento] {
+    seja nome = validar_titulo(mova(titulo), limite_titulo)
+    propague nome
+    seja dados = validar_conteudo(mova(conteudo), limite_conteudo)
+    propague dados
+    seja documento: Documento
+    mova(documento.titulo, nome.valor)
+    mova(documento.conteudo, dados.valor)
+    retorne sucesso[Documento](mova(documento))
+}
+
+publico funcao alterar_titulo(documento: Documento, titulo: texto, limite: inteiro) -> resultado[Documento] {
+    seja nome = validar_titulo(mova(titulo), limite)
+    propague nome
+    mova(documento.titulo, nome.valor)
+    retorne sucesso[Documento](mova(documento))
+}
