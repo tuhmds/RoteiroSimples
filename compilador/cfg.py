@@ -4,8 +4,8 @@ CFG somente para análise/depuração: não reordena instruções nem altera o
 backend nativo. O levantamento inclui saída de laços via pare/continue.
 """
 from collections import deque
-from dataclasses import dataclass, field
-from .nos_ir import InstrucaoIR, ProgramaIR
+from dataclasses import dataclass
+from .nos_ir import ExpressaoIR, InstrucaoIR, ProgramaIR, FuncaoIR
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,14 @@ class GrafoCFG:
     blocos: dict
     entrada: str
     saida: str
+    nome_funcao: str | None = None
+    parametros: tuple = ()
+    retorno: str | None = None
+    chamadas: tuple = ()
+
+    def validar_para_ssa(self):
+        if self.nome_funcao is not None or self.chamadas:
+            raise ValueError('SSA e memória versionada de funções ainda não estão disponíveis; use CFG e fluxo.')
 
     def alcancaveis(self):
         visitados = set()
@@ -53,6 +61,8 @@ class GrafoCFG:
 
     def formatar(self):
         saida = ['RS CFG v1 (analise de fluxo)']
+        if self.nome_funcao is not None:
+            saida.append(f'funcao {self.nome_funcao}: {self.parametros} -> {self.retorno}')
         for ident, bloco in self.blocos.items():
             pos = (f' [linha {bloco.origem.linha}, coluna {bloco.origem.coluna}]'
                    if bloco.origem else '')
@@ -78,12 +88,48 @@ class GrafoCFG:
         return '\n'.join(linhas) + '\n'
 
 
+def chamadas_instrucao(instr):
+    """Chamadas diretas nas expressões, sem duplicar os corpos aninhados."""
+    pendentes = list(instr.argumentos)
+    nomes = set()
+    while pendentes:
+        no = pendentes.pop()
+        if isinstance(no, ExpressaoIR):
+            if no.operacao == 'chamada':
+                nomes.add(no.valor)
+            pendentes.extend(no.filhos)
+    return nomes
+
+
 def construir_cfg(ir: ProgramaIR):
-    """Expande se, enquanto e para em blocos com arestas explícitas."""
+    """Grafo único histórico; programas com funções exigem grafos separados."""
     if not isinstance(ir, ProgramaIR):
         raise TypeError('CFG recebe ProgramaIR tipado, não AST legada.')
     if ir.funcoes:
-        raise ValueError('Análise CFG/SSA de programas com funções ainda não está disponível; use IR e efeitos.')
+        raise ValueError('CFG/SSA de funções exige grafos separados; use construir_cfg_programa.')
+    return _construir_cfg(ir)
+
+
+def construir_cfg_funcao(funcao: FuncaoIR):
+    """Parâmetros definidos na entrada; cada retorno vai à saída da função."""
+    if not isinstance(funcao, FuncaoIR):
+        raise TypeError('CFG de função recebe FuncaoIR tipada.')
+    if funcao.programa.funcoes:
+        raise ValueError('Corpo de função não pode declarar funções aninhadas na IR.')
+    if (funcao.retorno not in ('inteiro', 'logico') or
+            any(tipo not in ('inteiro', 'logico') for _, tipo in funcao.parametros) or
+            any(tipo not in ('inteiro', 'logico') for tipo in funcao.programa.tipos.values())):
+        raise ValueError('CFG de função requer o contrato escalar da IR.')
+    nomes = [nome for nome, _ in funcao.parametros]
+    if len(set(nomes)) != len(nomes) or any(funcao.programa.tipos.get(nome) != tipo
+                                          for nome, tipo in funcao.parametros):
+        raise ValueError('Parâmetros incompatíveis com os tipos do corpo da função.')
+    return _construir_cfg(funcao.programa, funcao.nome, funcao.parametros, funcao.retorno,
+                         incluir_estouro_para=True)
+
+
+def _construir_cfg(ir, nome_funcao=None, parametros=(), retorno=None, incluir_estouro_para=False):
+    """Expande se, enquanto e para em blocos com arestas explícitas."""
 
     blocos = {}
     contador = 0
@@ -107,8 +153,13 @@ def construir_cfg(ir: ProgramaIR):
             tag, args = instr.operacao, instr.argumentos
             origem = instr.origem
             if tag == 'retorne':
-                raise ValueError('Análise CFG/SSA de retornos de função ainda não está disponível.')
-            if tag == 'se':
+                if nome_funcao is None:
+                    raise ValueError('Análise de retornos de função exige construir_cfg_funcao.')
+                if len(args) != 1 or not isinstance(args[0], ExpressaoIR) or args[0].tipo != retorno:
+                    raise ValueError('Retorno incompatível com a assinatura da função na IR.')
+                nome = novo('retorne', (instr,), origem)
+                ligacoes(nome, ('retorne', saida))
+            elif tag == 'se':
                 nome = novo('se:condicao', (instr,), origem)
                 sim = sequencia(args[1], proximo, laco)
                 nao = sequencia(args[2], proximo, laco)
@@ -124,7 +175,13 @@ def construir_cfg(ir: ProgramaIR):
                 corpo = sequencia(args[4], incremento, (proximo, incremento))
                 ligacoes(inicio, ('proximo', cond))
                 ligacoes(cond, ('verdadeiro', corpo), ('falso', proximo))
-                ligacoes(incremento, ('proximo', cond))
+                if incluir_estouro_para:
+                    # O emissor testa overflow ANTES de gravar o contador.
+                    gravacao = novo('para:gravar_incremento', (instr,), origem)
+                    ligacoes(incremento, ('proximo', gravacao), ('estouro_incremento', proximo))
+                    ligacoes(gravacao, ('proximo', cond))
+                else:
+                    ligacoes(incremento, ('proximo', cond))
                 nome = inicio
             elif tag == 'pare':
                 if laco is None:
@@ -143,7 +200,8 @@ def construir_cfg(ir: ProgramaIR):
         return proximo
 
     primeiro = sequencia(ir.instrucoes, saida)
-    entrada = novo('entrada')
+    entrada = novo('entrada', tuple(InstrucaoIR('parametro', (nome, tipo))
+                                   for nome, tipo in parametros))
     ligacoes(entrada, ('proximo', primeiro))
     # Percorrer começando pela entrada ajuda a leitura humana do CFG.
     ordem = []
@@ -164,6 +222,50 @@ def construir_cfg(ir: ProgramaIR):
         bloco.id = renomear[velho]
         bloco.saidas = tuple(ArestaCFG(renomear[a.destino],a.motivo) for a in bloco.saidas)
         ordenados[bloco.id] = bloco
-    cfg = GrafoCFG(ordenados, renomear[entrada], renomear[saida])
+    cfg = GrafoCFG(ordenados, renomear[entrada], renomear[saida],
+                   nome_funcao, tuple(parametros), retorno)
+    cfg.chamadas = tuple(sorted(set().union(*(chamadas_instrucao(instr)
+        for bid in cfg.alcancaveis() for instr in cfg.blocos[bid].instrucoes))))
+    if nome_funcao is not None:
+        for bid in cfg.alcancaveis():
+            for aresta in cfg.blocos[bid].saidas:
+                if aresta.destino == cfg.saida and aresta.motivo != 'retorne':
+                    raise ValueError('Função IR pode chegar à saída sem retornar um valor.')
     cfg.validar()
     return cfg
+
+
+@dataclass
+class GrafosProgramaCFG:
+    principal: GrafoCFG
+    funcoes: dict
+
+    def formatar(self):
+        linhas = ['RS 0.42K - CFG do programa e das funções', 'inicio:', self.principal.formatar()]
+        for grafo in self.funcoes.values():
+            linhas.append(grafo.formatar())
+        return '\n'.join(linhas)
+
+    def para_dot(self):
+        # Cada subgrafo possui IDs próprios; prefixos evitam colisão entre b0.
+        linhas = ['digraph RoteiroSimples {', '  rankdir=TB;']
+        for numero, (nome, grafo) in enumerate([('inicio', self.principal), *self.funcoes.items()]):
+            linhas.extend((f'  subgraph cluster_{numero} {{', f'    label="{nome}";'))
+            for linha in grafo.para_dot().splitlines()[1:-1]:
+                for bid in sorted(grafo.blocos, key=len, reverse=True):
+                    linha = linha.replace(f'"{bid}"', f'"g{numero}_{bid}"')
+                linhas.append('  ' + linha)
+            linhas.append('  }')
+        linhas.append('}')
+        return '\n'.join(linhas) + '\n'
+
+
+def construir_cfg_programa(ir: ProgramaIR):
+    if not isinstance(ir, ProgramaIR):
+        raise TypeError('CFG recebe ProgramaIR tipado, não AST legada.')
+    if ir.funcoes and any(tipo not in ('inteiro', 'logico') for tipo in ir.tipos.values()):
+        raise ValueError('CFG do programa com funções requer o contrato escalar da IR.')
+    if any(nome != funcao.nome for nome, funcao in ir.funcoes.items()):
+        raise ValueError('Nome de função incompatível com a chave do programa IR.')
+    return GrafosProgramaCFG(_construir_cfg(ir, incluir_estouro_para=True),
+        {nome: construir_cfg_funcao(funcao) for nome, funcao in ir.funcoes.items()})

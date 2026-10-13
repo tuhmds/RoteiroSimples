@@ -25,6 +25,9 @@ def efeitos_bloco(bloco):
     usos, definicoes = set(), set()
     if not bloco.instrucoes:
         return usos, definicoes
+    if bloco.papel == 'entrada':
+        definicoes.update(i.argumentos[0] for i in bloco.instrucoes if i.operacao == 'parametro')
+        return usos, definicoes
     instr = bloco.instrucoes[0]
     op, args = instr.operacao, instr.argumentos
     if bloco.papel == 'para:inicio':
@@ -35,13 +38,16 @@ def efeitos_bloco(bloco):
         usos.update(nomes_lidos(args[2]))
     elif bloco.papel == 'para:incremento':
         usos.add(args[0])
+        if not any(a.motivo == 'estouro_incremento' for a in bloco.saidas):
+            definicoes.add(args[0])
+    elif bloco.papel == 'para:gravar_incremento':
         definicoes.add(args[0])
     elif op == 'atribua':
         usos.update(nomes_lidos(args[1]))
         definicoes.add(args[0])
     elif op == 'leia_int':
         definicoes.add(args[0])
-    elif op == 'imprima_num':
+    elif op in ('imprima_num', 'retorne'):
         usos.update(nomes_lidos(args[0]))
     elif bloco.papel in ('se:condicao', 'enquanto:condicao'):
         usos.update(nomes_lidos(args[0]))
@@ -60,6 +66,8 @@ class AnaliseFluxo:
     dominadores: dict
     phi_candidatos: dict
     sem_definicao: dict
+    garantidas_entrada: dict
+    garantidas_saida: dict
 
     def formatar(self):
         linhas = ['RS 0.11 - Fluxo de dados (analise conservadora)']
@@ -96,6 +104,8 @@ class AnaliseFluxo:
                             definicoes=sorted(self.definicoes[b.id]),
                             definicoes_entrada=sorted(self.entradas_def[b.id]),
                             definicoes_saida=sorted(self.saidas_def[b.id]),
+                            definicoes_garantidas_entrada=sorted(self.garantidas_entrada[b.id]),
+                            definicoes_garantidas_saida=sorted(self.garantidas_saida[b.id]),
                             vivas_entrada=sorted(self.vivos_entrada[b.id]),
                             vivas_saida=sorted(self.vivos_saida[b.id]),
                             dominadores=sorted(self.dominadores[b.id]),
@@ -167,6 +177,23 @@ def analisar_fluxo(cfg: GrafoCFG):
                 dominadores[nome] = novos
                 mudou = True
 
+    # Definições possíveis não comprovam definição em TODOS os caminhos.
+    # Interseção com ponto fixo descendente, entrada vazia e parâmetros gerados.
+    universo = set(definicoes_por_variavel)
+    garantidas_entrada = {b: set(universo) if b in vivos else set() for b in blocos}
+    garantidas_saida = {b: set(universo) if b in vivos else set() for b in blocos}
+    mudou = True
+    while mudou:
+        mudou = False
+        for nome in ordem:
+            ps = predecessores[nome]
+            entrada = (set.intersection(*(garantidas_saida[p] for p in ps))
+                       if ps and nome != cfg.entrada else set())
+            saida = entrada | defs[nome]
+            if entrada != garantidas_entrada[nome] or saida != garantidas_saida[nome]:
+                garantidas_entrada[nome], garantidas_saida[nome] = entrada, saida
+                mudou = True
+
     candidatos = {}
     sem_definicao = {b: set() for b in blocos}
     for nome in ordem:
@@ -176,8 +203,9 @@ def analisar_fluxo(cfg: GrafoCFG):
                 if len(chegando) >= 2:
                     candidatos.setdefault(nome, {})[var] = chegando
         for var in usos[nome]:
-            if not any(def_id in definicoes_por_variavel[var] for def_id in entradas_def[nome]):
+            if var not in garantidas_entrada[nome]:
                 sem_definicao[nome].add(var)
 
     return AnaliseFluxo(cfg, usos, defs, entradas_def, saidas_def,
-                        vivos_entrada, vivos_saida, dominadores, candidatos, sem_definicao)
+                        vivos_entrada, vivos_saida, dominadores, candidatos, sem_definicao,
+                        garantidas_entrada, garantidas_saida)

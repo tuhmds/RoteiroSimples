@@ -1,0 +1,25 @@
+// CFG e fluxo separados para inicio, parcela e somar.
+funcao parcela(numero: inteiro) -> inteiro {
+    se numero % 2 == 0 {
+        retorne numero * 3
+    }
+    retorne numero
+}
+
+funcao somar(limite: inteiro, corte: inteiro) -> inteiro {
+    seja soma = 0
+    para numero de 0 ate limite {
+        se numero == 2 {
+            continue
+        }
+        soma = soma + parcela(numero)
+        se soma > corte {
+            retorne soma
+        }
+    }
+    retorne soma
+}
+
+inicio {
+    escreva(somar(10, 30))
+}
