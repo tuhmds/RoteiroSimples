@@ -23,8 +23,9 @@ inicio {
     seja destino: bytes
     mova(destino, documento.conteudo)
     escreva(tamanho(destino))
+    mova(documento.conteudo, destino)
     adicione_byte(documento.conteudo, 90)
-    escreva(documento.conteudo[0])
+    escreva(documento.conteudo[2])
 
     se verdadeiro {
         seja temporario: Documento
