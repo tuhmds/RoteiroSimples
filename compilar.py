@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.42K experimental: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.42L experimental: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import re
@@ -19,7 +19,7 @@ def main(argv=None):
     for canal in (sys.stdout, sys.stderr):
         if canal is not None and hasattr(canal, 'reconfigure'):
             canal.reconfigure(encoding='utf-8')
-    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.42K (experimental)')
+    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.42L (experimental)')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--mostrar-modulos', action='store_true', help='lista os módulos e a ordem de importação')
     parser.add_argument('--mostrar-estrategia', action='store_true', help='explica quais otimizações serão aplicadas de fato')
@@ -91,9 +91,8 @@ def main(argv=None):
                 + '; '.join(decisao.motivos)
                 + '. Compile normalmente ou utilize '
                   '--mostrar-cobertura-intermediaria para examinar os limites.')
-        if programa.funcoes and (op.mostrar_ssa or op.salvar_ssa or op.mostrar_copias_phi
-                or op.mostrar_alocacao or op.mostrar_memory_ssa or op.salvar_memory_ssa):
-            raise ErroCompilacao('SSA, memória versionada e alocação de funções ainda não estão disponíveis; use --mostrar-cfg, --mostrar-fluxo ou --mostrar-efeitos.')
+        if programa.funcoes and (op.mostrar_memory_ssa or op.salvar_memory_ssa):
+            raise ErroCompilacao('Memória versionada de funções ainda não está disponível; use --mostrar-ssa, --mostrar-fluxo ou --mostrar-efeitos.')
         if op.mostrar_ast:
             from compilador.ast import formatar_ast
             print(formatar_ast(programa))
@@ -133,14 +132,18 @@ def main(argv=None):
                      else construir_cfg(ir_fluxo))
             if op.mostrar_ssa or op.salvar_ssa or op.mostrar_copias_phi:
                 from compilador.ssa import construir_ssa
-                ssa = construir_ssa(grafo)
+                from compilador.ssa_funcoes import construir_ssa_programa
+                ssa = (construir_ssa_programa(ir_fluxo, grafo) if programa.funcoes else construir_ssa(grafo))
                 if op.mostrar_copias_phi:
                     from compilador.ssa_baixamento import formatar_copias_phi
                     # Exibe o plano do CFG antes de O3 eliminar atribuicoes mortas.
                     from compilador.ssa import construir_ssa as montar_ssa
-                    cfg_original = construir_cfg(construir_ir(
-                        programa, otimizar=nivel > 0, nivel=min(nivel, 2)))
-                    print(formatar_copias_phi(montar_ssa(cfg_original)))
+                    if programa.funcoes:
+                        print(ssa.formatar_copias())
+                    else:
+                        cfg_original = construir_cfg(construir_ir(
+                            programa, otimizar=nivel > 0, nivel=min(nivel, 2)))
+                        print(formatar_copias_phi(montar_ssa(cfg_original)))
                 if op.mostrar_ssa:
                     print(ssa.formatar())
                 if op.salvar_ssa:
@@ -162,12 +165,17 @@ def main(argv=None):
                 op.salvar_cfg.write_text(grafo.para_dot(), encoding='utf-8')
                 print(f'Grafo de fluxo de controle salvo em: {op.salvar_cfg}')
         if op.mostrar_alocacao:
-            if nivel not in (4, 5, 6):
-                raise ErroCompilacao('Use -O 4, -O 5 ou -O 6 com --mostrar-alocacao.')
+            if nivel not in (4, 5, 6, 7, 8):
+                raise ErroCompilacao('Use -O 4 até -O 8 com --mostrar-alocacao.')
             from compilador.ir import construir_ir
             from backend.ssa_x86_64 import construir_backend_ssa
-            _, aloc = construir_backend_ssa(construir_ir(programa, nivel=3), coalescer=(nivel >= 6))
-            print(aloc.relatorio())
+            if programa.funcoes:
+                from backend.funcoes_ssa import construir_backend_funcoes_ssa
+                print(construir_backend_funcoes_ssa(construir_ir(programa, nivel=3),
+                                                   coalescer=nivel >= 6).relatorio())
+            else:
+                _, aloc = construir_backend_ssa(construir_ir(programa, nivel=3), coalescer=(nivel >= 6))
+                print(aloc.relatorio())
         binario = compilar(programa, op.alvo, otimizar=nivel > 0, nivel=nivel)
         saida.write_bytes(binario)
         if op.alvo == 'linux':

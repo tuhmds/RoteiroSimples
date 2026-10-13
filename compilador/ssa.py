@@ -25,6 +25,12 @@ def _fontes(expressao):
     return tuple(v for filho in expressao.filhos for v in _fontes(filho))
 
 
+def _usos(argumentos):
+    return tuple(v for item in argumentos for v in
+                 (_fontes(item) if isinstance(item, ExpressaoIR) else
+                  (item,) if isinstance(item, str) and '@' in item else ()))
+
+
 @dataclass
 class PhiSSA:
     variavel: str
@@ -64,6 +70,7 @@ class ProgramaSSA:
     def validar(self):
         """Confere unicidade, preenchimento dos phis e dominância das leituras."""
         defs = {}
+        posicoes = {}
         for bid, bloco in self.blocos.items():
             if not bloco.alcancavel:
                 continue
@@ -71,13 +78,15 @@ class ProgramaSSA:
                 if phi.destino in defs:
                     raise ValueError(f'Definição SSA duplicada: {phi.destino}')
                 defs[phi.destino] = bid
+                posicoes[phi.destino] = -1
                 if set(phi.entradas) != self.predecessores[bid]:
                     raise ValueError(f'Phi incompleto no bloco {bid}: {phi.destino}')
-            for instr in bloco.instrucoes:
+            for indice, instr in enumerate(bloco.instrucoes):
                 if instr.destino:
                     if instr.destino in defs:
                         raise ValueError(f'Definição SSA duplicada: {instr.destino}')
                     defs[instr.destino] = bid
+                    posicoes[instr.destino] = indice
         for bid, bloco in self.blocos.items():
             if not bloco.alcancavel:
                 continue
@@ -87,10 +96,14 @@ class ProgramaSSA:
                         raise ValueError(f'Phi {phi.destino} usa {versao} inválido na aresta {predecessor}->{bid}')
                     if versao.split('@')[0] != phi.variavel:
                         raise ValueError(f'Phi {phi.destino} recebeu variável de outro nome: {versao}')
-            for instr in bloco.instrucoes:
+            for indice, instr in enumerate(bloco.instrucoes):
+                if instr.usos != _usos(instr.argumentos):
+                    raise ValueError(f'Usos SSA incompatíveis com os argumentos em {bid}.')
                 for versao in instr.usos:
                     if versao not in defs or defs[versao] not in self.dominadores[bid]:
                         raise ValueError(f'Leitura SSA não dominada: {versao} em {bid}')
+                    if defs[versao] == bid and posicoes[versao] >= indice:
+                        raise ValueError(f'Leitura SSA antes da definição: {versao} em {bid}')
         return True
 
     def formatar(self):
@@ -100,9 +113,13 @@ class ProgramaSSA:
                     return str(x.valor)
                 if x.operacao == 'neg':
                     return '-' + renderizar(x.filhos[0])
+                if x.operacao == 'chamada':
+                    return str(x.valor) + '(' + ', '.join(renderizar(f) for f in x.filhos) + ')'
                 return '(' + renderizar(x.filhos[0]) + ' ' + str(x.valor) + ' ' + renderizar(x.filhos[1]) + ')'
             return str(x)
         linhas = ['RS 0.12 - SSA tipada (analise, ainda sem baixar para codigo nativo)']
+        if self.cfg.nome_funcao is not None or self.cfg.chamadas:
+            linhas = ['RS 0.42L - SSA tipada (análise e emissão nativa em O4–O8)']
         for bid, b in self.blocos.items():
             if not b.alcancavel:
                 linhas.append(f'{bid} [{b.papel}] inacessivel')
@@ -185,6 +202,12 @@ def construir_ssa(cfg: GrafoCFG) -> ProgramaSSA:
               for bid in cfg.blocos}
     tipos = {nome: cfg_tipo(fluxo, nome)
              for nome in sorted(set().union(*(fluxo.definicoes[b] for b in alcancaveis)))}
+    incrementos = {bid: f'__rs_incremento_{bid}' for bid in alcancaveis
+                   if cfg.blocos[bid].papel == 'para:incremento'
+                   and any(a.motivo == 'estouro_incremento' for a in cfg.blocos[bid].saidas)}
+    tipos.update({nome: 'inteiro' for nome in incrementos.values()})
+    gravacoes = {next(a.destino for a in cfg.blocos[bid].saidas if a.motivo == 'proximo'): nome
+                for bid, nome in incrementos.items()}
     definicoes_por_nome = defaultdict(set)
     for bid in alcancaveis:
         for nome in fluxo.definicoes[bid]:
@@ -234,7 +257,15 @@ def construir_ssa(cfg: GrafoCFG) -> ProgramaSSA:
         for nome in sorted(bb.phis):
             bb.phis[nome].destino = nova(nome)
             criadas.append(nome)
-        if original.instrucoes:
+        if original.instrucoes and original.papel == 'entrada':
+            for parametro in original.instrucoes:
+                if parametro.operacao != 'parametro':
+                    raise ValueError('Entrada SSA contém instrução que não define parâmetro.')
+                nome, tipo = parametro.argumentos
+                destino = nova(nome)
+                criadas.append(nome)
+                bb.instrucoes.append(InstrucaoSSA('parametro', destino, (nome, tipo), (), parametro.origem))
+        if original.instrucoes and original.papel != 'entrada':
             ir = original.instrucoes[0]
             op, a = ir.operacao, ir.argumentos
             funcao = original.papel
@@ -247,8 +278,13 @@ def construir_ssa(cfg: GrafoCFG) -> ProgramaSSA:
                 operandos = (ler(a[0]), renomear_expressao(a[2]), a[3])
             elif funcao == 'para:incremento':
                 corrente = ler(a[0])
-                destino = nova(a[0]); criadas.append(a[0])
+                nome = incrementos.get(bid, a[0])
+                destino = nova(nome); criadas.append(nome)
                 operandos = (corrente, a[3])
+            elif funcao == 'para:gravar_incremento':
+                resultado = ExpressaoIR('inteiro', 'var', ler(gravacoes[bid]), origem=ir.origem)
+                destino = nova(a[0]); criadas.append(a[0])
+                operandos = (resultado,)
             elif op == 'atribua':
                 expr = renomear_expressao(a[1])
                 destino = nova(a[0]); criadas.append(a[0])
@@ -256,7 +292,7 @@ def construir_ssa(cfg: GrafoCFG) -> ProgramaSSA:
             elif op == 'leia_int':
                 destino = nova(a[0])
                 criadas.append(a[0])
-            elif op == 'imprima_num':
+            elif op in ('imprima_num', 'retorne'):
                 operandos = (renomear_expressao(a[0]),)
             elif funcao in ('se:condicao', 'enquanto:condicao'):
                 operandos = (renomear_expressao(a[0]),)
@@ -264,9 +300,7 @@ def construir_ssa(cfg: GrafoCFG) -> ProgramaSSA:
                 operandos = (a[0],)
             elif op not in ('pare', 'continue'):
                 raise ValueError(f'Papel não reconhecido na SSA: {funcao}')
-            fontes = tuple(v for item in operandos for v in
-                           ((_fontes(item) if isinstance(item, ExpressaoIR) else
-                             (item,) if isinstance(item, str) and '@' in item else ())))
+            fontes = _usos(operandos)
             bb.instrucoes.append(InstrucaoSSA(funcao, destino, operandos, fontes, ir.origem))
         # Cada aresta recebe exatamente a versão vigente ao sair do bloco.
         for a in original.saidas:
@@ -304,6 +338,8 @@ def cfg_tipo(fluxo, nome):
             op, a = instr.operacao, instr.argumentos
             if op == 'atribua' and a[0] == nome:
                 return a[1].tipo
+            if op == 'parametro' and a[0] == nome:
+                return a[1]
             if bloco.papel.startswith('para:') and a[0] == nome:
                 return 'inteiro'
             if op == 'leia_int' and a[0] == nome:

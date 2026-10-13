@@ -40,7 +40,10 @@ jobs:
         run: python -m benchmarks.medir --repeticoes 17 --json relatorios/medicao-lacos.json
       - name: Medir funções escalares de O0 a O8
         if: matrix.python == '3.11'
-        run: python -m benchmarks.medir --fonte benchmarks/funcoes_escalares_rs042j.rts --repeticoes 3 --json relatorios/medicao-funcoes.json
+        run: python -m benchmarks.medir --fonte benchmarks/funcoes_escalares_rs042j.rts --repeticoes 17 --json relatorios/medicao-funcoes.json
+      - name: Medir fluxo e chamadas dentro de funções
+        if: matrix.python == '3.11'
+        run: python -m benchmarks.medir --fonte benchmarks/funcoes_fluxo_rs042l.rts --repeticoes 17 --json relatorios/medicao-funcoes-fluxo.json
       - name: Medir coleções de O0 a O8
         if: matrix.python == '3.11'
         run: python -m benchmarks.medir --fonte benchmarks/colecoes_rs042j.rts --repeticoes 3 --json relatorios/medicao-colecoes.json

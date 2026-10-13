@@ -1,0 +1,57 @@
+"""RS 0.42L: emissão SSA por quadro, preservando a convenção interna RS."""
+from dataclasses import dataclass, replace
+
+from compilador.alocacao import Local, alocar_registradores
+from compilador.ir import programa_para_backend
+from compilador.ssa_funcoes import construir_ssa_programa
+from .ssa_x86_64 import emissor_ssa
+from .x86_64 import montar_codigo
+
+
+@dataclass
+class BackendFuncoesSSA:
+    programa: object
+    alocacoes: dict
+
+    def relatorio(self):
+        linhas = ['RS 0.42L - alocação por função (r13/r14/r15 preservados nas chamadas)']
+        for nome, aloc in self.alocacoes.items():
+            linhas.extend((f'{nome}:', aloc.relatorio()))
+        return '\n'.join(linhas)
+
+
+def construir_backend_funcoes_ssa(ir, coalescer=False):
+    programa = construir_ssa_programa(ir)
+    # O montador destes quadros aplica sondagem e o limite global de 768 KiB.
+    # O limite antigo de 256 vagas continua no caminho SSA sem funções.
+    alocacoes = {'inicio': alocar_registradores(programa.principal, coalescer=coalescer, limite_vagas=None)}
+    alocacoes.update({nome: alocar_registradores(ssa, coalescer=coalescer, limite_vagas=None)
+                     for nome, ssa in programa.funcoes.items()})
+    return BackendFuncoesSSA(programa, alocacoes)
+
+
+def montar_funcoes_ssa(ir, windows, nivel=4):
+    plano = construir_backend_funcoes_ssa(ir, coalescer=nivel >= 6)
+    legado = programa_para_backend(ir)
+    principal = plano.alocacoes['inicio']
+    legado.variaveis = {f'__rs_ssa_vaga_{n}': n for n in range(principal.vagas_pilha + 1)}
+    emissores = {}
+    for nome, ssa in plano.programa.funcoes.items():
+        funcao = legado.funcoes[nome]
+        aloc = plano.alocacoes[nome]
+        casas = {parametro: n for n, (parametro, _) in enumerate(funcao.parametros)}
+        deslocamento = len(casas)
+        locais = {v: Local('pilha', loc.indice + deslocamento) if loc.classe == 'pilha' else loc
+                  for v, loc in aloc.locais.items()}
+        fim = deslocamento + aloc.vagas_pilha + 1  # reserva temporário de cópias
+        salvamentos = {reg: fim + n for n, reg in enumerate(sorted(
+            {loc.indice for loc in locais.values() if loc.classe == 'reg'}))} if not windows else {}
+        total = fim + len(salvamentos)
+        funcao.programa.variaveis = {**casas, **{f'__rs_ssa_vaga_{n}': n for n in range(deslocamento, total)}}
+        aloc = replace(aloc, locais=locais, vagas_pilha=deslocamento + aloc.vagas_pilha)
+        emissores[nome] = emissor_ssa(ir.funcoes[nome].programa, ssa, aloc,
+            otimizar_layout=nivel >= 5, otimizar_copias=nivel >= 6, saltos_curtos=nivel >= 6,
+            prefixo=f'ssa_funcao_{nome}_', salvamentos_linux=salvamentos)
+    return montar_codigo(legado, windows, emissor_ssa(ir, plano.programa.principal, principal,
+        otimizar_layout=nivel >= 5, otimizar_copias=nivel >= 6, saltos_curtos=nivel >= 6,
+        prefixo='ssa_inicio_'), emissores)

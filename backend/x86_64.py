@@ -950,7 +950,7 @@ def preparar_saida_fatal_windows(g):
     g.bytes(b'\x48\x83\xEC\x30')  # sub rsp,48
 
 
-def montar_codigo(programa, windows, emissor_alternativo=None):
+def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes=None):
     g = Gerador()
     g.desenrolamentos = []  # contratos reais para .pdata/.xdata
     g.exige_sondagem_pilha = False
@@ -1525,7 +1525,10 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             g.bytes(b'\xFF\xC9')
             g.salto(rotulo, 'jnz')
             indice_palavra += quantidade
-        emitir_bloco(funcao.programa.instrucoes)
+        if emissores_funcoes is not None and nome in emissores_funcoes:
+            emissores_funcoes[nome](g, mensagens, windows, variaveis)
+        else:
+            emitir_bloco(funcao.programa.instrucoes)
         g.marcar(f'funcao_fim_{nome}')
         if tem_dinamicas:
             valores_dinamicos.liberar_todos(g, variaveis, tipos, windows,

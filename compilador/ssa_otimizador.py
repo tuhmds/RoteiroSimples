@@ -27,6 +27,8 @@ def _expressao_constante(expr, valores):
         return expr.valor
     if expr.operacao == 'var':
         return valores.get(expr.valor, _INDEFINIDO)
+    if expr.operacao == 'chamada':
+        return _VARIAVEL  # nunca avaliar, remover nem presumir resultado de chamada
     filhos = [_expressao_constante(f, valores) for f in expr.filhos]
     if _VARIAVEL in filhos:
         return _VARIAVEL

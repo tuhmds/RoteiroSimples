@@ -368,12 +368,11 @@ inicio {
         with self.assertRaisesRegex(ValueError, 'contrato escalar'):
             construir_cfg_funcao(replace(f, retorno='bytes'))
 
-    def test_ssa_e_memoria_versionada_rejeitam_grafos_com_funcoes(self):
+    def test_ssa_aceita_funcoes_e_memoria_versionada_permanece_bloqueada(self):
         ir = levantar(FONTE)
         grafos = construir_cfg_programa(ir)
         for grafo in (grafos.principal, grafos.funcoes['escolher']):
-            with self.assertRaisesRegex(ValueError, 'ainda não'):
-                construir_ssa(grafo)
+            self.assertTrue(construir_ssa(grafo).validar())
             with self.assertRaisesRegex(ValueError, 'ainda não'):
                 construir_memory_ssa(ir, grafo)
         with self.assertRaisesRegex(ValueError, 'ainda não'):
@@ -410,7 +409,7 @@ inicio {
             resultado, _ = rodar(compilar(programa, alvo_nativo(), nivel=nivel, otimizar=nivel > 0))
             self.assertEqual((resultado.returncode, resultado.stdout, resultado.stderr), (0, '7\n', ''))
 
-    def test_cli_exporta_fluxo_cfg_e_conserva_bloqueio_ssa(self):
+    def test_cli_exporta_fluxo_cfg_ssa_e_conserva_bloqueio_memoria(self):
         with tempfile.TemporaryDirectory() as pasta:
             pasta = Path(pasta)
             fonte, saida, fluxo, dot = [pasta / n for n in ('a.rts', 'a.exe', 'fluxo.json', 'grafo.dot')]
@@ -424,12 +423,16 @@ inicio {
             self.assertEqual(json.loads(fluxo.read_text(encoding='utf-8'))['versao'], 'RS 0.42K')
             self.assertIn('cluster_1', dot.read_text(encoding='utf-8'))
             saida.unlink()
-            for opcao in ('--mostrar-ssa', '--mostrar-alocacao', '--mostrar-memory-ssa', '--mostrar-copias-phi'):
+            for opcao in ('--mostrar-ssa', '--mostrar-alocacao', '--mostrar-copias-phi'):
                 r = subprocess.run([*comando, opcao], capture_output=True, encoding='utf-8', timeout=15)
-                self.assertEqual(r.returncode, 1, r.stderr)
-                self.assertIn('ainda não', r.stderr)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertTrue(saida.exists())
+                saida.unlink()
                 self.assertNotIn('Traceback', r.stderr)
-                self.assertFalse(saida.exists())
+            r = subprocess.run([*comando, '--mostrar-memory-ssa'], capture_output=True, encoding='utf-8', timeout=15)
+            self.assertEqual(r.returncode, 1)
+            self.assertIn('ainda não', r.stderr)
+            self.assertFalse(saida.exists())
 
     def test_programas_gerados_com_ramos_lacos_e_retornos_contra_oraculo(self):
         gerador = random.Random(420110)

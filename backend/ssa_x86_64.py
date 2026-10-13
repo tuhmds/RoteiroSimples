@@ -130,7 +130,8 @@ def planejar_layout(ssa):
     return ordem
 
 
-def emissor_ssa(ir, ssa, aloc, otimizar_layout=False, otimizar_copias=False, saltos_curtos=False):
+def emissor_ssa(ir, ssa, aloc, otimizar_layout=False, otimizar_copias=False, saltos_curtos=False,
+                prefixo='ssa_', salvamentos_linux=None):
     """Retorna callback executavel para montar_codigo, com arquivo nativo real."""
     locais = aloc.locais
     pilha = {v: loc.indice for v, loc in locais.items() if loc.classe == 'pilha'}
@@ -142,16 +143,24 @@ def emissor_ssa(ir, ssa, aloc, otimizar_layout=False, otimizar_copias=False, sal
     proximos = {bid: (ordem[i+1] if i+1 < len(ordem) else None)
                 for i, bid in enumerate(ordem)}
 
-    def emissor(g, mensagens, windows):
+    def emissor(g, mensagens, windows, contexto=None):
+        pilha_atual = dict(pilha)
+        if contexto is not None and '__rs_uso_pilha' in contexto:
+            pilha_atual['__rs_uso_pilha'] = contexto['__rs_uso_pilha']
+        saida_geral = prefixo + 'saida_geral'
+        if not windows:
+            for reg, indice in (salvamentos_linux or {}).items():
+                _carregar(g, Local('reg', reg), windows)
+                _gravar(g, Local('pilha', indice), windows)
         if saltos_curtos:
             g.ativar_saltos_curtos_ssa()
         from .x86_64 import expressao  # aceita registradores em modo SSA
 
         def avaliar(exp):
-            expressao(g, expressao_para_ast(exp), pilha, windows, regs)
+            expressao(g, expressao_para_ast(exp), pilha_atual, windows, regs)
 
         def rotulo(bid):
-            return f'ssa_{bid}'
+            return prefixo + bid
 
         def copias_da_aresta(de, para):
             destino = ssa.blocos[para]
@@ -176,7 +185,7 @@ def emissor_ssa(ir, ssa, aloc, otimizar_layout=False, otimizar_copias=False, sal
             """
             seguinte = proximos[bid] if otimizar_layout else None
             if seguinte not in (falso, verdadeiro):
-                rotulo_falso = f'ssa_falso_{bid}'
+                rotulo_falso = prefixo + f'falso_{bid}'
                 g.salto(rotulo_falso, salto_falso)
                 aresta(bid, verdadeiro)
                 g.marcar(rotulo_falso)
@@ -185,7 +194,7 @@ def emissor_ssa(ir, ssa, aloc, otimizar_layout=False, otimizar_copias=False, sal
             outro = falso if seguinte == verdadeiro else verdadeiro
             salto = salto_falso if seguinte == verdadeiro else salto_verdadeiro
             if precisa_copiar(bid, outro):
-                desvio = f'ssa_desvio_{bid}'
+                desvio = prefixo + f'desvio_{bid}'
                 g.salto(desvio, salto)
                 desvios.append((desvio, bid, outro))
             else:
@@ -199,9 +208,15 @@ def emissor_ssa(ir, ssa, aloc, otimizar_layout=False, otimizar_copias=False, sal
             g.marcar(rotulo(bid))
             cfgb = ssa.cfg.blocos[bid]
             if cfgb.papel == 'saida':
-                g.salto('ssa_saida_geral')
+                g.salto(saida_geral)
                 continue
-            inst = bloco.instrucoes[0] if bloco.instrucoes else None
+            if cfgb.papel == 'entrada':
+                for parametro in bloco.instrucoes:
+                    if contexto is None or parametro.operacao != 'parametro':
+                        raise ValueError('Parâmetro SSA exige contexto do quadro da função.')
+                    _carregar(g, Local('pilha', contexto[parametro.argumentos[0]]), windows)
+                    _gravar(g, locais[parametro.destino], windows)
+            inst = bloco.instrucoes[0] if bloco.instrucoes and cfgb.papel != 'entrada' else None
             if inst:
                 nome = inst.operacao
                 args = inst.argumentos
@@ -209,7 +224,7 @@ def emissor_ssa(ir, ssa, aloc, otimizar_layout=False, otimizar_copias=False, sal
                     n = len(mensagens)
                     mensagens[n] = args[0]
                     escreve_literal(g, n, args[0], windows)
-                elif nome in ('atribua', 'para:inicio'):
+                elif nome in ('atribua', 'para:inicio', 'para:gravar_incremento'):
                     avaliar(args[0])
                     _gravar(g, locais[inst.destino], windows)
                 elif nome == 'leia_int':
@@ -218,24 +233,30 @@ def emissor_ssa(ir, ssa, aloc, otimizar_layout=False, otimizar_copias=False, sal
                 elif nome == 'imprima_num':
                     avaliar(args[0])
                     g.chamada('imprimir_inteiro')
+                elif nome == 'retorne':
+                    avaliar(args[0])
+                    g.salto(saida_geral)
+                    continue
                 elif nome == 'para:incremento':
                     atual, passo = args
                     _carregar(g, locais[atual], windows)
                     g.bytes(b'\x48\x89\xC1')  # mov rcx,rax
                     carregar_numero(g, passo)
                     g.bytes(b'\x48\x01\xC8')  # add rax,rcx
-                    overflow = next((a.destino for a in cfgb.saidas if a.motivo == 'overflow'), None)
+                    overflow = next((a.destino for a in cfgb.saidas if a.motivo in
+                                     ('overflow', 'estouro_incremento')), None)
                     if overflow is None:
                         raise ValueError('Aresta de overflow obrigatoria no incremento para.')
-                    rotulo_erro = f'ssa_overflow_{bid}'
+                    rotulo_erro = prefixo + f'overflow_{bid}'
                     g.salto(rotulo_erro, 'jo')
                     _gravar(g, locais[inst.destino], windows)
                     proximo = next(a.destino for a in cfgb.saidas if a.motivo == 'proximo')
                     aresta(bid, proximo)
                     g.marcar(rotulo_erro)
                     # No overflow, manter o contador anterior, como no backend legado.
-                    _carregar(g, locais[atual], windows)
-                    _gravar(g, locais[inst.destino], windows)
+                    if not any(a.motivo == 'estouro_incremento' for a in cfgb.saidas):
+                        _carregar(g, locais[atual], windows)
+                        _gravar(g, locais[inst.destino], windows)
                     aresta(bid, overflow)
                     continue
                 elif nome in ('se:condicao', 'enquanto:condicao'):
@@ -263,11 +284,16 @@ def emissor_ssa(ir, ssa, aloc, otimizar_layout=False, otimizar_copias=False, sal
             if len(saidas) == 1:
                 aresta(bid, saidas[0].destino, cair=True)
             elif not saidas:
-                g.salto('ssa_saida_geral')
+                g.salto(saida_geral)
             else:
                 raise ValueError(f'Bloco SSA sem emissao de condicao: {bid}.')
         for rotulo_desvio, origem, destino in desvios:
             g.marcar(rotulo_desvio)
             aresta(origem, destino)
-        g.marcar('ssa_saida_geral')
+        g.marcar(saida_geral)
+        if not windows:
+            for reg, indice in (salvamentos_linux or {}).items():
+                # Restaurar diretamente conserva RAX com o valor retornado.
+                offset = deslocamento_variavel({indice: indice}, indice, windows)
+                g.bytes(bytes((0x4C, 0x8B, 0x85 | ((REG_NUM[reg] & 7) << 3))) + struct.pack('<i', offset))
     return emissor

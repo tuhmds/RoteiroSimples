@@ -1,0 +1,20 @@
+funcao parcela(numero: inteiro, ajuste: inteiro) -> inteiro {
+    se numero % 2 == 0 {
+        retorne numero * 2 + ajuste
+    }
+    retorne numero + ajuste
+}
+
+funcao acumular(limite: inteiro, ajuste: inteiro) -> inteiro {
+    seja numero = 0
+    seja total = 0
+    enquanto numero < limite {
+        total = total + parcela(numero, ajuste)
+        numero = numero + 1
+    }
+    retorne total
+}
+
+inicio {
+    escreva(acumular(200000, 3))
+}

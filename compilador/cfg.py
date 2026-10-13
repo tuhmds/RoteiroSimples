@@ -34,8 +34,9 @@ class GrafoCFG:
     chamadas: tuple = ()
 
     def validar_para_ssa(self):
-        if self.nome_funcao is not None or self.chamadas:
-            raise ValueError('SSA e memória versionada de funções ainda não estão disponíveis; use CFG e fluxo.')
+        if (self.retorno is not None and self.retorno not in ('inteiro', 'logico') or
+                any(tipo not in ('inteiro', 'logico') for _, tipo in self.parametros)):
+            raise ValueError('SSA de funções requer parâmetros e retorno escalares.')
 
     def alcancaveis(self):
         visitados = set()

@@ -16,7 +16,10 @@ def compilar(programa, alvo, otimizar=True, nivel=1):
     ir = construir_ir(programa, otimizar=otimizar, nivel=decisao.nivel_ir)
     legado = programa_para_backend(ir)
     tem_listas = any(isinstance(t, tuple) and t[0] in ('lista', 'texto') for t in programa.tipos.values())
-    if decisao.gerador == 'ssa':
+    if decisao.gerador == 'ssa' and ir.funcoes:
+        from .funcoes_ssa import montar_funcoes_ssa
+        gerador, mensagens = montar_funcoes_ssa(ir, alvo == 'windows', nivel)
+    elif decisao.gerador == 'ssa':
         from .ssa_x86_64 import construir_backend_ssa, emissor_ssa
         ssa, aloc = construir_backend_ssa(ir, coalescer=(nivel >= 6))
         # Uma vaga extra na pilha serve de temporario para copias circulares.

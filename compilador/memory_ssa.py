@@ -183,6 +183,8 @@ def construir_memory_ssa(ir: ProgramaIR, cfg: GrafoCFG | None = None) -> Program
     cfg = cfg if cfg is not None else construir_cfg(ir)
     if ir.funcoes:
         raise ValueError('Memória versionada de funções ainda não está disponível; use CFG e fluxo.')
+    if cfg.nome_funcao is not None or cfg.chamadas:
+        raise ValueError('Memória versionada de funções ainda não está disponível; use SSA e fluxo.')
     cfg.validar_para_ssa()
     cfg.validar()
     vivos = cfg.alcancaveis()

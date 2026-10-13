@@ -47,7 +47,8 @@ class TestesFuncoesIRRS042J(unittest.TestCase):
         programa = self.verificar(FONTE, '60\n')
         for nivel in range(9):
             estrategia = decidir_estrategia(programa, nivel, nivel > 0)
-            self.assertEqual((estrategia.gerador, estrategia.nivel_ir), ('intermediario', min(nivel, 2)))
+            self.assertEqual((estrategia.gerador, estrategia.nivel_ir),
+                             ('ssa' if nivel >= 4 else 'intermediario', min(nivel, 3)))
         for alvo in ('windows', 'linux'):
             self.assertNotEqual(compilar(programa, alvo, nivel=0, otimizar=False), compilar(programa, alvo, nivel=8))
         ir = construir_ir(programa, nivel=2)
@@ -208,15 +209,16 @@ inicio {{
             with self.assertRaisesRegex(ErroCompilacao, 'representação intermediária'):
                 construir_ir(programa, nivel=8)
 
-    def test_cli_mostra_corpos_ir_e_rejeita_ssa_indisponivel(self):
+    def test_cli_mostra_corpos_ir_e_ssa_disponivel(self):
         retorno, existe = executar_cli(FONTE, ('-O', '8', '--mostrar-ir', '--mostrar-efeitos', '--mostrar-estrategia'))
         self.assertEqual(retorno.returncode, 0, retorno.stderr)
         self.assertTrue(existe)
         self.assertIn('funcao calcular:', retorno.stdout)
-        self.assertIn('análises IR até o nível 2', retorno.stdout)
+        self.assertIn('nativo com alocação SSA', retorno.stdout)
         retorno, existe = executar_cli(FONTE, ('-O', '8', '--mostrar-ssa'))
-        self.assertEqual(retorno.returncode, 1)
-        self.assertFalse(existe)
+        self.assertEqual(retorno.returncode, 0, retorno.stderr)
+        self.assertTrue(existe)
+        self.assertIn('SSA por função', retorno.stdout)
         self.assertNotIn('Traceback', retorno.stderr)
         with self.assertRaisesRegex(ValueError, 'CFG/SSA'):
             construir_cfg(construir_ir(analisar_programa(FONTE)))
