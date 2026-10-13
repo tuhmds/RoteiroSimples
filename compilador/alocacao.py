@@ -32,7 +32,7 @@ class Alocacao:
                           for v, l in sorted(self.locais.items())))
 
 
-def alocar_registradores(ssa, coalescer=False):
+def alocar_registradores(ssa, coalescer=False, limite_vagas=256):
     ssa.validar()
     alc = {b for b, block in ssa.blocos.items() if block.alcancavel}
     nomes = set()
@@ -156,6 +156,6 @@ def alocar_registradores(ssa, coalescer=False):
     qtd_slots = 1 + max((loc.indice for loc in locais.values()
                           if loc.classe == 'pilha'), default=-1)
     # Mesmo no Windows, sem stack probing: reserva conservadora de ate 2 KiB.
-    if qtd_slots > 256:
+    if limite_vagas is not None and qtd_slots > limite_vagas:
         raise ValueError('SSA excede limite temporario de pilha segura (256 slots).')
     return Alocacao(locais, qtd_slots, vivos_in, vivos_out, grafo)

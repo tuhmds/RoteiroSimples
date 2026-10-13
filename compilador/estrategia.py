@@ -70,9 +70,11 @@ def decidir_estrategia(programa, nivel=1, otimizar=True):
                           tuple(dict.fromkeys(motivos)), False)
 
     if tem_funcoes:
-        # Chamadas e retornos tipados passam pela IR, mantendo argumentos,
-        # quadros e salvamentos nativos. SSA de funções ainda não é emitida.
-        nivel_ir = min(nivel, 2) if otimizar else 0
+        # O3 propaga constantes por SSA; O4–O8 emitem os corpos alocados.
+        # Chamadas mantêm a convenção RS e os salvamentos nativos.
+        nivel_ir = min(nivel, 3) if otimizar else 0
+        if otimizar and nivel >= 4:
+            return Estrategia('ssa', nivel, nivel_ir, (), True)
         return Estrategia('intermediario', nivel, nivel_ir, (), otimizar and nivel > 0)
 
     listas_ou_textos = any(isinstance(t, tuple) and t[0] in ('lista', 'texto')

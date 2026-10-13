@@ -99,9 +99,13 @@ def construir_ir(programa, otimizar=True, nivel=1):
         return ir
     ir = converter_corpo(programa)
     if tem_funcoes:
-        return replace(ir, funcoes={nome: FuncaoIR(nome, funcao.parametros, funcao.retorno,
+        ir = replace(ir, funcoes={nome: FuncaoIR(nome, funcao.parametros, funcao.retorno,
             converter_corpo(funcao.programa), funcao.recursiva)
             for nome, funcao in programa.funcoes.items()})
+        if otimizar and nivel >= 3:
+            from .otimizacao_funcoes_ssa import otimizar_funcoes_com_ssa
+            ir = otimizar_funcoes_com_ssa(ir)
+        return ir
     if otimizar and nivel >= 2 and not any(isinstance(t, tuple) and t[0] in ('lista', 'texto') for t in programa.tipos.values()):
         from .propagacao import propagar_constantes_locais
         ir = propagar_constantes_locais(ir)
