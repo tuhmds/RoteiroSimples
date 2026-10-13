@@ -1,12 +1,13 @@
-"""Listas dinâmicas nativas da RS — propriedade única, sem empréstimos.
+"""Listas dinâmicas nativas da RS com propriedade única e empréstimos de leitura.
 
 Descritor por proprietário no quadro de execução:
 [rbp+base] ponteiro, [rbp+base-8] quantidade, [rbp+base-16] capacidade.
-Cada elemento ocupa um inteiro de 64 bits. Ao criar, a lista é vazia.
+A largura de cada elemento segue a disposição de seu tipo. A lista nasce vazia.
 A memória cresce geometricamente e é devolvida ao sistema operacional.
 """
 import struct
 from compilador.disposicao_tipos import palavras_tipo
+from . import valores_dinamicos
 from .desenrolamento_windows import (
     registrar_quadro_auxiliar, registrar_quadro_empilhado,
     emitir_prologo_auxiliar, emitir_epilogo_auxiliar,
@@ -28,26 +29,16 @@ def largura_elemento(g, tipo):
 
 
 def deslocamento(variaveis, nome, windows):
-    return -(16 + variaveis[nome]*8) if windows else -(8 + variaveis[nome]*8)
+    return valores_dinamicos.deslocamento_local(variaveis, nome, windows)
 
 
 def criar(g, variaveis, nome, windows):
-    base = deslocamento(variaveis, nome, windows)
-    g.bytes(b'\x31\xC0')
-    for pos in (base, base-8, base-16):
-        g.bytes(b'\x48\x89\x85' + struct.pack('<i', pos))
+    valores_dinamicos.criar_vazio(g, variaveis, nome, windows)
 
 
 def inicializar_inativas(g, variaveis, tipos, windows):
     """Marca descritores não alcançados como inativos na entrada."""
-    for nome, tipo in tipos.items():
-        if not eh_lista_dinamica(tipo):
-            continue
-        base = deslocamento(variaveis, nome, windows)
-        g.bytes(b'\x31\xC0')
-        g.bytes(b'\x48\x89\x85' + struct.pack('<i', base))
-        g.bytes(b'\x48\x89\x85' + struct.pack('<i', base - 16))
-        g.bytes(b'\x48\xC7\x85' + struct.pack('<i', base - 8) + b'\xFF\xFF\xFF\xFF')
+    valores_dinamicos.inicializar_inativos(g, variaveis, tipos, windows)
 
 
 def mover(g, variaveis, destino, origem, windows, largura=1):
@@ -61,14 +52,11 @@ def mover(g, variaveis, destino, origem, windows, largura=1):
 
 
 def endereco(g, variaveis, nome, windows):
-    g.bytes(b'\x48\x8D\xBD' + struct.pack('<i', deslocamento(variaveis, nome, windows)))
+    valores_dinamicos.endereco_descritor(g, variaveis, nome, windows)
 
 
 def verificar_viva(g, variaveis, nome, windows):
-    base = deslocamento(variaveis, nome, windows)
-    g.bytes(b'\x48\x8B\x85' + struct.pack('<i', base-8))
-    g.bytes(b'\x48\x85\xC0')
-    g.salto('erro_lista_liberada', 'js')
+    valores_dinamicos.verificar_vivo(g, variaveis, nome, windows)
 
 
 def emprestar(g, variaveis, nome, windows):
@@ -123,6 +111,12 @@ def escrever_indice(g, variaveis, nome, expressao_indice, valor, windows, emitir
     g.bytes(b'\x50')  # índice em pilha
     emitir_expressao(g, valor, variaveis, windows, pilha_extra=1)
     g.bytes(b'\x59')  # rcx=índice
+    # O valor pode consumir a própria lista em uma chamada. O índice já
+    # foi avaliado; conferir novamente a vida do dono sem repetir efeitos
+    # impede escrita através do ponteiro invalidado durante o valor.
+    g.bytes(b'\x50')  # conserva o valor enquanto a validação usa RAX
+    verificar_viva(g, variaveis, nome, windows)
+    g.bytes(b'\x58')
     base = deslocamento(variaveis, nome, windows)
     g.bytes(b'\x48\x8B\x95' + struct.pack('<i', base))
     g.bytes(b'\x48\x89\x04\xCA')  # mov [rdx+rcx*8],rax

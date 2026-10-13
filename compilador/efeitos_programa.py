@@ -37,8 +37,9 @@ _INDICES = frozenset((
     'indice', 'indice_bytes', 'indice_lista_dinamica',
     'indice_lista_emprestada',
 ))
-_CONTAGENS = frozenset((
-    'tamanho_texto', 'tamanho_bytes', 'quantidade_lista_dinamica',
+_CONTAGENS = frozenset(('tamanho_texto', 'tamanho_bytes'))
+_CONSULTAS_DINAMICAS = frozenset((
+    'quantidade_lista_dinamica',
     'quantidade_lista_emprestada', 'capacidade_lista_dinamica',
     'capacidade_lista_emprestada', 'empreste_lista_dinamica',
 ))
@@ -55,6 +56,11 @@ def efeito_expressao_arvore(no):
         return _ler(no[1])
     if operacao in _CONTAGENS:
         return _ler(no[1])
+    if operacao in _CONSULTAS_DINAMICAS:
+        # Mesmo tamanho/capacidade verificam o estado vivo do descritor.
+        return _ler(no[1]).combinar(_risco())
+    if operacao == 'mova_valor_dinamico':
+        return _propriedade('mover', no[1], falha=True)
     if operacao in _INDICES:
         return _ler(no[1]).combinar(
             efeito_expressao_arvore(no[2])).combinar(_risco())
@@ -130,8 +136,11 @@ def efeito_instrucao_arvore(no):
         return _propriedade('criar', no[1], falha=True)
     if operacao == 'mova_lista_dinamica':
         destino, origem = no[1:3]
-        return (_propriedade('receber', destino)
-                .combinar(_propriedade('mover', origem)))
+        return (_propriedade('receber', destino, falha=True)
+                .combinar(_propriedade('mover', origem, falha=True)))
+    if operacao == 'receba_valor_dinamico':
+        return (_propriedade('receber', no[1], falha=True)
+                .combinar(efeito_expressao_arvore(no[2])))
     if operacao == 'adicione_lista_dinamica':
         return (_propriedade('alterar', no[1], falha=True)
                 .combinar(efeito_expressao_arvore(no[2])))

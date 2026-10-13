@@ -5,6 +5,7 @@ O gerador conservador protege construções ainda não representadas pela IR.
 """
 from dataclasses import dataclass
 from .cobertura_intermediaria import analisar_cobertura, motivos_de_cobertura
+from .propriedade import eh_proprietario
 
 
 @dataclass(frozen=True)
@@ -44,8 +45,7 @@ def decidir_estrategia(programa, nivel=1, otimizar=True):
         motivos.append('escopos locais')
     if any(i[0] == 'copie_composto' for i in instrucoes):
         motivos.append('cópias compostas')
-    if any(isinstance(t, tuple) and t[0] == 'lista_dinamica'
-           for t in tipos.values()):
+    if any(eh_proprietario(t) for t in tipos.values()):
         motivos.append('listas dinâmicas')
     if any(isinstance(t, tuple) and t[0] == 'bytes' for t in tipos.values()): 
         motivos.append('buffers binários tipados')

@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.41.5
+# RoteiroSimples (RS) — versão experimental 0.42A.1
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,38 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.42A.1 — Funções que recebem e devolvem listas proprietárias
+
+Primeiro marco experimental da RS 0.42A: funções podem receber e retornar
+`lista[]` e `lista[T]` com transferência explícita de propriedade.
+`mova(origem)` passa o dono a uma função, retorno ou declaração nova;
+`mova(destino, origem)` continua disponível para destinos já existentes.
+O transporte usa somente as três palavras do descritor, sem copiar
+os elementos nem alocar outra coleção. Empréstimos continuam restritos
+à leitura durante chamadas síncronas.
+
+A biblioteca RS acrescenta cinco funções para consultar e selecionar
+listas de inteiros de comprimento variável. A
+[demonstração de cadastro numérico](exemplos/aplicacoes/cadastro_pessoas_rs042a.rts)
+cria registros, atualiza uma idade, calcula créditos em centavos, grava
+um arquivo novo e recupera os dados usando funções com propriedade explícita.
+
+O contrato comum distingue valores copiáveis, proprietários, empréstimos
+e recursos de arquivo. Ele acompanha os efeitos das transferências sem
+habilitar transformações SSA: esses programas usam o gerador conservador
+de `-O 0` a `-O 8`. A entrega inclui verificações de cópia implícita,
+consumo duplicado e empréstimo/consumo do mesmo dono numa chamada.
+
+**Escopo:** texto/bytes dinâmicos, donos aninhados, empréstimos mutáveis,
+funções genéricas gerais, novos operadores lógicos e números reais ficam
+para marcos seguintes. Esta entrega não conclui toda a RS 0.42A.
+A proteção de pilha inclui argumentos e temporários das chamadas. A
+[integração contínua](https://github.com/tuhmds/RoteiroSimples/actions/runs/38372044241)
+executou 487 testes por sistema, sem falhas: 12 ignorados no Windows e
+20 no Linux, conforme a plataforma.
+
+[Contrato, exemplos, migração e limites da RS 0.42A.1](docs/VALORES_DINAMICOS_RS_0_42A_1.md).
 
 ## RS 0.41.5 — Desenrolamento comprovado pelo Windows
 
@@ -785,11 +817,13 @@ inicio {
   Uma alteração dentro da função não altera o valor do chamador.
 - Funções podem chamar outras funções e chamar a si mesmas. Argumentos e
   retornos são tipados; os retornos ainda aceitam somente `inteiro` ou `logico`.
-- Na parte recursiva da execução, o compilador controla um orçamento acumulado
+- Na RS 0.24, na parte recursiva da execução, o compilador controlava um orçamento acumulado
   de pilha de **1 MiB** e encerra com diagnóstico e código 1 quando ele é excedido,
   antes de reservar o quadro recursivo seguinte. A sondagem de páginas para grandes
   quadros locais continua disponível. Esse limite de segurança não é um máximo
   geral de variáveis, listas, buffers ou tamanho de executável.
+  Desde a RS 0.42A.1, o orçamento de 768 KiB inclui o principal, todos os
+  quadros, argumentos e temporários, com verificação em todas as chamadas.
 - Nesta versão o gerador de código conservador executa funções e registros; as
   análises avançadas de atribuição única e otimização de memória ainda não são
   aplicadas a programas que usam esses novos recursos.
@@ -832,7 +866,7 @@ nenhum nível foi criado na RS 0.29. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes até a RS 0.39
+## Recursos presentes na RS 0.42A.1
 
 | Recurso | Situação |
 |---|---|
@@ -848,11 +882,15 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Registros aninhados, campos de listas e texto | Implementado na 0.26 |
 | Importação de módulos e resolução de dependências | Implementado na 0.27 |
 | Espaços de nomes com apelidos e visibilidade pública/privada | Implementado na 0.28 |
-| Biblioteca Padrão RS escrita em .rts, 30 funções em quatro módulos | Implementado na 0.29 |
+| Biblioteca Padrão RS escrita em .rts, incluindo listas e resultados tipados | Implementado desde 0.29; ampliado nas revisões seguintes |
 | Resultados tipados e operações matemáticas com erro explícito | Implementado na 0.30 |
 | resultado[T], sucesso[T], falha[T] e propague | Implementado na 0.31 |
 | `lista[]` e proprietário exclusivo com liberação automática | Implementado na 0.32 |
 | Transferência `mova`, limpeza por escopo, empréstimo imutável | Implementado na 0.33 |
+| Parâmetros/retornos de listas proprietárias e `mova(origem)` em expressão | Primeiro marco experimental na 0.42A.1 |
+| Consultas gerais e seleção de listas em RS | Acrescentadas na 0.42A.1 |
+| ABI e desenrolamento Windows com ensaios reais | Consolidado na 0.41.5; regressões mantidas |
+| Contrato comum de disposição, efeitos e propriedade | Consolidado nas revisões 0.40 e neste marco |
 | Listas dinâmicas tipadas para inteiros, lógicos e registros | Implementado na 0.33 |
 | Leitura e gravação de arquivos inteiros | Implementado na 0.34 |
 | Leitura e gravação binária por posição, com estado de erro recuperável | Implementado na 0.35 |
@@ -861,7 +899,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Publicação por renomeação, bloqueio não bloqueante e basename variável verificado | Implementado na 0.39 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
-| Tipos reais/decimais, textos dinâmicos, empréstimos mutáveis, FFI e durabilidade de arquivos | Ainda não |
+| Tipos reais/decimais, texto/bytes dinâmicos, donos aninhados, empréstimos mutáveis e FFI | Ainda não |
 
 ## Organização atual
 
@@ -869,6 +907,8 @@ que ainda não compreendem chamadas e identidades de valores compostos.
   e análises de fluxo.
 - `backend/`: emissão direta de instruções x86-64 e geração de PE/ELF.
 - `biblioteca_padrao/`: funções oficiais em módulos `.rts`, incluindo números, matemática, estatística, listas e resultados tipados.
+- `compilador/propriedade.py`: contrato de cópia, transferência, empréstimo e descarte dos valores.
+- `backend/valores_dinamicos.py`: operações comuns dos descritores proprietários.
 - `backend/listas_dinamicas.py`: gerador de alocação e liberação nativas das listas de propriedade exclusiva.
 - `bibliotecas/`: compatibilidade com antigas operações matemáticas internas.
 - `exemplos/`: programas `.rts`, inclusive a demonstração nova.
@@ -878,7 +918,17 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**RS 0.40 (planejamento):** endereçamento de diretórios confiáveis, testes de falhas de chamadas de sistema, controle de escritores concorrentes e formato binário versionado. A RS 0.39 introduziu publicação por renomeação e bloqueio cooperativo, mas continua sem transações, isolamento geral nem garantias absolutas de durabilidade. Para o Dados RS também faltam interfaces de bibliotecas externas e recuperação.
+**Continuidade da RS 0.42A:** revisar este primeiro marco já validado com execução
+nativa em Windows e Linux; depois compartilhar reserva e descarte com texto UTF-8
+dinâmico e bytes dinâmicos. Nomes de comprimento variável no cadastro dependem
+dessa etapa. Funções e coleções mais gerais, novos operadores lógicos e
+tipos reais/decimais pertencem aos marcos seguintes. A autocompilação continua
+um objetivo gradual, sem substituir a base funcional por anúncios de recursos.
+
+O Dados RS ainda precisa de formato binário versionado, recuperação,
+controle de concorrência e outras garantias de persistência. Publicação,
+bloqueio e sincronização existentes não fornecem transações nem durabilidade
+absoluta após queda de energia.
 
 O projeto ainda é experimental, não pronto para produção. Não estamos acrescentando níveis de otimização.
 

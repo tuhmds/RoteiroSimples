@@ -7,6 +7,7 @@ percorridos pelo desenrolador do sistema operacional.
 import struct
 
 from compilador.erros import ErroCompilacao
+from .convencao_funcoes import LIMITE_PILHA_SEGURA, custo_quadro
 
 
 _REGISTRADORES = {
@@ -188,17 +189,18 @@ def _validar_usuario(gerador, descricao, inicio, fim, fim_prologo):
     else:
         # O controle de profundidade só pode ler/alterar RAX e comparar.
         # Validar também esse trecho impede um PUSH não descrito no meio.
-        custo = quadro + 128
+        custo = custo_quadro(quadro)
         if custo > 0x7FFFFFFF:
             meio_valido = (len(meio) == 9 and meio[:4] == b'\x48\x8B\x45\x48'
                            and meio[4] == 0xE9)
         else:
-            meio_valido = (len(meio) in (16, 28)
+            meio_valido = (len(meio) == 28
                            and meio[:6] == b'\x48\x8B\x45\x48\x48\x05'
                            and struct.unpack_from('<I', meio, 6)[0] == custo
                            and meio[10:12] == b'\x0F\x80')
-            if meio_valido and len(meio) == 28:
-                meio_valido = (meio[16:22] == b'\x48\x3D\x00\x00\x10\x00'
+            if meio_valido:
+                meio_valido = (meio[16:18] == b'\x48\x3D'
+                               and struct.unpack_from('<I', meio, 18)[0] == LIMITE_PILHA_SEGURA
                                and meio[22:24] == b'\x0F\x87')
     if not meio_valido:
         raise ErroCompilacao('Controle de profundidade mudou dentro do prologo Windows.')

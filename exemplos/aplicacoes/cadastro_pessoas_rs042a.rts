@@ -1,0 +1,190 @@
+// Primeira aplicacao da RS 0.42A: cadastro numerico com propriedade unica.
+// Registros tem codigo, idade e credito inteiro em centavos.
+// Arquivo novo: cadastro.rsd; 24 bytes por registro, byte menos significativo primeiro.
+// Nomes de comprimento variavel dependem do proximo marco de texto dinamico.
+tipo Pessoa {
+    codigo: inteiro
+    idade: inteiro
+    credito_centavos: inteiro
+}
+
+funcao criar_cadastro() -> lista[Pessoa] {
+    seja cadastro: lista[Pessoa]
+    seja pessoa: Pessoa
+    pessoa.codigo = 1
+    pessoa.idade = 20
+    pessoa.credito_centavos = 1000
+    adicione(cadastro, pessoa)
+    pessoa.codigo = 2
+    pessoa.idade = 30
+    pessoa.credito_centavos = 1250
+    adicione(cadastro, pessoa)
+    pessoa.codigo = 3
+    pessoa.idade = 40
+    pessoa.credito_centavos = 1500
+    adicione(cadastro, pessoa)
+    retorne mova(cadastro)
+}
+
+funcao pesquisar(cadastro: emprestimo[lista[Pessoa]], codigo: inteiro) -> inteiro {
+    seja indice = 0
+    enquanto indice < tamanho(cadastro) {
+        seja pessoa: Pessoa = cadastro[indice]
+        se pessoa.codigo == codigo {
+            retorne indice
+        }
+        indice = indice + 1
+    }
+    retorne -1
+}
+
+funcao atualizar_idade(cadastro: lista[Pessoa], codigo: inteiro, idade: inteiro) -> lista[Pessoa] {
+    seja posicao = pesquisar(empreste(cadastro), codigo)
+    se posicao >= 0 {
+        seja pessoa: Pessoa = cadastro[posicao]
+        pessoa.idade = idade
+        cadastro[posicao] = pessoa
+    }
+    retorne mova(cadastro)
+}
+
+funcao total_credito(cadastro: emprestimo[lista[Pessoa]]) -> inteiro {
+    seja total = 0
+    seja indice = 0
+    enquanto indice < tamanho(cadastro) {
+        seja pessoa: Pessoa = cadastro[indice]
+        total = total + pessoa.credito_centavos
+        indice = indice + 1
+    }
+    retorne total
+}
+
+funcao gravar_cadastro(cadastro: emprestimo[lista[Pessoa]]) -> inteiro {
+    seja recurso: arquivo
+    seja estado = 0
+    abra_arquivo("cadastro.rsd", recurso, "novo", estado)
+    se estado != 0 {
+        retorne estado
+    }
+    seja indice = 0
+    enquanto indice < tamanho(cadastro) {
+        seja pessoa: Pessoa = cadastro[indice]
+        seja campos: lista[3]
+        campos[0] = pessoa.codigo
+        campos[1] = pessoa.idade
+        campos[2] = pessoa.credito_centavos
+        seja bloco: bytes[24]
+        para campo de 0 ate 2 {
+            seja restante = campos[campo]
+            para parte de 0 ate 7 {
+                adicione_byte(bloco, restante % 256)
+                restante = restante / 256
+            }
+        }
+        grave_em(recurso, bloco, indice * 24, estado)
+        se estado != 24 {
+            retorne -2
+        }
+        indice = indice + 1
+    }
+    feche_arquivo(recurso, estado)
+    retorne estado
+}
+
+funcao carregar_cadastro() -> lista[Pessoa] {
+    seja cadastro: lista[Pessoa]
+    seja recurso: arquivo
+    seja estado = 0
+    abra_arquivo("cadastro.rsd", recurso, "leitura", estado)
+    se estado != 0 {
+        escreva("Erro: nao foi possivel abrir o cadastro.")
+        encerre(2)
+    }
+    seja posicao = 0
+    seja terminou = falso
+    enquanto terminou == falso {
+        seja bloco: bytes[24]
+        carregue_de(recurso, bloco, posicao, 24, estado)
+        se estado == 0 {
+            terminou = verdadeiro
+        } senao {
+            se estado != 24 {
+                escreva("Erro: registro incompleto no cadastro.")
+                encerre(2)
+            }
+            seja campos: lista[3]
+            para campo de 0 ate 2 {
+                seja valor = 0
+                para parte de 7 ate 0 passo -1 {
+                    valor = valor * 256 + bloco[campo * 8 + parte]
+                }
+                campos[campo] = valor
+            }
+            seja pessoa: Pessoa
+            pessoa.codigo = campos[0]
+            pessoa.idade = campos[1]
+            pessoa.credito_centavos = campos[2]
+            se pessoa.codigo <= 0 {
+                escreva("Erro: codigo invalido no cadastro.")
+                encerre(2)
+            }
+            se pessoa.idade < 0 {
+                escreva("Erro: idade invalida no cadastro.")
+                encerre(2)
+            }
+            se pessoa.idade > 150 {
+                escreva("Erro: idade invalida no cadastro.")
+                encerre(2)
+            }
+            se pessoa.credito_centavos < 0 {
+                escreva("Erro: credito invalido no cadastro.")
+                encerre(2)
+            }
+            adicione(cadastro, pessoa)
+            posicao = posicao + 24
+        }
+    }
+    feche_arquivo(recurso, estado)
+    retorne mova(cadastro)
+}
+
+inicio {
+    seja cadastro = criar_cadastro()
+    seja codigo = 0
+    seja idade = 0
+    escreva("Codigo para atualizar:")
+    leia(codigo)
+    escreva("Nova idade:")
+    leia(idade)
+    se codigo <= 0 {
+        escreva("Erro: informe um codigo positivo.")
+        encerre(1)
+    }
+    se idade < 0 {
+        escreva("Erro: idade deve estar entre 0 e 150.")
+        encerre(1)
+    }
+    se idade > 150 {
+        escreva("Erro: idade deve estar entre 0 e 150.")
+        encerre(1)
+    }
+    se pesquisar(empreste(cadastro), codigo) < 0 {
+        escreva("Erro: pessoa nao encontrada.")
+        encerre(1)
+    }
+    seja atualizado = atualizar_idade(mova(cadastro), codigo, idade)
+    escreva("Credito total em centavos:")
+    escreva(total_credito(empreste(atualizado)))
+    seja estado = gravar_cadastro(empreste(atualizado))
+    se estado != 0 {
+        escreva("Erro: nao foi possivel criar o arquivo; o destino pode ja existir.")
+        encerre(2)
+    }
+    seja recuperado = carregar_cadastro()
+    escreva("Registros recuperados:")
+    escreva(tamanho(recuperado))
+    seja posicao = pesquisar(empreste(recuperado), codigo)
+    seja pessoa: Pessoa = recuperado[posicao]
+    escreva("Idade recuperada:")
+    escreva(pessoa.idade)
+}

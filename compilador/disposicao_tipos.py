@@ -3,6 +3,7 @@
 Quadros na pilha e elementos dinamicos no heap compartilham a MESMA
 representacao de tamanho, inclusive campos compostos e bytes[N].
 """
+from .propriedade import PALAVRAS_DESCRITOR, eh_proprietario, eh_emprestimo
 
 
 def palavras_tipo(tipo, registros):
@@ -21,9 +22,9 @@ def palavras_tipo(tipo, registros):
     categoria = tipo[0]
     if categoria == 'registro' and len(tipo) == 3:
         return sum(palavras_tipo(campo, registros) for _, campo in tipo[2])
-    if categoria == 'lista_dinamica' and len(tipo) == 2:
-        return 3  # ponteiro, quantidade, capacidade
-    if categoria == 'lista_emprestada' and len(tipo) == 2:
+    if eh_proprietario(tipo):
+        return PALAVRAS_DESCRITOR
+    if eh_emprestimo(tipo):
         return 1  # endereco do descritor de origem
     if categoria == 'lista' and len(tipo) == 3:
         return tipo[2]  # lista fixa de inteiros
