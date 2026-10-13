@@ -61,6 +61,8 @@ def efeito_expressao_arvore(no):
     if operacao in _CONSULTAS_DINAMICAS:
         # Mesmo tamanho/capacidade verificam o estado vivo do descritor.
         return _ler(no[1]).combinar(_risco())
+    if operacao == 'mova_registro_proprietario':
+        return _propriedade('mover_registro', no[1], falha=True)
     if operacao == 'mova_valor_dinamico':
         return _propriedade('mover', no[1], falha=True)
     if operacao in _INDICES or operacao == 'byte_texto':
@@ -151,6 +153,12 @@ def efeito_instrucao_arvore(no):
         destino, origem = no[1:3]
         return (_propriedade('receber', destino, falha=True)
                 .combinar(_propriedade('mover', origem, falha=True)))
+    if operacao == 'mova_registro_proprietario':
+        return (_propriedade('receber_registro', no[1], falha=True)
+                .combinar(_propriedade('mover_registro', no[2], falha=True)))
+    if operacao == 'receba_registro_proprietario':
+        return (_propriedade('receber_registro', no[1], falha=True)
+                .combinar(efeito_expressao_arvore(no[2])))
     if operacao == 'receba_valor_dinamico':
         return (_propriedade('receber', no[1], falha=True)
                 .combinar(efeito_expressao_arvore(no[2])))

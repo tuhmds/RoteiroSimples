@@ -8,6 +8,7 @@ from .semantica import ContextoSemantico
 from .validacao_caminhos import validar_literal_arquivo
 from .propriedade import (eh_proprietario, eh_emprestimo, eh_texto, contrato_valor,
                          TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO)
+from .propriedade import eh_registro_proprietario, eh_valor_proprietario, donos_do_agregado
 from .propriedade import eh_bytes, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
 
 def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _retorno=None, _registros=None):
@@ -144,8 +145,6 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if cabecalho[fim_par+1:fim_par+3] != ['-', '>'] or cabecalho[-1] != '{':
                 raise ErroCompilacao(f'Linha {n}: use funcao nome(parametros) -> tipo {{.')
             retorno = ler_tipo(cabecalho[fim_par+3:-1], n)
-            if isinstance(retorno, str) and retorno in registros and possui_dono_registro(retorno):
-                raise ErroCompilacao(f'Linha {n}: retorno de registro proprietario ainda exige ABI de transferencia; proibido para evitar copia do dono.')
             if eh_emprestimo(retorno):
                 raise ErroCompilacao(f'Linha {n}: emprestimo[lista] so pode aparecer em parametros; nao pode ser retornado.')
             partes = cabecalho[3:fim_par]
@@ -163,8 +162,6 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     if grupo[0] in (x[0] for x in parametros):
                         raise ErroCompilacao(f'Linha {n}: parâmetro duplicado: {grupo[0]}.')
                     tipo_parametro = ler_tipo(grupo[2:], n)
-                    if isinstance(tipo_parametro, str) and tipo_parametro in registros and possui_dono_registro(tipo_parametro):
-                        raise ErroCompilacao(f'Linha {n}: parametro com registro proprietario nao admite copia implicita; transferencia ainda nao implementada.')
                     parametros.append((str(grupo[0]), tipo_parametro))
             if nome in assinaturas or nome in registros:
                 raise ErroCompilacao(f'Linha {n}: função {nome!r} já foi declarada.')
@@ -294,9 +291,9 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 if len(t) == 1:
                     raise ErroCompilacao(f'Linha {n}: retorne exige um valor.')
                 valor, _ = expressao_tipada(t[1:], n, _retorno)
-                if eh_proprietario(_retorno) and valor[0] not in ('mova_valor_dinamico', 'chamada'):
+                if eh_valor_proprietario(_retorno, registros) and valor[0] not in ('mova_valor_dinamico', 'mova_registro_proprietario', 'chamada'):
                     raise ErroCompilacao(f'Linha {n}: retorno proprietario exige mova(origem) ou chamada de funcao; copiar dono unico nao e permitido.')
-                if not eh_proprietario(_retorno) and eh_composto(_retorno) and valor[0] not in ('var', 'chamada'):
+                if not eh_valor_proprietario(_retorno, registros) and eh_composto(_retorno) and valor[0] not in ('var', 'chamada'):
                     raise ErroCompilacao(f'Linha {n}: retorno composto exige variável ou função do mesmo tipo.')
                 adicionar(('retorne', valor), n, t)
                 i += 1
@@ -710,19 +707,17 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                         adicionar(('crie_registro', interno, tuple(contexto.campos_registro[interno].values())), n, t)
                         # Cada campo proprietario aponta para os slots do registro.
                         # O campo participa da liberacao do escopo, sem copiar dono.
-                        def registrar_donos(campos):
-                            for caminho in campos.values():
-                                if eh_proprietario(tipos[caminho]):
-                                    donos_locais.append(caminho)
-                                if caminho in contexto.campos_registro:
-                                    registrar_donos(contexto.campos_registro[caminho])
-                        registrar_donos(contexto.campos_registro[interno])
+                        donos_locais.extend(donos_do_agregado(interno, tipos, contexto.campos_registro))
                     elif len(t) >= 6 and t[4] == '=':
-                        if possui_dono_registro(tipo_nome):
-                            raise ErroCompilacao(
-                                f'Linha {n}: registro com dono dinamico nao pode ser copiado; '
-                                'declare vazio e use mova() nos campos.')
                         arvore, _ = expressao_tipada(t[5:], n, tipo_nome)
+                        if possui_dono_registro(tipo_nome):
+                            if arvore[0] not in ('mova_registro_proprietario', 'chamada'):
+                                raise ErroCompilacao(f'Linha {n}: registro com dono exige mova(origem) ou retorno proprietario.')
+                            adicionar(('crie_registro', interno, tuple(contexto.campos_registro[interno].values())), n, t)
+                            donos_locais.extend(donos_do_agregado(interno, tipos, contexto.campos_registro))
+                            adicionar(('receba_registro_proprietario', interno, arvore), n, t)
+                            i += 1
+                            continue
                         if arvore[0] not in ('var', 'chamada', 'indice_lista_dinamica', 'indice_lista_emprestada'):
                             raise ErroCompilacao(f'Linha {n}: registro precisa de origem composta.')
                         adicionar(('copie_composto', interno, arvore), n, t)
@@ -798,6 +793,15 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f"Linha {n}: use 'seja nome = valor' ou 'seja nome: inteiro = valor'.")
                 if inferido == 'arquivo':
                     raise ErroCompilacao(f'Linha {n}: recursos arquivo nao podem ser copiados; declare seja nome: arquivo.')
+                if eh_registro_proprietario(inferido, registros):
+                    if arvore[0] not in ('mova_registro_proprietario', 'chamada'):
+                        raise ErroCompilacao(f'Linha {n}: registro com dono nao admite copia implicita.')
+                    interno = registrar(str(nome), ('registro', inferido, registros[inferido]), n)
+                    donos_locais.extend(donos_do_agregado(interno, tipos, contexto.campos_registro))
+                    adicionar(('crie_registro', interno, tuple(contexto.campos_registro[interno].values())), n, t)
+                    adicionar(('receba_registro_proprietario', interno, arvore), n, t)
+                    i += 1
+                    continue
                 if eh_proprietario(inferido):
                     if arvore[0] not in ('mova_valor_dinamico', 'chamada'):
                         raise ErroCompilacao(f'Linha {n}: lista[] tem dono unico; copiar ou inferir propriedade nao e permitido.')

@@ -5,7 +5,8 @@ from .lexico import Token
 from .ast import NoExpressao
 from .tipos import MAX_VARIAVEIS, tipo_expressao
 from .disposicao_tipos import palavras_tipo
-from .propriedade import eh_proprietario, contrato_valor, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO
+from .propriedade import (contrato_valor, eh_valor_proprietario,
+                         TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO)
 
 
 class ContextoSemantico:
@@ -19,6 +20,7 @@ class ContextoSemantico:
         self.escopos = [{}]
         self.total_slots = 0
         self.contador = 0
+        self.contador_campos = 0
         self.usou_locais = False
 
     def entrar_escopo(self):
@@ -60,7 +62,10 @@ class ContextoSemantico:
         campos = {}
         deslocamento = 0
         for campo, tipo_campo in tipo[2]:
-            nome = f'__rs_campo_{self.contador}_{inicio}_{deslocamento}_{campo}'
+            # Pai e primeiro filho podem ter mesmo nome e mesmo endereço.
+            # Cada caminho precisa de um alias próprio, mesmo nesses casos.
+            self.contador_campos += 1
+            nome = f'__rs_campo_{self.contador_campos}_{campo}'
             tipo_real = (('registro', tipo_campo, self.registros[tipo_campo])
                          if isinstance(tipo_campo, str) and tipo_campo in self.registros
                          else tipo_campo)
@@ -109,10 +114,10 @@ class ContextoSemantico:
                         ((isinstance(tipo_parametro, str) and tipo_parametro in self.registros) or
                          isinstance(tipo_parametro, tuple))):
                     capacidades = contrato_valor(tipo_parametro, self.registros)
-                    if not capacidades.pode_copiar and not eh_proprietario(tipo_parametro):
+                    if not capacidades.pode_copiar and not eh_valor_proprietario(tipo_parametro, self.registros):
                         raise ErroCompilacao('Emprestimos e recursos nao podem ser armazenados em temporario composto.')
-                    # Chamadas proprietárias usam os mesmos slots, mas o
-                    # backend consome e inativa o descritor em vez de copiá-lo.
+                    # Reservar o tipo completo, incluindo os aliases das
+                    # folhas que serão consumidas e inativadas pelo chamado.
                     nome_temp = f'__rs_temporario_composto_{self.contador + 1}'
                     self.contador += 1
                     tamanho = capacidades.palavras
@@ -123,6 +128,8 @@ class ContextoSemantico:
                                  else tipo_parametro)
                     self.variaveis[nome_temp] = self.total_slots
                     self.tipos[nome_temp] = tipo_real
+                    if isinstance(tipo_real, tuple) and tipo_real[0] == 'registro':
+                        self._criar_campos(nome_temp, tipo_real, self.total_slots)
                     self.total_slots += tamanho
                     novos.append(NoExpressao(('temporario_composto', nome_temp, argumento),
                                               getattr(argumento, 'origem', None)))
@@ -157,8 +164,10 @@ class ContextoSemantico:
             analisador = Expressao(self._renomear_tokens(partes), linha, self.variaveis, self.importa_matematica)
             analisador.tipos = self.tipos
             analisador.funcoes = self.funcoes
+            analisador.registros = self.registros
             arvore = analisador.analisar()
-            tipo = tipo_expressao(arvore, self.tipos, linha, self.funcoes)
+            tipo = tipo_expressao(arvore, self.tipos, linha, self.funcoes,
+                                 self.registros, self.campos_registro)
             arvore = self._preparar_argumentos_compostos(arvore)
             if exigir is not None and tipo != exigir:
                 raise ErroCompilacao(f'Linha {linha}: tipo incompatível: esperava {exigir}, recebeu {tipo}.')

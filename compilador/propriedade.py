@@ -1,8 +1,10 @@
-"""Contrato compartilhado de armazenamento e propriedade da RS 0.42A.
+"""Contrato compartilhado de armazenamento e propriedade da RS 0.42F.
 
 A propriedade dinâmica pertence às listas tipadas, texto UTF-8 e bytes.
 Texto e bytes de tamanho fixo continuam valores copiáveis. Empréstimos são
 referências temporárias de parâmetros, nunca proprietários do armazenamento.
+Registros com folhas proprietárias conservam sua disposição completa e
+transferem todos os donos internos, sem assumir a largura de um descritor.
 """
 from dataclasses import dataclass
 
@@ -28,6 +30,33 @@ def eh_emprestimo(tipo):
     """Identifica a referência temporária de leitura de um descritor."""
     return (isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] == 'lista_emprestada'
             or tipo in (TIPO_TEXTO_EMPRESTADO, TIPO_BYTES_EMPRESTADOS))
+
+
+def eh_registro_proprietario(tipo, registros):
+    """Agregado com folhas donas; não é um descritor de três palavras."""
+    campos = (registros.get(tipo, ()) if isinstance(tipo, str)
+              else tipo[2] if isinstance(tipo, tuple) and len(tipo) == 3
+              and tipo[0] == 'registro' else ())
+    return any(eh_proprietario(campo) or eh_registro_proprietario(campo, registros)
+               for _, campo in campos)
+
+
+def eh_valor_proprietario(tipo, registros):
+    """Valores transferíveis: descritores ou agregados com donos internos."""
+    return eh_proprietario(tipo) or eh_registro_proprietario(tipo, registros)
+
+
+def donos_do_agregado(nome, tipos, campos):
+    """Resolve folhas proprietárias pelos aliases compartilhados do registro."""
+    donos = []
+    def visitar(atual):
+        for filho in campos.get(atual, {}).values():
+            if eh_proprietario(tipos[filho]):
+                donos.append(filho)
+            elif filho in campos:
+                visitar(filho)
+    visitar(nome)
+    return tuple(donos)
 
 
 def eh_texto(tipo):
@@ -99,4 +128,6 @@ def contrato_valor(tipo, registros=None):
         campo = contrato_valor(tipo_campo, registros)
         pode_copiar = pode_copiar and campo.pode_copiar
         precisa_descartar = precisa_descartar or campo.precisa_descartar
+    if eh_registro_proprietario(tipo, registros):
+        classe = 'agregado_proprietario'
     return ContratoValor(classe, pode_copiar, precisa_descartar, palavras)

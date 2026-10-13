@@ -62,12 +62,17 @@ class TestesRegistroProprietarioRS042D(unittest.TestCase):
             CABECALHO + """funcao usar(x: Documento) -> inteiro {
   retorne 1
 }
-inicio { escreva(1) }""",
+inicio {
+  seja documento: Documento
+  escreva(usar(documento))
+}""",
             CABECALHO + """funcao devolver() -> Documento {
   seja documento: Documento
   retorne documento
 }
-inicio { escreva(1) }""",
+inicio {
+  escreva(1)
+}""",
             CABECALHO + """inicio {
   seja origem: Documento
   seja destino: Documento

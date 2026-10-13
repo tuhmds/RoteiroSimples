@@ -4,6 +4,7 @@ from .erros import ErroCompilacao
 from .ast import NoExpressao
 from .propriedade import eh_proprietario, eh_texto, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO
 from .propriedade import eh_bytes, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
+from .propriedade import eh_registro_proprietario
 
 class Expressao:
     def __init__(self, tokens, linha, variaveis, importa):
@@ -75,6 +76,8 @@ class Expressao:
                 self.consumir('(')
                 nome = self.consumir()
                 self.consumir(')')
+                if eh_registro_proprietario(getattr(self, 'tipos', {}).get(nome), getattr(self, 'registros', {})):
+                    return NoExpressao(('mova_registro_proprietario', str(nome)), getattr(token, 'origem', None))
                 if not eh_proprietario(getattr(self, 'tipos', {}).get(nome)):
                     raise ErroCompilacao(f'Linha {self.linha}: mova(origem) exige valor dinamico proprietario com dono unico.')
                 return NoExpressao(('mova_valor_dinamico', str(nome)), getattr(token, 'origem', None))

@@ -1,0 +1,40 @@
+tipo Dados {
+    conteudo: bytes
+    numeros: lista[inteiro]
+}
+tipo Documento {
+    codigo: inteiro
+    titulo: texto
+    dados: Dados
+}
+
+funcao criar(codigo: inteiro) -> Documento {
+    seja documento: Documento
+    documento.codigo = codigo
+    copie(documento.titulo, "Relatório RS")
+    adicione_byte(documento.dados.conteudo, 65)
+    adicione(documento.dados.numeros, codigo)
+    retorne mova(documento)
+}
+
+funcao acrescentar(documento: Documento, valor: inteiro) -> Documento {
+    adicione(documento.dados.numeros, valor)
+    retorne mova(documento)
+}
+
+funcao encaminhar(documento: Documento) -> Documento {
+    retorne acrescentar(mova(documento), 42)
+}
+
+funcao consultar(documento: Documento) -> inteiro {
+    escreva(documento.titulo)
+    escreva(documento.dados.conteudo[0])
+    retorne documento.codigo + documento.dados.numeros[1]
+}
+
+inicio {
+    seja origem: Documento = criar(10)
+    seja destino = encaminhar(mova(origem))
+    escreva(consultar(mova(destino)))
+    escreva(consultar(encaminhar(criar(20))))
+}
