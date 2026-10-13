@@ -49,25 +49,63 @@ funcao espaco(valor: inteiro) -> logico {
 }
 
 funcao simbolo(valor: inteiro) -> logico {
-    se valor == 40 { retorne verdadeiro }
-    se valor == 41 { retorne verdadeiro }
-    se valor == 43 { retorne verdadeiro }
-    se valor == 45 { retorne verdadeiro }
-    se valor == 42 { retorne verdadeiro }
-    se valor == 47 { retorne verdadeiro }
-    se valor == 37 { retorne verdadeiro }
-    se valor == 61 { retorne verdadeiro }
-    se valor == 44 { retorne verdadeiro }
-    se valor == 59 { retorne verdadeiro }
-    se valor == 123 { retorne verdadeiro }
-    se valor == 125 { retorne verdadeiro }
-    se valor == 60 { retorne verdadeiro }
-    se valor == 62 { retorne verdadeiro }
-    se valor == 33 { retorne verdadeiro }
-    se valor == 58 { retorne verdadeiro }
-    se valor == 91 { retorne verdadeiro }
-    se valor == 93 { retorne verdadeiro }
-    se valor == 46 { retorne verdadeiro }
+    se valor == 40 {
+        retorne verdadeiro
+    }
+    se valor == 41 {
+        retorne verdadeiro
+    }
+    se valor == 43 {
+        retorne verdadeiro
+    }
+    se valor == 45 {
+        retorne verdadeiro
+    }
+    se valor == 42 {
+        retorne verdadeiro
+    }
+    se valor == 47 {
+        retorne verdadeiro
+    }
+    se valor == 37 {
+        retorne verdadeiro
+    }
+    se valor == 61 {
+        retorne verdadeiro
+    }
+    se valor == 44 {
+        retorne verdadeiro
+    }
+    se valor == 59 {
+        retorne verdadeiro
+    }
+    se valor == 123 {
+        retorne verdadeiro
+    }
+    se valor == 125 {
+        retorne verdadeiro
+    }
+    se valor == 60 {
+        retorne verdadeiro
+    }
+    se valor == 62 {
+        retorne verdadeiro
+    }
+    se valor == 33 {
+        retorne verdadeiro
+    }
+    se valor == 58 {
+        retorne verdadeiro
+    }
+    se valor == 91 {
+        retorne verdadeiro
+    }
+    se valor == 93 {
+        retorne verdadeiro
+    }
+    se valor == 46 {
+        retorne verdadeiro
+    }
     retorne falso
 }
 
@@ -221,9 +259,9 @@ funcao analisar(fonte: emprestimo[bytes]) -> lista[UnidadeLexica] {
             }
             // A coluna usa pontos de codigo Unicode, nao bytes UTF-8.
             // Bytes de continuacao (0x80..0xBF) nao aumentam a coluna.
-            seja passo = inicio_byte
-            enquanto passo < indice {
-                seja atual = fonte[passo]
+            seja posicao_coluna = inicio_byte
+            enquanto posicao_coluna < indice {
+                seja atual = fonte[posicao_coluna]
                 se atual < 128 {
                     coluna = coluna + 1
                 } senao {
@@ -231,7 +269,7 @@ funcao analisar(fonte: emprestimo[bytes]) -> lista[UnidadeLexica] {
                         coluna = coluna + 1
                     }
                 }
-                passo = passo + 1
+                posicao_coluna = posicao_coluna + 1
             }
             seja unidade: UnidadeLexica
             unidade.classe = classe
