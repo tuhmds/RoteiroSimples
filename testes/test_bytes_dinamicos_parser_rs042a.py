@@ -97,6 +97,13 @@ class TestesBytesDinamicosParserRS042A(unittest.TestCase):
                         'escreva(dados[falso])', 'adicione_byte(dados, falso)'):
             self.rejeitar('inicio {\n seja dados: bytes\n' + comando + '\n}')
 
+    def test_leia_de_indice_binario_rejeita_com_diagnostico_da_linguagem(self):
+        for tipo in ('bytes', 'bytes[4]'):
+            self.rejeitar('inicio {\n seja dados: ' + tipo + '\n leia(dados[0])\n}',
+                          'leia nao admite indices de bytes')
+        self.rejeitar('tipo Registro {\n dados: bytes[4]\n}\ninicio {\n seja item: Registro\n leia(item.dados[0])\n}',
+                      'leia nao admite indices de bytes')
+
     def test_operacoes_binarias_preservam_barreiras_de_memoria_e_arquivos(self):
         e = efeito_instrucao_arvore(('modifique_bytes', 'junte', 'destino', ('buffer', 'origem', None)))
         self.assertEqual(e.leituras, frozenset(('destino', 'origem')))

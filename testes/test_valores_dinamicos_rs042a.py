@@ -43,6 +43,19 @@ def rodar(imagem, entrada=None, antes=None):
         return resultado, arquivos
 
 class TestesValoresDinamicosRS042A(unittest.TestCase):
+    def test_funcoes_com_somente_emprestimos_emitem_diagnosticos_referenciados(self):
+        for tipo, consulta in (('lista', 'dados[0] + tamanho(dados) + capacidade(dados)'),
+                               ('lista[logico]', 'tamanho(dados) + capacidade(dados)'),
+                               ('texto', 'byte_em(dados, 0) + caracteres(dados)'),
+                               ('bytes', 'dados[0] + tamanho(dados) + capacidade(dados)')):
+            fonte = 'funcao consultar(dados: emprestimo[' + tipo + ']) -> inteiro {\n retorne ' + consulta + '\n}\ninicio {\n escreva(1)\n}'
+            p = analisar_programa(fonte)
+            for nivel in (0, 8):
+                for alvo in ('windows', 'linux'):
+                    self.assertTrue(compilar(p, alvo, nivel=nivel, otimizar=nivel > 0))
+                r, _ = rodar(compilar(p, alvo_nativo(), nivel=nivel, otimizar=nivel > 0))
+                self.assertEqual((r.returncode, r.stdout), (0, '1\n'), r.stderr)
+
     def verificar(self, fonte, esperado, entrada=None, niveis=NIVEIS):
         programa = analisar_programa(fonte)
         for nivel in niveis:
