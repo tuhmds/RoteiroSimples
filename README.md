@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.42A.1
+# RoteiroSimples (RS) — versão experimental 0.42A.2
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,31 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.42A.2 — Texto UTF-8 dinâmico
+
+`seja nome: texto` cria um texto que cresce sem capacidade fixa declarada.
+Leitura, `copie`, `junte`, `limpe`, impressão e persistência nativa operam
+nesse armazenamento; `texto[N]` continua disponível. Funções recebem e
+devolvem textos por `mova`, com empréstimos de leitura `emprestimo[texto]`.
+
+`tamanho` e `capacidade` são bytes. `caracteres` conta valores escalares
+Unicode; `byte_em` consulta um byte com limite verificado. Igualdade entre
+variáveis usa o conteúdo UTF-8, sem normalização ou comparação de ponteiros.
+Conteúdo externo inválido é rejeitado, sem truncamento para caber no texto.
+
+A memória usa as mesmas rotinas de reserva, crescimento e descarte das
+listas, com passo de um byte. A biblioteca em RS ganha `padrao/textos.rts`;
+a [aplicação de documento UTF-8](exemplos/aplicacoes/documento_utf8_rs042a.rts)
+recebe um nome de comprimento variável, constrói, transfere, grava e
+recupera o documento. Os executáveis continuam independentes de Python.
+
+Windows local: suíte de 525 testes aprovada, mais a verificação adicional
+de largura de registros aprovada separadamente. A CI dos dois sistemas
+será registrada na [nota técnica](docs/TEXTO_DINAMICO_RS_0_42A_2.md).
+Bytes dinâmicos, donos em registros/listas e empréstimos mutáveis ficam
+para os próximos marcos. Esta entrega continua dependente do primeiro
+marco de propriedade 0.42A.1 e não representa publicação na main.
 
 ## RS 0.42A.1 — Funções que recebem e devolvem listas proprietárias
 
@@ -866,7 +891,7 @@ nenhum nível foi criado na RS 0.29. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes na RS 0.42A.1
+## Recursos presentes na RS 0.42A.2
 
 | Recurso | Situação |
 |---|---|
@@ -888,6 +913,8 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | `lista[]` e proprietário exclusivo com liberação automática | Implementado na 0.32 |
 | Transferência `mova`, limpeza por escopo, empréstimo imutável | Implementado na 0.33 |
 | Parâmetros/retornos de listas proprietárias e `mova(origem)` em expressão | Primeiro marco experimental na 0.42A.1 |
+| Texto UTF-8 dinâmico, funções proprietárias e empréstimos de leitura | Implementado na 0.42A.2 |
+| Contagem Unicode, igualdade de conteúdo e consulta explícita de bytes | Implementado na 0.42A.2 |
 | Consultas gerais e seleção de listas em RS | Acrescentadas na 0.42A.1 |
 | ABI e desenrolamento Windows com ensaios reais | Consolidado na 0.41.5; regressões mantidas |
 | Contrato comum de disposição, efeitos e propriedade | Consolidado nas revisões 0.40 e neste marco |
@@ -899,7 +926,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Publicação por renomeação, bloqueio não bloqueante e basename variável verificado | Implementado na 0.39 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
-| Tipos reais/decimais, texto/bytes dinâmicos, donos aninhados, empréstimos mutáveis e FFI | Ainda não |
+| Tipos reais/decimais, bytes dinâmicos, donos aninhados, empréstimos mutáveis e FFI | Ainda não |
 
 ## Organização atual
 
@@ -909,6 +936,8 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 - `biblioteca_padrao/`: funções oficiais em módulos `.rts`, incluindo números, matemática, estatística, listas e resultados tipados.
 - `compilador/propriedade.py`: contrato de cópia, transferência, empréstimo e descarte dos valores.
 - `backend/valores_dinamicos.py`: operações comuns dos descritores proprietários.
+- `backend/memoria_dinamica.py`: reserva, realocação, movimentação e liberação compartilhadas.
+- `backend/textos_dinamicos.py`: vistas UTF-8, validação, leitura e operações sobre texto crescente.
 - `backend/listas_dinamicas.py`: gerador de alocação e liberação nativas das listas de propriedade exclusiva.
 - `bibliotecas/`: compatibilidade com antigas operações matemáticas internas.
 - `exemplos/`: programas `.rts`, inclusive a demonstração nova.
@@ -918,10 +947,10 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**Continuidade da RS 0.42A:** revisar este primeiro marco já validado com execução
-nativa em Windows e Linux; depois compartilhar reserva e descarte com texto UTF-8
-dinâmico e bytes dinâmicos. Nomes de comprimento variável no cadastro dependem
-dessa etapa. Funções e coleções mais gerais, novos operadores lógicos e
+**Continuidade da RS 0.42A:** revisar os marcos de propriedade e texto UTF-8,
+depois aplicar a memória compartilhada aos bytes dinâmicos. Nomes variáveis
+já podem ser recebidos e gravados; armazená-los dentro de registros e listas
+depende da propriedade de elementos aninhados. Funções e coleções mais gerais, novos operadores lógicos e
 tipos reais/decimais pertencem aos marcos seguintes. A autocompilação continua
 um objetivo gradual, sem substituir a base funcional por anúncios de recursos.
 
