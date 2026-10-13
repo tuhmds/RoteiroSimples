@@ -35,6 +35,19 @@ Testar em Windows e Linux:
     python -m unittest testes.test_dados_rs_prova_binaria -v
     python -m unittest discover -s testes -v
 
+
+## Biblioteca de codificacao binaria reutilizavel
+
+Em **biblioteca_padrao/codificacao_binaria.rts**, o codigo RS define resultados copiaveis com estado de validade e codigo de erro. As funcoes publicas codificar_u32, codificar_u64_positivo, ler_u32 e ler_u64_positivo permitem compartilhar o mesmo algoritmo com o compilador, o Dados RS e outras aplicacoes.
+
+- Codificacao de inteiros nao negativos de 32 bits e 64 bits assinados positivos, sempre little-endian; bytes de saida em buffers fixos de 4 e 8 bytes.
+- Leitura com offsets verificados antes do acesso. Nao ocorre encerramento do processo em erros de tamanho, sinal ou deslocamento.
+- Valores negativos na codificacao, numeros fora de u32 e byte alto >=128 em u64 positivo geram resultados invalidos; o estado de erro deve ser verificado pelo chamador.
+- O limite atual de u64 e 9223372036854775807, porque inteiro da RS usa 64 bits com sinal. Nao alegar suporte a todo o intervalo sem sinal de u64.
+- Nao existe conversao implicita de texto em bytes.
+
+Os dois executaveis da prova agora importam esse modulo e nao possuem loops duplicados para codificar ou ler inteiros. A aplicacao prova_codificacao_recuperavel.rts e seu teste executam os extremos e erros em -O0 e -O8, em Windows e Linux. A serializacao RSD v1 permanece apenas demonstrativa e nao transacional.
+
 ## Limites e expansao
 
 - O arquivo e uma demonstracao de serializacao, nao um formato definitivo; versoes futuras ainda nao estao congeladas.
