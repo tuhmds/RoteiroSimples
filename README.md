@@ -1,5 +1,9 @@
 # RoteiroSimples (RS) — versão experimental 0.42A.3
 
+## RS 0.42C — Biblioteca lexico em RS (PR #5)
+
+O analisador lexico escrito na propria RS pode ser importado com `importe "padrao/lexico.rts" como lexico`. Recebe bytes por emprestimo, devolve `lista[UnidadeLexica]` com offsets na fonte original e diagnosticos recuperaveis (classes -1 e -2), sem encerrar o processo. A ferramenta de exemplo usa o modulo; o Studio podera fazer o mesmo. A revisao corrigiu tambem tipos de registros importados dentro de `lista[Tipo]` no resolvedor de nomes. Testes diferenciais com o lexico Python e um processo que examina codigo invalido e valido verificam o comportamento em Windows/Linux. Dependente da RS 0.42A.3, ainda em revisao: [PR #5](https://github.com/tuhmds/RoteiroSimples/pull/5). Consulte `docs/LEXICO_NATIVO_RS_0_42C.md`.
+
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
 (ELF64), sem etapa intermediária obrigatória em C, LLVM ou montador externo. Os
