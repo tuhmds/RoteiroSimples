@@ -20,6 +20,12 @@ def palavras_tipo(tipo, registros):
         raise ValueError(f'Tipo de memoria invalido: {tipo!r}.')
 
     categoria = tipo[0]
+    if categoria == 'reserva_vista':
+        return tipo[1]
+    if categoria == 'registro_emprestado':
+        from .emprestimos_registros import campos_emprestados
+        campos = tipo[2] if len(tipo) == 3 else campos_emprestados(tipo[1], registros)
+        return sum(palavras_tipo(campo, registros) for _, campo in campos)
     if categoria == 'registro' and len(tipo) == 3:
         return sum(palavras_tipo(campo, registros) for _, campo in tipo[2])
     if eh_proprietario(tipo):

@@ -152,7 +152,8 @@ Prioridades que deverão ser implementadas e validadas na linguagem/núcleo:
 5. Texto dinâmico (0.42A.2), campos proprietários (0.42D) e transporte de
    registros em funções (0.42F) e resultados com conteúdo proprietário
    (0.42G); coleções de registros proprietários chegaram na 0.42H.
-   Leitura de campos por empréstimo ainda exige contrato próprio.
+   Leitura de campos por empréstimo de chamada chegou na
+   [0.42I](EMPRESTIMOS_REGISTROS_RS_0_42I.md), com busca de documentos em RS.
 6. Interface de funções externas (ABI C) para drivers existentes.
 7. Rede, TLS e gerenciamento de credenciais para modo servidor e clientes
    remotos, quando necessário.

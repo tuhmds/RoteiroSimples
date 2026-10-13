@@ -94,8 +94,9 @@ atribuição por valor, com o comportamento histórico das listas tipadas.
 
 `emprestimo[lista[Registro]]` permite consultar tamanho/capacidade; não permite
 copiar um elemento proprietário, retirar, inserir ou substituir elementos.
-Ainda falta empréstimo de leitura de um registro dentro da coleção e acesso
-direto a seus campos. Não há referência persistente para posições do heap.
+O empréstimo de leitura de registros dentro da coleção foi acrescentado na
+[RS 0.42I](EMPRESTIMOS_REGISTROS_RS_0_42I.md). Na 0.42H, exigia retirar o
+registro; a sintaxe direta de campos e referências persistentes permanece pendente.
 Na mesma árvore de chamada, `retire` não pode compartilhar sua lista com um
 movimento ou empréstimo explícito dessa lista. Para retirar a última posição,
 `retire(colecao, tamanho(colecao) - 1)` é permitido.

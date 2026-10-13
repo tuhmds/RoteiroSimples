@@ -1,5 +1,5 @@
 // Documento com donos variaveis e validacao recuperavel inteiramente em RS.
-// As funcoes consomem seus parametros, inclusive quando devolvem uma falha.
+// Criacao e alteracao consomem os donos, inclusive quando devolvem uma falha.
 publico tipo Documento {
     titulo: texto
     conteudo: bytes
@@ -46,4 +46,35 @@ publico funcao alterar_titulo(documento: Documento, titulo: texto, limite: intei
     propague nome
     mova(documento.titulo, nome.valor)
     retorne sucesso[Documento](mova(documento))
+}
+
+// Consultas compartilham o conteudo durante a chamada e conservam os donos.
+publico funcao titulo_igual(documento: emprestimo[Documento], titulo: emprestimo[texto]) -> logico {
+    retorne documento.titulo == titulo
+}
+
+publico funcao tamanho_conteudo(documento: emprestimo[Documento]) -> inteiro {
+    retorne tamanho(documento.conteudo)
+}
+
+// Devolve a primeira posicao com titulo identico em UTF-8, ou -1.
+publico funcao localizar_titulo(documentos: emprestimo[lista[Documento]], titulo: emprestimo[texto]) -> inteiro {
+    seja indice = 0
+    enquanto indice < tamanho(documentos) {
+        se titulo_igual(empreste(documentos[indice]), titulo) {
+            retorne indice
+        }
+        indice = indice + 1
+    }
+    retorne -1
+}
+
+publico funcao somar_conteudos(documentos: emprestimo[lista[Documento]]) -> inteiro {
+    seja total = 0
+    seja indice = 0
+    enquanto indice < tamanho(documentos) {
+        total = total + tamanho_conteudo(empreste(documentos[indice]))
+        indice = indice + 1
+    }
+    retorne total
 }
