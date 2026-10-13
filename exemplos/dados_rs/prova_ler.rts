@@ -1,20 +1,8 @@
-// Prova inicial de leitura do formato binario Dados RS.
-// Um segundo executavel valida os dados gravados por prova_gravar.rts.
-// Nenhuma promessa de transacoes, catalogo ou acesso concorrente.
-funcao ler_nao_negativo(dados: emprestimo[bytes], posicao_inicial: inteiro) -> inteiro {
-    // Evita overflow em um campo serializado com bit de sinal definido.
-    se dados[posicao_inicial + 7] >= 128 {
-        retorne -1
-    }
-    seja numero = 0
-    para parte de 7 ate 0 passo -1 {
-        numero = numero * 256 + dados[posicao_inicial + parte]
-    }
-    retorne numero
-}
+// A segunda prova valida um RSD em outro processo por biblioteca RS compartilhada.
+importe "padrao/codificacao_binaria.rts" como binario
 
 funcao validar(dados: emprestimo[bytes]) -> inteiro {
-    // Primeiro validamos TODO o comprimento, antes de qualquer indice.
+    // Todos os offsets seguintes sao seguros apos conferir o tamanho exato.
     se tamanho(dados) != 1616 {
         retorne -1
     }
@@ -30,33 +18,38 @@ funcao validar(dados: emprestimo[bytes]) -> inteiro {
     se dados[3] != 66 {
         retorne -2
     }
-    se dados[4] != 1 {
+    seja versao = binario.ler_u32(dados, 4)
+    se versao.valido == falso {
         retorne -3
     }
-    se dados[5] != 0 {
+    se versao.valor != 1 {
         retorne -3
     }
-    se dados[6] != 0 {
-        retorne -3
+    seja quantidade = binario.ler_u64_positivo(dados, 8)
+    se quantidade.valido == falso {
+        retorne -4
     }
-    se dados[7] != 0 {
-        retorne -3
-    }
-    se ler_nao_negativo(dados, 8) != 100 {
+    se quantidade.valor != 100 {
         retorne -4
     }
     seja total = 0
     para indice de 0 ate 99 {
         seja posicao = 16 + indice * 16
-        seja codigo = ler_nao_negativo(dados, posicao)
-        seja valor = ler_nao_negativo(dados, posicao + 8)
-        se codigo != indice + 1 {
+        seja codigo = binario.ler_u64_positivo(dados, posicao)
+        seja valor = binario.ler_u64_positivo(dados, posicao + 8)
+        se codigo.valido == falso {
             retorne -5
         }
-        se valor != codigo * 10 {
+        se valor.valido == falso {
             retorne -6
         }
-        total = total + valor
+        se codigo.valor != indice + 1 {
+            retorne -5
+        }
+        se valor.valor != codigo.valor * 10 {
+            retorne -6
+        }
+        total = total + valor.valor
     }
     retorne total
 }
