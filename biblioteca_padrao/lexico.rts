@@ -8,6 +8,15 @@ publico tipo UnidadeLexica {
     coluna: inteiro
 }
 
+// Erro tipado e copiavel: nao carrega dono e pode atravessar funcoes.
+publico tipo DiagnosticoLexico {
+    encontrado: logico
+    codigo: inteiro
+    posicao_byte: inteiro
+    linha: inteiro
+    coluna: inteiro
+}
+
 privado funcao letra(valor: inteiro) -> logico {
     se valor >= 65 {
         se valor <= 90 {
@@ -135,6 +144,23 @@ publico funcao primeiro_erro(unidades: emprestimo[lista[UnidadeLexica]]) -> inte
 // Contrato experimental:
 // classe: 1 identificador, 2 numero, 3 texto, 4 simbolo, 5 operador duplo.
 // Um erro torna-se um token negativo; o chamador decide como tratar.
+// Converte o token de erro em registro tipado; nao encerra a aplicacao.
+// Quando encontrado=falso, os demais campos permanecem zero.
+publico funcao obter_diagnostico(unidades: emprestimo[lista[UnidadeLexica]]) -> DiagnosticoLexico {
+    seja resposta: DiagnosticoLexico
+    seja indice = primeiro_erro(unidades)
+    se indice < 0 {
+        retorne resposta
+    }
+    seja unidade: UnidadeLexica = unidades[indice]
+    resposta.encontrado = verdadeiro
+    resposta.codigo = unidade.classe
+    resposta.posicao_byte = unidade.inicio_byte
+    resposta.linha = unidade.linha
+    resposta.coluna = unidade.coluna
+    retorne resposta
+}
+
 publico funcao analisar(fonte: emprestimo[bytes]) -> lista[UnidadeLexica] {
     seja encontrados: lista[UnidadeLexica]
     seja indice = 0
