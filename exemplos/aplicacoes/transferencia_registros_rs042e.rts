@@ -1,0 +1,44 @@
+// RS 0.42E: mover registro inteiro, sem duplicar os descritores dinamicos.
+tipo Pessoa {
+    nome: texto
+}
+tipo Documento {
+    responsavel: Pessoa
+    arquivo_binario: bytes
+    folhas: lista[inteiro]
+    numero: inteiro
+}
+
+inicio {
+    seja origem: Documento
+    seja destino: Documento
+    copie(origem.responsavel.nome, "Origem RS")
+    adicione_byte(origem.arquivo_binario, 65)
+    adicione(origem.folhas, 7)
+    adicione(origem.folhas, 11)
+    origem.numero = 42
+
+    // O destino anterior ja possui donos, que precisam ser liberados.
+    copie(destino.responsavel.nome, "Antigo")
+    adicione_byte(destino.arquivo_binario, 99)
+    adicione(destino.folhas, 100)
+
+    mova(destino, origem)
+    escreva(destino.responsavel.nome)
+    escreva(destino.arquivo_binario[0])
+    escreva(destino.folhas[1])
+    escreva(destino.numero)
+
+    // Os descritores originais ficaram inativos, mas podem receber donos novamente.
+    mova(origem, destino)
+    escreva(origem.responsavel.nome)
+    escreva(tamanho(origem.folhas))
+    escreva(origem.numero)
+
+    se verdadeiro {
+        seja outro: Documento
+        mova(outro, origem)
+        escreva(outro.responsavel.nome)
+        escreva(outro.arquivo_binario[0])
+    }
+}
