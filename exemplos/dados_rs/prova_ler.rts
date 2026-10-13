@@ -1,14 +1,14 @@
 // Prova inicial de leitura do formato binario Dados RS.
 // Um segundo executavel valida os dados gravados por prova_gravar.rts.
 // Nenhuma promessa de transacoes, catalogo ou acesso concorrente.
-funcao ler_nao_negativo(dados: emprestimo[bytes], inicio: inteiro) -> inteiro {
+funcao ler_nao_negativo(dados: emprestimo[bytes], posicao_inicial: inteiro) -> inteiro {
     // Evita overflow em um campo serializado com bit de sinal definido.
-    se dados[inicio + 7] >= 128 {
+    se dados[posicao_inicial + 7] >= 128 {
         retorne -1
     }
     seja numero = 0
     para parte de 7 ate 0 passo -1 {
-        numero = numero * 256 + dados[inicio + parte]
+        numero = numero * 256 + dados[posicao_inicial + parte]
     }
     retorne numero
 }
