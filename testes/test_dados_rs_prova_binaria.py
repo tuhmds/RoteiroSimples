@@ -11,6 +11,7 @@ sys.path.insert(0, str(RAIZ))
 
 from backend import compilar
 from compilador.parser import analisar_programa
+from compilador.modulos import carregar_fontes
 
 GRAVADOR = RAIZ / "exemplos" / "dados_rs" / "prova_gravar.rts"
 LEITOR = RAIZ / "exemplos" / "dados_rs" / "prova_ler.rts"
@@ -31,7 +32,7 @@ class TestesDadosRSMiniatura(unittest.TestCase):
         cls.alvo = plataforma()
         cls.executaveis = []
         for caminho, nome in ((GRAVADOR, "gravador"), (LEITOR, "leitor")):
-            programa = analisar_programa(caminho.read_text(encoding="utf-8"))
+            programa = analisar_programa(carregar_fontes(caminho).texto)
             destino = Path(cls.artefatos.name) / (
                 nome + (".exe" if cls.alvo == "windows" else "")
             )
