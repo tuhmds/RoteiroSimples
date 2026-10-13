@@ -6,7 +6,7 @@ A largura de cada elemento segue a disposição de seu tipo. A lista nasce vazia
 A memória cresce geometricamente e é devolvida ao sistema operacional.
 """
 import struct
-from compilador.propriedade import passo_armazenamento
+from compilador.propriedade import passo_armazenamento, eh_colecao_proprietaria
 from . import valores_dinamicos
 from .desenrolamento_windows import (
     registrar_quadro_auxiliar, registrar_quadro_empilhado,
@@ -39,6 +39,8 @@ def inicializar_inativas(g, variaveis, tipos, windows):
 
 
 def mover(g, variaveis, destino, origem, windows, largura=1):
+    if eh_colecao_proprietaria(g.tipos_atual[destino], g.registros):
+        return valores_dinamicos.mover(g, variaveis, destino, origem, windows)
     endereco(g, variaveis, destino, windows)
     g.bytes(b'\x48\x83\xEC\x10\x48\x89\x3C\x24')  # reserva 16, salva destino
     endereco(g, variaveis, origem, windows)
@@ -180,6 +182,11 @@ def escrever_composto(g, variaveis, nome, indice_expressao, valor,
 
 def limpar(g, variaveis, nome, windows):
     verificar_viva(g, variaveis, nome, windows)
+    if eh_colecao_proprietaria(g.tipos_atual[nome], g.registros):
+        from .colecoes_proprietarias import rotulo
+        endereco(g, variaveis, nome, windows)
+        g.chamada(rotulo(g.tipos_atual[nome], 'limpar'))
+        return
     base = deslocamento(variaveis, nome, windows)
     g.bytes(b'\x31\xC0')
     g.bytes(b'\x48\x89\x85' + struct.pack('<i', base-8))
@@ -190,10 +197,18 @@ def retirar(g, variaveis, nome, windows):
     quantidade(g, variaveis, nome, windows)
     g.bytes(b'\x48\x85\xC0')
     g.salto('erro_indice_lista', 'jz')
+    if eh_colecao_proprietaria(g.tipos_atual[nome], g.registros):
+        from .colecoes_proprietarias import rotulo
+        g.bytes(b'\x48\x8D\x70\xFF\x31\xD2')
+        endereco(g, variaveis, nome, windows)
+        g.chamada(rotulo(g.tipos_atual[nome], 'retirar'))
+        return
     g.bytes(b'\x48\xFF\x8D' + struct.pack('<i', base-8)) # dec qword [rbp+base-8]
 
 
 def liberar(g, variaveis, nome, windows, explicito=False, largura=1):
+    if eh_colecao_proprietaria(g.tipos_atual[nome], g.registros):
+        return valores_dinamicos.liberar(g, variaveis, nome, windows, explicito=explicito)
     if explicito:
         verificar_viva(g, variaveis, nome, windows)
     endereco(g, variaveis, nome, windows)

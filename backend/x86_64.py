@@ -3,6 +3,8 @@ import struct
 from compilador.erros import ErroCompilacao
 from compilador.propriedade import eh_proprietario, eh_emprestimo, eh_texto, eh_bytes, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
 from compilador.propriedade import eh_registro_proprietario, donos_do_agregado, contrato_valor
+from compilador.propriedade import eh_colecao_proprietaria
+from . import colecoes_proprietarias
 from . import valores_dinamicos, memoria_dinamica, sequencias_dinamicas, textos_dinamicos, listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros, arquivos_abertos, publicacao_atomica, politica_caminhos
 from compilador.disposicao_tipos import palavras_tipo as _palavras_tipo
 from .base import Emissor, alinhar
@@ -347,6 +349,21 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
                 g.bytes(b'\x48\x83\xC4' + struct.pack('<B', limpar))
             else:
                 g.bytes(b'\x48\x81\xC4' + struct.pack('<I', limpar))
+    elif tipo == 'retire_registro_lista':
+        if destino_composto is None:
+            raise ErroCompilacao('retire exige destino proprietario para o registro retirado.')
+        expressao(g, expr[2], variaveis, windows, registradores, pilha_extra)
+        g.bytes(b'\x48\x89\xC6')  # RSI=índice já avaliado uma única vez
+        valores_dinamicos.endereco_descritor(g, variaveis, expr[1], windows)
+        if destino_composto == '__rs_retorno_externo':
+            g.bytes(b'\x48\x8B\x55' + bytes((80 if windows else 24,)))
+        else:
+            g.bytes(b'\x48\x8D\x95' + struct.pack('<i', deslocamento_variavel(variaveis, destino_composto, windows)))
+        if pilha_extra % 2:
+            g.bytes(b'\x48\x83\xEC\x08')
+        g.chamada(colecoes_proprietarias.rotulo(g.tipos_atual[expr[1]], 'retirar'))
+        if pilha_extra % 2:
+            g.bytes(b'\x48\x83\xC4\x08')
     elif tipo in ('mova_valor_dinamico', 'mova_registro_proprietario'):
         raise ErroCompilacao('Transferencia dinamica exige parametro, retorno ou declaracao proprietaria.')
     elif tipo in ('empreste_texto_dinamico', 'empreste_bytes_dinamicos'):
@@ -953,6 +970,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
     tipos = getattr(programa, 'tipos', {})
     tipos_do_programa = tuple(tipos.values()) + tuple(
         t for f in g.funcoes.values() for t in f.programa.tipos.values())
+    colecoes_proprietarias.preparar(g, tipos_do_programa)
     pendentes = [programa.instrucoes] + [f.programa.instrucoes for f in g.funcoes.values()]
     consultas_utf8 = False
     while pendentes:
@@ -1130,6 +1148,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                 destino, origem = op[1:]
                 if origem[0] == 'mova_registro_proprietario':
                     _transferir_registro_proprietario(g, variaveis, tipos, destino, origem[1], windows)
+                elif origem[0] == 'retire_registro_lista':
+                    expressao(g, origem, variaveis, windows, destino_composto=destino)
                 elif origem[0] == 'chamada':
                     if g.funcoes[origem[1]].retorno != tipos[destino][1]:
                         raise ErroCompilacao('Retorno de registro exige o mesmo tipo.')
@@ -1153,6 +1173,29 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             elif op[0] == 'adicione_lista_dinamica':
                 listas_dinamicas.acrescentar(g, variaveis, op[1], op[2], windows, expressao,
                                             listas_dinamicas.largura_elemento(g, tipos[op[1]]))
+            elif op[0] in ('adicione_colecao_proprietaria', 'substitua_colecao_proprietaria'):
+                nome, valor = op[1], op[-1]
+                substituicao = op[0] == 'substitua_colecao_proprietaria'
+                if substituicao:
+                    listas_dinamicas.indice(g, variaveis, nome, op[2], windows, expressao)
+                    g.bytes(b'\x50')
+                if valor[0] == 'temporario_composto':
+                    origem = valor[1]
+                    expressao(g, valor[2], variaveis, windows, pilha_extra=int(substituicao), destino_composto=origem)
+                elif valor[0] == 'mova_registro_proprietario':
+                    origem = valor[1]
+                else:
+                    raise ErroCompilacao('Colecao proprietaria exige registro transferido ou novo.')
+                _validar_registro_vivo(g, variaveis, origem, windows)
+                if substituicao:
+                    g.bytes(b'\x5E')  # recupera índice, sem guardar ponteiro do heap entre chamadas
+                    valores_dinamicos.endereco_descritor(g, variaveis, nome, windows)
+                    g.bytes(b'\x48\x8D\x95' + struct.pack('<i', deslocamento_variavel(variaveis, origem, windows)))
+                    g.chamada(colecoes_proprietarias.rotulo(tipos[nome], 'substituir'))
+                else:
+                    listas_dinamicas.acrescentar(g, variaveis, nome, ('var', origem), windows, expressao,
+                                                listas_dinamicas.largura_elemento(g, tipos[nome]))
+                _inativar_registro(g, variaveis, origem, windows)
             elif op[0] == 'limpe_lista_dinamica':
                 listas_dinamicas.limpar(g, variaveis, op[1], windows)
             elif op[0] == 'remova_ultimo_lista_dinamica':
@@ -1345,6 +1388,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                         _copiar_para_retorno(g, deslocamento_variavel(variaveis, origem, windows),
                                            _palavras_tipo(tipo_retorno, g.registros), windows)
                         _inativar_registro(g, variaveis, origem, windows)
+                    elif op[1][0] == 'retire_registro_lista':
+                        expressao(g, op[1], variaveis, windows, destino_composto='__rs_retorno_externo')
                     elif op[1][0] == 'chamada':
                         if g.funcoes[op[1][1]].retorno != tipo_retorno:
                             raise ErroCompilacao('Retorno de registro exige chamada do mesmo tipo.')
@@ -1505,6 +1550,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
             listas_dinamicas.emitir_rotinas(g, windows)
         else:
             memoria_dinamica.emitir_rotinas(g, windows)
+        colecoes_proprietarias.emitir_rotinas(g, windows)
     if tem_sequencias_dinamicas:
         sequencias_dinamicas.emitir_rotinas(g, windows)
     if tem_texto_novo:

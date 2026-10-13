@@ -1,0 +1,42 @@
+importe "padrao/documentos.rts" como documentos
+
+tipo Catalogo {
+    documentos: lista[documentos.Documento]
+}
+
+funcao criar(numero: inteiro) -> documentos.Documento {
+    seja titulo: texto
+    copie(titulo, "Coleção RS")
+    seja conteudo: bytes
+    adicione_byte(conteudo, numero)
+    seja resposta = documentos.criar(mova(titulo), mova(conteudo), 128, 4096)
+    retorne mova(resposta.valor)
+}
+
+funcao montar() -> Catalogo {
+    seja catalogo: Catalogo
+    para numero de 0 ate 9 {
+        adicione(catalogo.documentos, criar(numero))
+    }
+    retorne mova(catalogo)
+}
+
+inicio {
+    seja catalogo = montar()
+    escreva(tamanho(catalogo.documentos))
+    seja terceiro = retire(catalogo.documentos, 3)
+    escreva(terceiro.titulo)
+    escreva(terceiro.conteudo[0])
+    catalogo.documentos[0] = criar(42)
+    seja primeiro = retire(catalogo.documentos, 0)
+    escreva(primeiro.conteudo[0])
+    escreva(tamanho(catalogo.documentos))
+    remova_ultimo(catalogo.documentos)
+    limpe_lista(catalogo.documentos)
+    escreva(tamanho(catalogo.documentos))
+    adicione(catalogo.documentos, mova(terceiro))
+    seja grupos: lista[Catalogo]
+    adicione(grupos, mova(catalogo))
+    remova_ultimo(grupos)
+    escreva(tamanho(grupos))
+}

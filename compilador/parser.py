@@ -9,6 +9,7 @@ from .validacao_caminhos import validar_literal_arquivo
 from .propriedade import (eh_proprietario, eh_emprestimo, eh_texto, contrato_valor,
                          TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO)
 from .propriedade import eh_registro_proprietario, eh_valor_proprietario, donos_do_agregado
+from .propriedade import ORIGENS_PROPRIETARIAS, eh_colecao_proprietaria
 from .propriedade import eh_bytes, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
 
 def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _retorno=None, _registros=None):
@@ -47,7 +48,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if len(cab) != 3 or cab[2] != '{' or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', cab[1]):
                 raise ErroCompilacao(f'Linha {n}: use tipo Nome {{.')
             nome_tipo = str(cab[1])
-            if nome_tipo in registros or nome_tipo in ('inteiro', 'logico', 'texto', 'bytes', 'lista', 'emprestimo', 'empreste', 'seja', 'se', 'senao', 'inicio', 'funcao', 'retorne', 'para', 'enquanto', 'tipo', 'leia', 'escreva') or nome_tipo.startswith('__rs_'):
+            if nome_tipo in registros or nome_tipo in ('inteiro', 'logico', 'texto', 'bytes', 'lista', 'emprestimo', 'empreste', 'retire', 'seja', 'se', 'senao', 'inicio', 'funcao', 'retorne', 'para', 'enquanto', 'tipo', 'leia', 'escreva') or nome_tipo.startswith('__rs_'):
                 raise ErroCompilacao(f'Linha {n}: nome de tipo duplicado ou reservado.')
             campos = []
             while linhas and linhas[0][1] != ['}']:
@@ -64,7 +65,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     elif tipo_campo not in ('inteiro', 'logico') and tipo_campo not in registros:
                         raise ErroCompilacao(f'Linha {n_campo}: tipo de campo desconhecido: {tipo_campo}.')
                 elif (len(parte_tipo) == 4 and parte_tipo[:2] == ['lista', '[']
-                      and parte_tipo[-1] == ']' and parte_tipo[2] in ('inteiro', 'logico')):
+                      and parte_tipo[-1] == ']' and (parte_tipo[2] in ('inteiro', 'logico') or parte_tipo[2] in registros)):
                     tipo_campo = ('lista_dinamica', str(parte_tipo[2]))
                 elif (len(parte_tipo) == 4 and parte_tipo[0] in ('lista', 'texto', 'bytes')
                       and parte_tipo[1] == '[' and parte_tipo[-1] == ']'
@@ -88,12 +89,6 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     def possui_dono_registro(tipo):
         return not contrato_valor(tipo, registros).pode_copiar
 
-    def exigir_copiavel_em_colecao(tipo, linha):
-        if isinstance(tipo, str) and tipo in registros and possui_dono_registro(tipo):
-            raise ErroCompilacao(
-                f'Linha {linha}: lista de registros proprietarios exige '
-                'transferencia por elemento, ainda nao implementada.')
-
     def ler_tipo(partes, linha):
         if len(partes) == 1:
             nome = str(partes[0])
@@ -113,13 +108,11 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             return ('lista_emprestada', 'inteiro')
         if (len(partes) == 7 and partes[:4] == ['emprestimo', '[', 'lista', '[']
                 and partes[-2:] == [']', ']'] and (partes[4] in ('inteiro', 'logico') or partes[4] in registros)):
-            exigir_copiavel_em_colecao(str(partes[4]), linha)
             return ('lista_emprestada', str(partes[4]))
         if len(partes) == 4 and partes[1] == '[' and partes[3] == ']':
             categoria = str(partes[0])
             valor = str(partes[2])
             if categoria == 'lista' and (valor in ('inteiro', 'logico') or valor in registros):
-                exigir_copiavel_em_colecao(valor, linha)
                 return ('lista_dinamica', valor)
             if categoria in ('lista', 'texto', 'bytes') and valor.isascii() and valor.isdecimal():
                 tamanho = int(valor)
@@ -163,7 +156,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                         raise ErroCompilacao(f'Linha {n}: parâmetro duplicado: {grupo[0]}.')
                     tipo_parametro = ler_tipo(grupo[2:], n)
                     parametros.append((str(grupo[0]), tipo_parametro))
-            if nome in assinaturas or nome in registros:
+            if nome in assinaturas or nome in registros or nome == 'retire':
                 raise ErroCompilacao(f'Linha {n}: função {nome!r} já foi declarada.')
             assinaturas[nome] = (tuple(tipo for _, tipo in parametros), retorno)
             nivel = 1
@@ -182,7 +175,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     contexto = _contexto or ContextoSemantico(importa, assinaturas, registros)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'encerre', 'arquivo', 'abra_arquivo', 'grave_em', 'carregue_de', 'sincronize_arquivo', 'feche_arquivo', 'publique_arquivo', 'bloqueie_arquivo', 'funcao', 'retorne', 'tipo'}
+    reservadas = {'retire', 'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'encerre', 'arquivo', 'abra_arquivo', 'grave_em', 'carregue_de', 'sincronize_arquivo', 'feche_arquivo', 'publique_arquivo', 'bloqueie_arquivo', 'funcao', 'retorne', 'tipo'}
 
     def indice_lista(partes, linha):
         if '[' not in partes or partes[-1] != ']':
@@ -291,7 +284,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 if len(t) == 1:
                     raise ErroCompilacao(f'Linha {n}: retorne exige um valor.')
                 valor, _ = expressao_tipada(t[1:], n, _retorno)
-                if eh_valor_proprietario(_retorno, registros) and valor[0] not in ('mova_valor_dinamico', 'mova_registro_proprietario', 'chamada'):
+                if eh_valor_proprietario(_retorno, registros) and valor[0] not in ORIGENS_PROPRIETARIAS:
                     raise ErroCompilacao(f'Linha {n}: retorno proprietario exige mova(origem) ou chamada de funcao; copiar dono unico nao e permitido.')
                 if not eh_valor_proprietario(_retorno, registros) and eh_composto(_retorno) and valor[0] not in ('var', 'chamada'):
                     raise ErroCompilacao(f'Linha {n}: retorno composto exige variável ou função do mesmo tipo.')
@@ -601,8 +594,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             elif t[0] in ('adicione', 'remova_ultimo', 'limpe_lista', 'libere') and t[1:2] == ['('] and t[-1:] == [')']:
                 operacao = str(t[0])
                 conteudo = t[2:-1]
-                if operacao == 'libere' and len(conteudo) == 1:
-                    nome = contexto.resolver(str(conteudo[0]))
+                if operacao == 'libere':
+                    nome = contexto.resolver_caminho(conteudo, n)
                     if tipos.get(nome) in (TIPO_TEXTO_DINAMICO, TIPO_BYTES_DINAMICOS):
                         adicionar(('libere_valor_dinamico', nome), n, t)
                         i += 1
@@ -616,6 +609,13 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     if not isinstance(tipos.get(nome), tuple) or tipos[nome][0] != 'lista_dinamica':
                         raise ErroCompilacao(f'Linha {n}: adicione exige lista dinamica proprietaria.')
                     valor, _ = expressao_tipada(valor_parte, n, tipos[nome][1])
+                    if eh_colecao_proprietaria(tipos[nome], registros):
+                        if valor[0] not in ORIGENS_PROPRIETARIAS:
+                            raise ErroCompilacao(f'Linha {n}: adicione exige mova(registro) ou valor novo; nao pode copiar dono.')
+                        valor = contexto.preparar_produtor_composto(valor, tipos[nome][1])
+                        adicionar(('adicione_colecao_proprietaria', nome, valor), n, t)
+                        i += 1
+                        continue
                     if tipos[nome][1] in registros and valor[0] != 'var':
                         raise ErroCompilacao(f'Linha {n}: adicione com registro exige variavel de mesmo tipo.')
                     adicionar(('adicione_lista_dinamica', nome, valor), n, t)
@@ -678,7 +678,6 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                           (t[5] in ('inteiro', 'logico') or t[5] in registros)):
                         elemento, fim_tipo = str(t[5]), 7
                     if fim_tipo is not None:
-                        exigir_copiavel_em_colecao(elemento, n)
                         tipo_dono = ('lista_dinamica', elemento)
                         valor = None
                         if len(t) != fim_tipo:
@@ -711,7 +710,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     elif len(t) >= 6 and t[4] == '=':
                         arvore, _ = expressao_tipada(t[5:], n, tipo_nome)
                         if possui_dono_registro(tipo_nome):
-                            if arvore[0] not in ('mova_registro_proprietario', 'chamada'):
+                            if arvore[0] not in ORIGENS_PROPRIETARIAS:
                                 raise ErroCompilacao(f'Linha {n}: registro com dono exige mova(origem) ou retorno proprietario.')
                             adicionar(('crie_registro', interno, tuple(contexto.campos_registro[interno].values())), n, t)
                             donos_locais.extend(donos_do_agregado(interno, tipos, contexto.campos_registro))
@@ -794,7 +793,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 if inferido == 'arquivo':
                     raise ErroCompilacao(f'Linha {n}: recursos arquivo nao podem ser copiados; declare seja nome: arquivo.')
                 if eh_registro_proprietario(inferido, registros):
-                    if arvore[0] not in ('mova_registro_proprietario', 'chamada'):
+                    if arvore[0] not in ORIGENS_PROPRIETARIAS:
                         raise ErroCompilacao(f'Linha {n}: registro com dono nao admite copia implicita.')
                     interno = registrar(str(nome), ('registro', inferido, registros[inferido]), n)
                     donos_locais.extend(donos_do_agregado(interno, tipos, contexto.campos_registro))
@@ -844,6 +843,13 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 nome, indice, tamanho = indice_lista(t[:igual], n)
                 esperado = tipos[nome][1] if tamanho is None else 'inteiro'
                 valor, _ = expressao_tipada(t[igual+1:], n, esperado)
+                if tamanho is None and eh_colecao_proprietaria(tipos[nome], registros):
+                    if valor[0] not in ORIGENS_PROPRIETARIAS:
+                        raise ErroCompilacao(f'Linha {n}: substituicao exige mova(registro) ou valor novo; nao pode copiar dono.')
+                    valor = contexto.preparar_produtor_composto(valor, esperado)
+                    adicionar(('substitua_colecao_proprietaria', nome, indice, valor), n, t)
+                    i += 1
+                    continue
                 if tamanho == 'bytes':
                     adicionar(('atribua_byte_dinamico' if tipos[nome] == TIPO_BYTES_DINAMICOS else 'atribua_byte', nome, indice, valor), n, t)
                 elif tamanho is None:

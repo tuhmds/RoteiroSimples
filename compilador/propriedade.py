@@ -1,4 +1,4 @@
-"""Contrato compartilhado de armazenamento e propriedade da RS 0.42F.
+"""Contrato compartilhado de armazenamento e propriedade da RS 0.42H.
 
 A propriedade dinâmica pertence às listas tipadas, texto UTF-8 e bytes.
 Texto e bytes de tamanho fixo continuam valores copiáveis. Empréstimos são
@@ -18,6 +18,8 @@ TIPO_TEXTO_DINAMICO = ('texto_dinamico', 'utf8')
 TIPO_TEXTO_EMPRESTADO = ('texto_emprestado', 'utf8')
 TIPO_BYTES_DINAMICOS = ('bytes_dinamicos', 'binario')
 TIPO_BYTES_EMPRESTADOS = ('bytes_emprestados', 'binario')
+ORIGENS_PROPRIETARIAS = ('mova_valor_dinamico', 'mova_registro_proprietario',
+                        'chamada', 'retire_registro_lista')
 
 
 def eh_proprietario(tipo):
@@ -44,6 +46,29 @@ def eh_registro_proprietario(tipo, registros):
 def eh_valor_proprietario(tipo, registros):
     """Valores transferíveis: descritores ou agregados com donos internos."""
     return eh_proprietario(tipo) or eh_registro_proprietario(tipo, registros)
+
+
+def eh_colecao_proprietaria(tipo, registros):
+    return (isinstance(tipo, tuple) and len(tipo) == 2 and
+            tipo[0] == 'lista_dinamica' and eh_registro_proprietario(tipo[1], registros))
+
+
+def folhas_proprietarias_tipo(tipo, registros):
+    """Folhas e offsets em palavras, conforme a disposição comum do agregado."""
+    from .disposicao_tipos import palavras_tipo
+    folhas = []
+    def visitar(atual, inicio):
+        if eh_proprietario(atual):
+            folhas.append((inicio, atual))
+            return
+        campos = registros.get(atual, ()) if isinstance(atual, str) else (
+            atual[2] if isinstance(atual, tuple) and atual[0] == 'registro' else ())
+        deslocamento = inicio
+        for _, campo in campos:
+            visitar(campo, deslocamento)
+            deslocamento += palavras_tipo(campo, registros)
+    visitar(tipo, 0)
+    return tuple(folhas)
 
 
 def donos_do_agregado(nome, tipos, campos):

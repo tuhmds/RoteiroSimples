@@ -63,6 +63,9 @@ def efeito_expressao_arvore(no):
         return _ler(no[1]).combinar(_risco())
     if operacao == 'mova_registro_proprietario':
         return _propriedade('mover_registro', no[1], falha=True)
+    if operacao == 'retire_registro_lista':
+        return (_propriedade('retirar_registro', no[1], falha=True)
+                .combinar(efeito_expressao_arvore(no[2])))
     if operacao == 'mova_valor_dinamico':
         return _propriedade('mover', no[1], falha=True)
     if operacao in _INDICES or operacao == 'byte_texto':
@@ -162,9 +165,13 @@ def efeito_instrucao_arvore(no):
     if operacao == 'receba_valor_dinamico':
         return (_propriedade('receber', no[1], falha=True)
                 .combinar(efeito_expressao_arvore(no[2])))
-    if operacao == 'adicione_lista_dinamica':
+    if operacao in ('adicione_lista_dinamica', 'adicione_colecao_proprietaria'):
         return (_propriedade('alterar', no[1], falha=True)
                 .combinar(efeito_expressao_arvore(no[2])))
+    if operacao == 'substitua_colecao_proprietaria':
+        return (_propriedade('substituir_registro', no[1], falha=True)
+                .combinar(efeito_expressao_arvore(no[2]))
+                .combinar(efeito_expressao_arvore(no[3])))
     if operacao in ('limpe_lista_dinamica', 'remova_ultimo_lista_dinamica'):
         return _propriedade('alterar', no[1], falha=True)
     if operacao in ('libere_lista_dinamica', 'libere_valor_dinamico'):
