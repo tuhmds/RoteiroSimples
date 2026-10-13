@@ -1,4 +1,4 @@
-# RoteiroSimples (RS) — versão experimental 0.42A.2
+# RoteiroSimples (RS) — versão experimental 0.42A.3
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -9,6 +9,33 @@ executáveis gerados **não dependem do Python**. Projeto experimental: **não u
 > que controlamos seguem o português brasileiro e não levam acentos na sintaxe.
 > Mensagens, comentários e textos exibidos aceitam acentuação e UTF-8 normalmente.
 > Alguns nomes de arquivos e argumentos históricos foram mantidos por compatibilidade.
+
+## RS 0.42A.3 — Bytes dinâmicos
+
+`seja dados: bytes` cria um buffer binário crescente sem capacidade declarada.
+`adicione_byte`, leitura e substituição por índice, `copie`, `junte`, `limpe`,
+`tamanho` e `capacidade` operam nesse tipo. `bytes[N]` mantém seu comportamento
+histórico e aceita cópia/acréscimo explícitos de outros buffers binários.
+
+Funções recebem/devolvem bytes por `mova`; `emprestimo[bytes]` permite leitura
+durante chamadas. O transporte preserva o ponteiro, sem copiar conteúdo, e o
+descarte é automático por escopo. Comprimentos, índices, valores de 0 a 255 e
+aritmética de crescimento são verificados. Arquivos completos podem ser lidos
+e gravados com bytes fixos/dinâmicos, preservando NUL e qualquer sequência
+binária. Texto UTF-8 e bytes permanecem tipos distintos, sem conversão implícita.
+
+Texto, bytes e listas compartilham o gerenciador de memória; texto e bytes
+também compartilham vistas, cópia e carregamento crescente de arquivos. A
+biblioteca RS ganha `padrao/binarios.rts`, com cópia, concatenação, comparação
+e soma modular. A [aplicação binária](exemplos/aplicacoes/arquivo_binario_rs042a.rts)
+constrói, transfere, grava e recupera dados, verifica a igualdade e demonstra
+a independência de uma cópia explícita.
+
+Detalhes, provas e limites estão na
+[nota técnica](docs/BYTES_DINAMICOS_RS_0_42A_3.md). Este marco depende da entrega
+de texto 0.42A.2 e do contrato 0.42A.1; sua branch não representa publicação na
+main. Donos em registros/listas, empréstimos mutáveis e operações posicionais
+com buffers dinâmicos permanecem pendentes.
 
 ## RS 0.42A.2 — Texto UTF-8 dinâmico
 
@@ -32,8 +59,9 @@ A [CI aprovada](https://github.com/tuhmds/RoteiroSimples/actions/runs/3838266797
 executou 527 testes por sistema, sem falhas: 12 ignorados no Windows e
 23 no Linux. Sintaxe, provas e limites estão na
 [nota técnica](docs/TEXTO_DINAMICO_RS_0_42A_2.md).
-Bytes dinâmicos, donos em registros/listas e empréstimos mutáveis ficam
-para os próximos marcos. Esta entrega continua dependente do primeiro
+Bytes dinâmicos são acrescentados no marco 0.42A.3 acima; donos em
+registros/listas e empréstimos mutáveis ficam para próximos marcos.
+Esta entrega continua dependente do primeiro
 marco de propriedade 0.42A.1 e não representa publicação na main.
 
 ## RS 0.42A.1 — Funções que recebem e devolvem listas proprietárias
