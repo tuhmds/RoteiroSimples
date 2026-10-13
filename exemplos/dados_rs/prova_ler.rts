@@ -1,0 +1,75 @@
+// Prova inicial de leitura do formato binario Dados RS.
+// Um segundo executavel valida os dados gravados por prova_gravar.rts.
+// Nenhuma promessa de transacoes, catalogo ou acesso concorrente.
+funcao ler_nao_negativo(dados: emprestimo[bytes], inicio: inteiro) -> inteiro {
+    // Evita overflow em um campo serializado com bit de sinal definido.
+    se dados[inicio + 7] >= 128 {
+        retorne -1
+    }
+    seja numero = 0
+    para parte de 7 ate 0 passo -1 {
+        numero = numero * 256 + dados[inicio + parte]
+    }
+    retorne numero
+}
+
+funcao validar(dados: emprestimo[bytes]) -> inteiro {
+    // Primeiro validamos TODO o comprimento, antes de qualquer indice.
+    se tamanho(dados) != 1616 {
+        retorne -1
+    }
+    se dados[0] != 82 {
+        retorne -2
+    }
+    se dados[1] != 83 {
+        retorne -2
+    }
+    se dados[2] != 68 {
+        retorne -2
+    }
+    se dados[3] != 66 {
+        retorne -2
+    }
+    se dados[4] != 1 {
+        retorne -3
+    }
+    se dados[5] != 0 {
+        retorne -3
+    }
+    se dados[6] != 0 {
+        retorne -3
+    }
+    se dados[7] != 0 {
+        retorne -3
+    }
+    se ler_nao_negativo(dados, 8) != 100 {
+        retorne -4
+    }
+    seja total = 0
+    para indice de 0 ate 99 {
+        seja posicao = 16 + indice * 16
+        seja codigo = ler_nao_negativo(dados, posicao)
+        seja valor = ler_nao_negativo(dados, posicao + 8)
+        se codigo != indice + 1 {
+            retorne -5
+        }
+        se valor != codigo * 10 {
+            retorne -6
+        }
+        total = total + valor
+    }
+    retorne total
+}
+
+inicio {
+    seja dados: bytes
+    carregue_arquivo("entregas.rsd", dados)
+    seja total = validar(empreste(dados))
+    se total < 0 {
+        escreva("Erro: arquivo RSD invalido.")
+        escreva(total)
+        encerre(3)
+    }
+    escreva(100)
+    escreva(total)
+}
