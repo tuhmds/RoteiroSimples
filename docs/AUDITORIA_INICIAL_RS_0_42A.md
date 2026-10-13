@@ -37,3 +37,11 @@ Rejeitar consumo duplicado e mistura de empréstimo/consumo do mesmo dono numa c
 Provar esse marco com listas vazias e grandes, inteiros/lógicos/registros, argumentos e retornos encadeados, retornos antecipados, escopos/loops, uso inválido, falha de alocação simulada, identidade da região transferida e integridade de registradores. Executar Windows e Linux de O0 a O8; adicionar biblioteca e aplicação em RS.
 
 Texto dinâmico, bytes dinâmicos, coleções de donos, operadores lógicos e números novos permanecem marcos seguintes. Esta entrega não concluirá toda a RS 0.42A.
+
+## Achados durante a implementação
+
+Os testes nativos revelaram escrita indexada por ponteiro inativo quando a expressão do valor consumia a própria lista. O destino agora é verificado novamente depois do valor, preservando o índice e sem repetir efeitos.
+
+A conta antiga da pilha omitia argumentos, temporários pendentes e o quadro principal. Além disso, a inicialização dos donos e a sondagem Windows alteravam RAX antes de salvar a conta acumulada. O contrato de chamadas passou a incluir esses custos, com verificação antes de avaliar argumentos e em todos os prólogos. O limite de 768 KiB mantém margem no PE de 1 MiB. Quadros individuais de 600.000 bytes continuam válidos; combinações que ultrapassam a conta encerram com diagnóstico.
+
+Os callbacks de índices proprietários e emprestados também precisam transmitir os temporários da expressão envolvente. A correção foi comprovada com chamadas aninhadas e medição real do alinhamento na entrada de VirtualAlloc. A documentação do marco registra a migração para a política de pilha e a rejeição de comparação direta entre descritores proprietários.
