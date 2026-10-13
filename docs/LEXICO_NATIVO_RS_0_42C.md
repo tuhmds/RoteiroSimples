@@ -32,10 +32,26 @@ Classes: 1 identificador, 2 numero, 3 texto, 4 simbolo, 5 operador duplo.
 
 O teste usa compilador/lexico.py como referencia. Valida classes, posicoes, comprimentos e slices exatos em UTF-8 para programas, funcoes, operadores, comentarios, CRLF, Unicode em literais, vazio e falhas selecionadas.
 
+
+## Biblioteca compartilhada e erros recuperaveis
+
+A ferramenta reutiliza o modulo **biblioteca_padrao/lexico.rts**, escrito integralmente em RS, que expoe o tipo publico UnidadeLexica e as funcoes analisar e primeiro_erro. A aplicacao inicial ainda pode encerrar com codigo 2, mas **a biblioteca nunca encerra a aplicacao por erro lexico**: retorna uma lista de unidades com um diagnostico de classe negativa no final do prefixo valido.
+
+- classe -1: caractere fora do conjunto reconhecido, com byte, linha e coluna;
+- classe -2: literal textual sem aspas de fechamento, com posicao inicial;
+- comprimento zero identifica o token de diagnostico; os demais tokens preservam fatias do arquivo fonte;
+- primeiro_erro(empreste(unidades)) devolve o indice do diagnostico ou -1 quando nao ha erro.
+
+Esse contrato e uma etapa intermediaria necessaria porque a RS ainda nao suporta um registro que contenha uma lista proprietaria; quando houver propriedade aninhada, a API podera evoluir para um resultado tipado completo sem mudar a semantica de erros.
+
+A aplicacao exemplos/ferramentas/prova_lexico_recuperavel.rts demonstra que o mesmo processo pode analisar um arquivo invalido, receber o erro como dado e depois analisar outro valido. Os testes executam binarios nativos no Linux e no Windows. O trabalho tambem corrige o resolvedor de tipos importados em lista[Registro] no compilador/espacos_nomes.py, descoberto pela propria integracao.
+
+**Limites reais:** o analisador ainda nao verifica integralmente UTF-8 malformado dentro de literais, nao normaliza Unicode e nao oferece fatias editaveis. Os offsets ficam vinculados aos bytes originais e nao sao referencias persistentes a memoria; o Studio devera manter a fonte viva enquanto interpretar suas posicoes.
+
 ## Limites e proximos passos
 
 - Ainda nao ha argumentos de linha de comando na RS; caminho de entrada fixo.
-- Falhas lexicas encerram o processo; na versao seguinte devem retornar resultados recuperaveis.
+- A ferramenta de linha de comando encerra com codigo 2, mas a biblioteca agora retorna diagnosticos recuperaveis.
 - Ainda nao ha prova de paridade de todos os separadores Unicode, erros e mensagens do lexico Python.
 - Nao executa analise sintatica ou semantica.
 - Primeira etapa escrita em RS, e nao compilador autocompilado. A compilacao de desenvolvimento segue em Python.
