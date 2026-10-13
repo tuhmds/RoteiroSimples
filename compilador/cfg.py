@@ -82,6 +82,8 @@ def construir_cfg(ir: ProgramaIR):
     """Expande se, enquanto e para em blocos com arestas explícitas."""
     if not isinstance(ir, ProgramaIR):
         raise TypeError('CFG recebe ProgramaIR tipado, não AST legada.')
+    if ir.funcoes:
+        raise ValueError('Análise CFG/SSA de programas com funções ainda não está disponível; use IR e efeitos.')
 
     blocos = {}
     contador = 0
@@ -104,6 +106,8 @@ def construir_cfg(ir: ProgramaIR):
         for instr in reversed(instrucoes):
             tag, args = instr.operacao, instr.argumentos
             origem = instr.origem
+            if tag == 'retorne':
+                raise ValueError('Análise CFG/SSA de retornos de função ainda não está disponível.')
             if tag == 'se':
                 nome = novo('se:condicao', (instr,), origem)
                 sim = sequencia(args[1], proximo, laco)

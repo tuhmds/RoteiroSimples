@@ -24,6 +24,8 @@ def efeito_expressao(expr):
     if expr.operacao in ('neg', 'bin'):
         # Overflow, divisão por zero e divisão fora do intervalo são observáveis.
         return e.combinar(Efeitos(pode_falhar=True))
+    if expr.operacao == 'chamada':
+        return e.combinar(Efeitos(pode_falhar=True, desconhecido=True, controle=True))
     if expr.operacao in ('numero', 'logico', 'comparacao'):
         return e
     # Falha segura: novas expressões IR não se tornam puras por omissão.
@@ -36,7 +38,7 @@ def efeito_instrucao(instr):
     exprs = ()
     if tag == 'atribua':
         exprs = (a[1],)
-    elif tag in ('imprima_num', 'se', 'enquanto'):
+    elif tag in ('imprima_num', 'retorne', 'se', 'enquanto'):
         exprs = (a[0],)
     elif tag == 'para':
         exprs = (a[1], a[2])
@@ -66,6 +68,8 @@ def efeito_instrucao(instr):
         e = e.combinar(Efeitos(leituras=frozenset((a[0],)), saida=True))
     elif tag in ('imprima_num', 'texto'):
         e = e.combinar(Efeitos(saida=True))
+    elif tag == 'retorne':
+        e = e.combinar(Efeitos(controle=True, encerra=True))
     elif tag == 'para':
         e = e.combinar(Efeitos(escritas=frozenset((a[0],)),
                               pode_falhar=True, controle=True))
@@ -95,6 +99,8 @@ def listar_efeitos(ir):
             elif t == 'para':
                 caminhar(a[4], atual + '.corpo')
     caminhar(ir.instrucoes, '')
+    for nome, funcao in ir.funcoes.items():
+        caminhar(funcao.programa.instrucoes, 'funcao:' + nome)
     return itens
 
 

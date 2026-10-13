@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.42I experimental: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.42J experimental: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import re
@@ -19,7 +19,7 @@ def main(argv=None):
     for canal in (sys.stdout, sys.stderr):
         if canal is not None and hasattr(canal, 'reconfigure'):
             canal.reconfigure(encoding='utf-8')
-    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.42I (experimental)')
+    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.42J (experimental)')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--mostrar-modulos', action='store_true', help='lista os módulos e a ordem de importação')
     parser.add_argument('--mostrar-estrategia', action='store_true', help='explica quais otimizações serão aplicadas de fato')
@@ -91,6 +91,10 @@ def main(argv=None):
                 + '; '.join(decisao.motivos)
                 + '. Compile normalmente ou utilize '
                   '--mostrar-cobertura-intermediaria para examinar os limites.')
+        if programa.funcoes and (op.mostrar_cfg or op.salvar_cfg or op.mostrar_fluxo
+                or op.salvar_fluxo or op.mostrar_ssa or op.salvar_ssa or op.mostrar_copias_phi
+                or op.mostrar_alocacao or op.mostrar_memory_ssa or op.salvar_memory_ssa):
+            raise ErroCompilacao('Análise CFG/SSA de funções ainda não está disponível; use --mostrar-ir ou --mostrar-efeitos.')
         if op.mostrar_ast:
             from compilador.ast import formatar_ast
             print(formatar_ast(programa))
