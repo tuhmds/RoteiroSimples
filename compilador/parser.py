@@ -587,10 +587,20 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 origem = contexto.resolver_caminho(grupos[1], n)
                 if destino == origem:
                     raise ErroCompilacao(f'Linha {n}: mova exige origem e destino diferentes.')
-                if (not eh_proprietario(tipos.get(destino)) or
-                        tipos.get(destino) != tipos.get(origem)):
-                    raise ErroCompilacao(f'Linha {n}: mova exige duas listas[] proprietarias.')
-                adicionar(('mova_lista_dinamica' if tipos[destino][0] == 'lista_dinamica' else 'mova_valor_dinamico_comando', destino, origem), n, t)
+                tipo_destino = tipos.get(destino)
+                tipo_origem = tipos.get(origem)
+                if tipo_destino != tipo_origem:
+                    raise ErroCompilacao(f'Linha {n}: mova exige origem e destino de tipos identicos.')
+                if (isinstance(tipo_destino, tuple) and tipo_destino[0] == 'registro'
+                        and possui_dono_registro(tipo_destino)):
+                    # Uma unica instrucao recebe o agregado inteiro. O backend
+                    # deve validar todos os donos ANTES de liberar o destino.
+                    adicionar(('mova_registro_proprietario', destino, origem), n, t)
+                elif eh_proprietario(tipo_destino):
+                    adicionar(('mova_lista_dinamica' if tipo_destino[0] == 'lista_dinamica'
+                              else 'mova_valor_dinamico_comando', destino, origem), n, t)
+                else:
+                    raise ErroCompilacao(f'Linha {n}: mova exige valores com propriedade dinamica.')
             elif t[0] in ('adicione', 'remova_ultimo', 'limpe_lista', 'libere') and t[1:2] == ['('] and t[-1:] == [')']:
                 operacao = str(t[0])
                 conteudo = t[2:-1]
