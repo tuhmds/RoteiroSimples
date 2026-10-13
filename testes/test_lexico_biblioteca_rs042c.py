@@ -32,7 +32,7 @@ class TestesBibliotecaLexicoRS(unittest.TestCase):
                                       text=True, encoding="utf-8", timeout=15)
         self.assertEqual(execucao.returncode, 0, execucao.stdout + execucao.stderr)
         # Erro -1 na coluna 2; arquivo valido nao tem erro e tem quatro tokens.
-        self.assertEqual(execucao.stdout.strip().splitlines(), ["-1", "1", "2", "-1", "4"])
+        self.assertEqual(execucao.stdout.strip().splitlines(), ["-1", "1", "2", "1", "-1", "1", "1", "2", "-1", "4", "0"])
 
 if __name__ == "__main__":
     unittest.main()
