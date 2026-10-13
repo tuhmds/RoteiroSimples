@@ -18,7 +18,7 @@ def _validar_consumos_chamada(expr, linha):
         no = pendentes.pop()
         if not isinstance(no, (tuple, list)):
             continue
-        if no and no[0] == 'mova_valor_dinamico':
+        if no and no[0] in ('mova_valor_dinamico', 'mova_registro_proprietario'):
             nome = no[1]
             if nome in consumidos:
                 raise ErroCompilacao(f'Linha {linha}: lista {nome!r} consumida mais de uma vez na mesma chamada.')
@@ -54,9 +54,24 @@ def tipo_expressao(expr, tipos, linha, funcoes=None):
             recebido = tipo_expressao(argumento, tipos, linha, funcoes)
             if eh_proprietario(esperado) and argumento[0] not in ('mova_valor_dinamico', 'chamada'):
                 raise ErroCompilacao(f'Linha {linha}: argumento {posicao} de {nome!r} exige mova(origem) ou resultado proprietario de funcao; copiar dono unico nao e permitido.')
+            # Registros com donos nao admitem copia. A chamada deve consumir
+            # uma variavel explicitamente ate existir temporario seguro.
+            if (isinstance(esperado, str) and argumento[0] != 'mova_registro_proprietario'
+                    and argumento[0] != 'chamada'):
+                tipo_arg = tipos.get(argumento[1]) if argumento[0] == 'var' else None
+                if (isinstance(tipo_arg, tuple) and tipo_arg[0] == 'registro'
+                        and tipo_arg[1] == esperado):
+                    raise ErroCompilacao(
+                        f'Linha {linha}: argumento {posicao} com registro '
+                        'exige mova(origem) quando possui donos.')
             if recebido != esperado:
                 raise ErroCompilacao(f'Linha {linha}: argumento {posicao} de {nome!r} exige {esperado}, recebeu {recebido}.')
         return retorno
+    if categoria == 'mova_registro_proprietario':
+        tipo = tipos.get(expr[1])
+        if not isinstance(tipo, tuple) or tipo[0] != 'registro':
+            raise ErroCompilacao(f'Linha {linha}: mova(origem) exige registro proprietario.')
+        return tipo[1]
     if categoria == 'mova_valor_dinamico':
         tipo = tipos.get(expr[1])
         if not eh_proprietario(tipo):
