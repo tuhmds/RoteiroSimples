@@ -4,6 +4,10 @@
 
 A biblioteca `padrao/codificacao_binaria.rts`, implementada em RS, codifica e le inteiros nao negativos little-endian em blocos de 4/8 bytes, com resultados e falhas recuperaveis. O gravador e o leitor da prova `entregas.rsd` usam o mesmo modulo, com 100 registros verificados entre processos e testes de truncamento/corrupcao. O suporte a valores de 64 bits esta restrito ao intervalo positivo de `inteiro` assinado. Nao ha transacoes, indices, diario de recuperacao ou garantias ACID. [PR #6](https://github.com/tuhmds/RoteiroSimples/pull/6), com detalhes em `docs/DADOS_RS_PROVA_BINARIA_V1.md`.
 
+## RS 0.42C — Biblioteca lexico em RS (PR #5)
+
+O analisador lexico escrito na propria RS pode ser importado com `importe "padrao/lexico.rts" como lexico`. Recebe bytes por emprestimo, devolve `lista[UnidadeLexica]` com offsets na fonte original e diagnosticos recuperaveis (classes -1 e -2), sem encerrar o processo. Tambem expoe o registro copiavel `DiagnosticoLexico` e `obter_diagnostico`, que devolvem codigo, posicao em bytes, linha e coluna sem encerrar a aplicacao. A ferramenta de exemplo usa o modulo; o Studio podera fazer o mesmo. A revisao corrigiu tambem tipos de registros importados dentro de `lista[Tipo]` no resolvedor de nomes. Testes diferenciais com o lexico Python e um processo que examina codigo invalido e valido verificam o comportamento em Windows/Linux. Dependente da RS 0.42A.3, ainda em revisao: [PR #5](https://github.com/tuhmds/RoteiroSimples/pull/5). Consulte `docs/LEXICO_NATIVO_RS_0_42C.md`.
+
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
 (ELF64), sem etapa intermediária obrigatória em C, LLVM ou montador externo. Os
@@ -35,14 +39,15 @@ e soma modular. A [aplicação binária](exemplos/aplicacoes/arquivo_binario_rs0
 constrói, transfere, grava e recupera dados, verifica a igualdade e demonstra
 a independência de uma cópia explícita.
 
-A [CI aprovada](https://github.com/tuhmds/RoteiroSimples/actions/runs/38389802837)
-executou 567 testes por sistema, sem falhas: 555 aprovados e 12 ignorados
-no Windows; 541 aprovados e 26 ignorados no Linux. Há 40 testes novos,
+A [CI da revisão aprovada](https://github.com/tuhmds/RoteiroSimples/actions/runs/38393807039)
+executou 569 testes por sistema, sem falhas: 557 aprovados e 12 ignorados
+no Windows; 543 aprovados e 26 ignorados no Linux. Há 42 testes adicionais desde a 0.42A.2,
 incluindo dados binários arbitrários, crescimento, transferência,
 falhas simuladas e desenrolamento Windows real. Detalhes, provas e limites estão na
-[nota técnica](docs/BYTES_DINAMICOS_RS_0_42A_3.md). Este marco depende da entrega
-de texto 0.42A.2 e do contrato 0.42A.1; sua branch não representa publicação na
-main. Donos em registros/listas, empréstimos mutáveis e operações posicionais
+[nota técnica](docs/BYTES_DINAMICOS_RS_0_42A_3.md) e na
+[revisão conjunta](docs/REVISAO_CONJUNTA_RS_0_42A.md). Os marcos foram organizados
+em propriedade 0.42A.1, texto 0.42A.2 e bytes 0.42A.3, com commits preservados.
+Donos em registros/listas, empréstimos mutáveis e operações posicionais
 com buffers dinâmicos permanecem pendentes.
 
 ## RS 0.42A.2 — Texto UTF-8 dinâmico
