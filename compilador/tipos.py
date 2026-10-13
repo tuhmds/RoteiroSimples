@@ -29,6 +29,10 @@ def _validar_consumos_chamada(expr, linha, tipos, campos):
             consumidos.update(folhas)
         elif no and no[0] in ('empreste_lista_dinamica', 'empreste_texto_dinamico', 'empreste_bytes_dinamicos'):
             emprestados.add(no[1])
+        elif no and no[0] == 'empreste_registro_lista':
+            emprestados.add(no[1])
+        elif no and no[0] == 'empreste_registro':
+            emprestados.update(donos_do_agregado(no[1], tipos, campos))
         elif no and no[0] == 'retire_registro_lista':
             retiradas.add(no[1])
         pendentes.extend(filho for filho in no if isinstance(filho, (tuple, list)))
@@ -45,6 +49,18 @@ def tipo_expressao(expr, tipos, linha, funcoes=None, registros=None, campos=None
     registros = {} if registros is None else registros
     campos = {} if campos is None else campos
     categoria = expr[0]
+    if categoria in ('empreste_registro', 'empreste_registro_lista'):
+        tipo = tipos.get(expr[1])
+        if categoria == 'empreste_registro_lista':
+            if (not isinstance(tipo, tuple) or tipo[0] not in ('lista_dinamica', 'lista_emprestada')
+                    or tipo[1] not in registros):
+                raise ErroCompilacao(f'Linha {linha}: emprestimo do elemento exige lista de registros.')
+            _validar_consumos_chamada(expr, linha, tipos, campos)
+            if tipo_expressao(expr[2], tipos, linha, funcoes, registros, campos) != 'inteiro':
+                raise ErroCompilacao(f'Linha {linha}: indice do emprestimo deve ser inteiro.')
+        elif not isinstance(tipo, tuple) or tipo[0] not in ('registro', 'registro_emprestado'):
+            raise ErroCompilacao(f'Linha {linha}: emprestimo exige registro.')
+        return ('registro_emprestado', tipo[1])
     if categoria == 'numero':
         if expr[1] > (1 << 63) - 1:
             raise ErroCompilacao(f'Linha {linha}: número inteiro ultrapassa o máximo de 64 bits.')
@@ -109,6 +125,8 @@ def tipo_expressao(expr, tipos, linha, funcoes=None, registros=None, campos=None
         return 'inteiro'
     if categoria == 'var':
         tipo = tipos[expr[1]]
+        if isinstance(tipo, tuple) and tipo[0] == 'registro_emprestado':
+            return ('registro_emprestado', tipo[1])
         if isinstance(tipo, tuple) and tipo[0] == 'registro':
             return tipo[1]
         # Listas e textos são valores compostos; o contexto da operação

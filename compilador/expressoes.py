@@ -84,7 +84,19 @@ class Expressao:
             if token == 'empreste' and self.olhar() == '(':
                 self.consumir('(')
                 nome = self.consumir()
+                tipo = getattr(self, 'tipos', {}).get(nome)
+                if self.olhar() == '[':
+                    self.consumir('[')
+                    indice = self.comparacao()
+                    self.consumir(']')
+                    self.consumir(')')
+                    if (not isinstance(tipo, tuple) or tipo[0] not in ('lista_dinamica', 'lista_emprestada')
+                            or tipo[1] not in getattr(self, 'registros', {})):
+                        raise ErroCompilacao(f'Linha {self.linha}: empreste(lista[indice]) exige lista de registros.')
+                    return NoExpressao(('empreste_registro_lista', nome, indice), getattr(token, 'origem', None))
                 self.consumir(')')
+                if isinstance(tipo, tuple) and tipo[0] in ('registro', 'registro_emprestado'):
+                    return NoExpressao(('empreste_registro', nome), getattr(token, 'origem', None))
                 if getattr(self, 'tipos', {}).get(nome) == TIPO_TEXTO_DINAMICO:
                     return NoExpressao(('empreste_texto_dinamico', nome), getattr(token, 'origem', None))
                 if getattr(self, 'tipos', {}).get(nome) == TIPO_BYTES_DINAMICOS:

@@ -11,6 +11,7 @@ from .propriedade import (eh_proprietario, eh_emprestimo, eh_texto, contrato_val
 from .propriedade import eh_registro_proprietario, eh_valor_proprietario, donos_do_agregado
 from .propriedade import ORIGENS_PROPRIETARIAS, eh_colecao_proprietaria
 from .propriedade import eh_bytes, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
+from .efeitos_programa import efeito_instrucao_arvore
 
 def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _retorno=None, _registros=None):
     # O analisador público também compreende resultados genéricos, e não só
@@ -102,6 +103,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             return TIPO_TEXTO_EMPRESTADO
         if partes == ['emprestimo', '[', 'bytes', ']']:
             return TIPO_BYTES_EMPRESTADOS
+        if len(partes) == 4 and partes[:2] == ['emprestimo', '['] and partes[-1] == ']' and partes[2] in registros:
+            return ('registro_emprestado', str(partes[2]))
         if partes == ['lista', '[', ']']:
             return ('lista_dinamica', 'inteiro')
         if len(partes) == 4 and partes == ['emprestimo', '[', 'lista', ']']:
@@ -263,6 +266,9 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
         instrucoes = []
 
         def adicionar(instruicao, linha, partes):
+            escritas = efeito_instrucao_arvore(instruicao).escritas
+            if escritas & contexto.somente_leitura:
+                raise ErroCompilacao(f'Linha {linha}: campos de registro emprestado permitem somente leitura.')
             instrucao = NoInstrucao(instruicao, PosicaoFonte(linha, partes[0].origem.coluna))
             instrucoes.append(instrucao)
         while i < len(normalizadas):

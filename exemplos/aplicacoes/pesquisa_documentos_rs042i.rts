@@ -1,0 +1,38 @@
+importe "padrao/documentos.rts" como documentos
+
+funcao criar(numero: inteiro) -> documentos.Documento {
+    seja titulo: texto
+    se numero == 1 {
+        copie(titulo, "Ação")
+    } senao {
+        copie(titulo, "Coleção RS")
+    }
+    seja conteudo: bytes
+    para indice de 0 ate numero + 1 {
+        adicione_byte(conteudo, 255)
+    }
+    seja resposta = documentos.criar(mova(titulo), mova(conteudo), 128, 4096)
+    retorne mova(resposta.valor)
+}
+
+funcao mostrar(documento: emprestimo[documentos.Documento]) -> inteiro {
+    escreva(documento.titulo)
+    escreva(documento.conteudo[0])
+    retorne tamanho(documento.conteudo)
+}
+
+inicio {
+    seja catalogo: lista[documentos.Documento]
+    para numero de 0 ate 2 {
+        adicione(catalogo, criar(numero))
+    }
+    seja procurado: texto
+    copie(procurado, "Ação")
+    escreva(documentos.localizar_titulo(empreste(catalogo), empreste(procurado)))
+    copie(procurado, "Ausente")
+    escreva(documentos.localizar_titulo(empreste(catalogo), empreste(procurado)))
+    escreva(tamanho(catalogo))
+    escreva(documentos.somar_conteudos(empreste(catalogo)))
+    escreva(mostrar(empreste(catalogo[1])))
+    limpe_lista(catalogo)
+}

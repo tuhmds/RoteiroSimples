@@ -293,11 +293,12 @@ funcao com_medida(n: inteiro, a: Documento) -> inteiro {
     seja documento: Documento = mova(interno)
 }''', 'tipo incompat'),
             (CABECALHO + '''funcao consultar(a: emprestimo[Documento]) -> inteiro {
+    a.codigo = 1
     retorne 1
 }
 inicio {
     escreva(1)
-}''', 'tipo inv'),
+}''', 'somente leitura'),
             ('''tipo Recurso {
     arquivo: arquivo
 }

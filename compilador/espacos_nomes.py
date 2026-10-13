@@ -256,10 +256,10 @@ def carregar_com_espacos(principal):
                     saida.append(alvo.nomes[proximo])
                     indice += 3
                     continue
-            # Tipos importados devem ser resolvidos tambem dentro de lista[Tipo].
+            # Tipos importados também são resolvidos em coleções e empréstimos.
             deve_renomear = bool(
                 (indice >= 1 and partes[indice-1] in ('tipo', 'funcao', ':', '>')) or
-                (indice >= 2 and partes[indice-1] == '[' and partes[indice-2] in ('lista', 'resultado', 'sucesso', 'falha')) or
+                (indice >= 2 and partes[indice-1] == '[' and partes[indice-2] in ('lista', 'emprestimo', 'resultado', 'sucesso', 'falha')) or
                 (indice + 1 < len(partes) and partes[indice+1] == '('))
             if deve_renomear and nome in referencias:
                 saida.append(referencias[nome])

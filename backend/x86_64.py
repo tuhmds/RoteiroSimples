@@ -315,6 +315,10 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
                 _validar_registro_vivo(g, variaveis, origem, windows)
                 _empilhar_palavras(g, variaveis, origem, quantidade, windows)
                 _inativar_registro(g, variaveis, origem, windows)
+            elif isinstance(tipo_parametro, tuple) and tipo_parametro[0] == 'registro_emprestado':
+                from .emprestimos_registros import empilhar
+                empilhar(g, argumento, tipo_parametro, variaveis, windows, expressao,
+                         _empilhar_palavras, pilha_extra + ajustar + empilhados)
             elif _composto(tipo_parametro, g.registros):
                 if argumento[0] == 'temporario_composto':
                     expressao(g, argumento[2], variaveis, windows, registradores,

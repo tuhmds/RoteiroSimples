@@ -5,6 +5,7 @@ from .lexico import Token
 from .ast import NoExpressao
 from .tipos import MAX_VARIAVEIS, tipo_expressao
 from .disposicao_tipos import palavras_tipo
+from .emprestimos_registros import eh_registro_emprestado, campos_emprestados
 from .propriedade import (contrato_valor, eh_valor_proprietario,
                          TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO)
 
@@ -15,6 +16,7 @@ class ContextoSemantico:
         self.funcoes = funcoes or {}
         self.registros = registros or {}
         self.campos_registro = {}
+        self.somente_leitura = set()
         self.variaveis = {}  # nomes internos -> deslocamentos de pilha
         self.tipos = {}      # nomes internos -> tipos
         self.escopos = [{}]
@@ -66,13 +68,17 @@ class ContextoSemantico:
             # Cada caminho precisa de um alias próprio, mesmo nesses casos.
             self.contador_campos += 1
             nome = f'__rs_campo_{self.contador_campos}_{campo}'
-            tipo_real = (('registro', tipo_campo, self.registros[tipo_campo])
+            tipo_real = (('registro_emprestado', tipo_campo[1], campos_emprestados(tipo_campo[1], self.registros))
+                         if eh_registro_emprestado(tipo_campo) else
+                         ('registro', tipo_campo, self.registros[tipo_campo])
                          if isinstance(tipo_campo, str) and tipo_campo in self.registros
                          else tipo_campo)
             self.variaveis[nome] = inicio + deslocamento
             self.tipos[nome] = tipo_real
             campos[campo] = nome
-            if isinstance(tipo_real, tuple) and tipo_real[0] == 'registro':
+            if eh_registro_emprestado(tipo):
+                self.somente_leitura.add(nome)
+            if isinstance(tipo_real, tuple) and tipo_real[0] in ('registro', 'registro_emprestado'):
                 self._criar_campos(nome, tipo_real, inicio + deslocamento)
             deslocamento += self._espacos_tipo(tipo_real)
         self.campos_registro[interno] = campos
@@ -104,6 +110,17 @@ class ContextoSemantico:
     def _preparar_argumentos_compostos(self, arvore):
         """Reserva destino interno para chamada composta passada diretamente como argumento."""
         tag = arvore[0]
+        if tag == 'empreste_registro_lista':
+            indice = self._preparar_argumentos_compostos(arvore[2])
+            self.contador += 1
+            nome = f'__rs_vista_registro_{self.contador}'
+            palavras = palavras_tipo(self.tipos[arvore[1]][1], self.registros)
+            if (self.total_slots + palavras) * 8 >= 0x7FFF0000:
+                raise ErroCompilacao('Quadro temporario de emprestimo excede endereco de 32 bits.')
+            self.variaveis[nome] = self.total_slots
+            self.tipos[nome] = ('reserva_vista', palavras)
+            self.total_slots += palavras
+            return NoExpressao((tag, arvore[1], indice, nome), getattr(arvore, 'origem', None))
         if tag == 'chamada':
             nome, argumentos = arvore[1], arvore[2]
             parametros, _ = self.funcoes[nome]
@@ -185,6 +202,8 @@ class ContextoSemantico:
             raise ErroCompilacao(f'Linha {linha}: variável {nome!r} duplicada no mesmo escopo.')
         if nome.startswith('__rs_'):
             raise ErroCompilacao(f'Linha {linha}: o prefixo __rs_ é reservado ao compilador.')
+        if eh_registro_emprestado(tipo):
+            tipo = ('registro_emprestado', tipo[1], campos_emprestados(tipo[1], self.registros))
         tamanho = self._espacos_tipo(tipo)
         if (self.total_slots + tamanho)*8 >= 0x7FFF0000:
             raise ErroCompilacao(f'Linha {linha}: quadro local excede endereçamento de 32 bits do gerador x86-64.')
@@ -194,7 +213,9 @@ class ContextoSemantico:
         self.variaveis[interno] = self.total_slots
         self.tipos[interno] = tipo
         self.total_slots += tamanho
-        if isinstance(tipo, tuple) and tipo[0] == 'registro':
+        if eh_registro_emprestado(tipo):
+            self.somente_leitura.add(interno)
+        if isinstance(tipo, tuple) and tipo[0] in ('registro', 'registro_emprestado'):
             self._criar_campos(interno, tipo, self.variaveis[interno])
         if len(self.escopos) > 1:
             self.usou_locais = True

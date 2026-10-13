@@ -29,8 +29,9 @@ def eh_proprietario(tipo):
 
 
 def eh_emprestimo(tipo):
-    """Identifica a referência temporária de leitura de um descritor."""
-    return (isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] == 'lista_emprestada'
+    """Identifica vistas temporárias de leitura de descritores e registros."""
+    return (isinstance(tipo, tuple) and tipo[0] == 'registro_emprestado'
+            or isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] == 'lista_emprestada'
             or tipo in (TIPO_TEXTO_EMPRESTADO, TIPO_BYTES_EMPRESTADOS))
 
 
