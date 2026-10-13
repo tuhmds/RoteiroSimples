@@ -61,4 +61,3 @@ def emitir_rotinas(g, windows):
     _emitir(g, '4C 8B 55 F8 49 8B 3A 48 03 7D D0 48 8B 4D E8 FC F3 A4')
     _emitir(g, '48 8B 45 C8 49 89 42 F8')
     _fechar(g, windows, nome)
-

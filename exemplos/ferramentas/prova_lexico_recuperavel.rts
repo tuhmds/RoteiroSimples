@@ -1,0 +1,40 @@
+// O processo nao encerra quando o lexico encontra um erro.
+importe "padrao/lexico.rts" como lexico
+
+inicio {
+    seja ruim: bytes
+    adicione_byte(ruim, 97)
+    adicione_byte(ruim, 64)
+    seja encontrados = lexico.analisar(empreste(ruim))
+    seja posicao_erro = lexico.primeiro_erro(empreste(encontrados))
+    se posicao_erro < 0 {
+        encerre(10)
+    }
+    seja erro: lexico.UnidadeLexica = encontrados[posicao_erro]
+    escreva(erro.classe)
+    escreva(erro.linha)
+    escreva(erro.coluna)
+    seja diagnostico = lexico.obter_diagnostico(empreste(encontrados))
+    escreva(diagnostico.encontrado)
+    escreva(diagnostico.codigo)
+    escreva(diagnostico.posicao_byte)
+    escreva(diagnostico.linha)
+    escreva(diagnostico.coluna)
+    // Um segundo documento continua sendo analisado pelo mesmo processo.
+    seja bom: bytes
+    adicione_byte(bom, 115)
+    adicione_byte(bom, 101)
+    adicione_byte(bom, 106)
+    adicione_byte(bom, 97)
+    adicione_byte(bom, 32)
+    adicione_byte(bom, 120)
+    adicione_byte(bom, 32)
+    adicione_byte(bom, 61)
+    adicione_byte(bom, 32)
+    adicione_byte(bom, 49)
+    seja validos = lexico.analisar(empreste(bom))
+    escreva(lexico.primeiro_erro(empreste(validos)))
+    escreva(tamanho(validos))
+    seja sem_erro = lexico.obter_diagnostico(empreste(validos))
+    escreva(sem_erro.encontrado)
+}

@@ -347,6 +347,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 destino = t[2:-1]
                 if '[' in destino:
                     nome, indice, tamanho = indice_lista(destino, n)
+                    if tamanho == 'bytes':
+                        raise ErroCompilacao(f'Linha {n}: leia nao admite indices de bytes; leia um inteiro e atribua o byte explicitamente.')
                     if tamanho is None and tipos[nome][1] != 'inteiro':
                         raise ErroCompilacao(f'Linha {n}: leia de lista dinamica so aceita elementos inteiros.')
                     if tamanho is None:

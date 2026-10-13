@@ -1,7 +1,7 @@
 """Emissão nativa de instruções AMD64, leitura/escrita e saltos."""
 import struct
 from compilador.erros import ErroCompilacao
-from compilador.propriedade import eh_proprietario, eh_texto, eh_bytes, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
+from compilador.propriedade import eh_proprietario, eh_emprestimo, eh_texto, eh_bytes, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
 from . import valores_dinamicos, memoria_dinamica, sequencias_dinamicas, textos_dinamicos, listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros, arquivos_abertos, publicacao_atomica, politica_caminhos
 from compilador.disposicao_tipos import palavras_tipo as _palavras_tipo
 from .base import Emissor, alinhar
@@ -905,10 +905,10 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
         pendentes.extend(f for f in no if isinstance(f, (tuple, list)))
     tem_texto_novo = consultas_utf8 or any(t in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO) for t in tipos_do_programa)
     tem_sequencias_dinamicas = tem_texto_novo or any(t in (TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS) for t in tipos_do_programa)
-    tem_dinamicas = tem_sequencias_dinamicas or any(eh_proprietario(t) for t in tipos_do_programa)
+    tem_dinamicas = tem_sequencias_dinamicas or any(eh_proprietario(t) or eh_emprestimo(t) for t in tipos_do_programa)
     tem_listas_dinamicas = any(listas_dinamicas.eh_lista_dinamica(t) for t in tipos_do_programa)
     tem_listas = tem_listas_dinamicas or any(
-        isinstance(t, tuple) and t[0] == 'lista' for t in tipos_do_programa)
+        isinstance(t, tuple) and t[0] in ('lista', 'lista_emprestada') for t in tipos_do_programa)
     tem_textos = any(eh_texto(t) for t in tipos_do_programa)
     tem_bytes = any(eh_bytes(t) for t in tipos_do_programa)
     tem_publicacao = any(op[0] == 'publique_arquivo'

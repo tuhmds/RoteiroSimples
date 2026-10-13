@@ -183,8 +183,10 @@ Implementação: [964f1d0](https://github.com/tuhmds/RoteiroSimples/commit/964f1
 Documentação: [b9da8bd](https://github.com/tuhmds/RoteiroSimples/commit/b9da8bd).
 [PR #4](https://github.com/tuhmds/RoteiroSimples/pull/4), dependente da
 [PR #3](https://github.com/tuhmds/RoteiroSimples/pull/3) e
-[PR #2](https://github.com/tuhmds/RoteiroSimples/pull/2). A entrega continua
-aguardando revisão e integração, sem mesclagem automática.
+[PR #2](https://github.com/tuhmds/RoteiroSimples/pull/2). A
+[revisão conjunta posterior](REVISAO_CONJUNTA_RS_0_42A.md) registra duas
+correções adicionais e 569 testes encontrados por sistema. A integração
+segue a ordem das dependências e exige autorização explícita.
 
 Permanecem pendentes donos dentro de registros/listas, empréstimos mutáveis,
 fatiamento binário, igualdade direta pela sintaxe, operações posicionais
