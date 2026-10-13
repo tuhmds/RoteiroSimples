@@ -35,9 +35,10 @@ consumo duplicado e empréstimo/consumo do mesmo dono numa chamada.
 **Escopo:** texto/bytes dinâmicos, donos aninhados, empréstimos mutáveis,
 funções genéricas gerais, novos operadores lógicos e números reais ficam
 para marcos seguintes. Esta entrega não conclui toda a RS 0.42A.
-A proteção de pilha inclui argumentos e temporários das chamadas. A validação
-Windows está registrada na nota técnica; a integração contínua dos dois sistemas
-ainda será confirmada.
+A proteção de pilha inclui argumentos e temporários das chamadas. A
+[integração contínua](https://github.com/tuhmds/RoteiroSimples/actions/runs/38372044241)
+executou 487 testes por sistema, sem falhas: 12 ignorados no Windows e
+20 no Linux, conforme a plataforma.
 
 [Contrato, exemplos, migração e limites da RS 0.42A.1](docs/VALORES_DINAMICOS_RS_0_42A_1.md).
 
@@ -917,8 +918,8 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**Continuidade da RS 0.42A:** consolidar este primeiro marco com execução nativa
-em Windows e Linux; depois compartilhar reserva e descarte com texto UTF-8
+**Continuidade da RS 0.42A:** revisar este primeiro marco já validado com execução
+nativa em Windows e Linux; depois compartilhar reserva e descarte com texto UTF-8
 dinâmico e bytes dinâmicos. Nomes de comprimento variável no cadastro dependem
 dessa etapa. Funções e coleções mais gerais, novos operadores lógicos e
 tipos reais/decimais pertencem aos marcos seguintes. A autocompilação continua

@@ -236,12 +236,21 @@ propriedade; selecionar `-O 8` não muda essa restrição. O diagnóstico
 
 ## Validação reproduzível
 
-A suíte completa local em Windows x64 executou 486 testes, sem falhas,
-com 13 ignorados por condições de plataforma/permissão. Depois desse
-resultado, uma regressão adicional de índices/temporários foi acrescentada
-e passou isoladamente. A contagem final após essa inclusão e a execução
-Linux serão registradas na integração contínua; seus resultados ainda
-estão pendentes.
+A [integração contínua da PR](https://github.com/tuhmds/RoteiroSimples/actions/runs/38372044241)
+aprovou o commit `acb65af`, incluindo a regressão adicional de índices e
+temporários. As alterações posteriores deste registro são documentais.
+
+| Sistema | Testes encontrados | Aprovados | Ignorados | Falhas |
+|---|---:|---:|---:|---:|
+| Windows x64 | 487 | 475 | 12 | 0 |
+| Linux x86-64 | 487 | 467 | 20 | 0 |
+
+Cada sistema executou seus próprios binários nativos. No Linux, os ensaios
+da API Windows e da ABI Windows são ignorados; no Windows, os ensaios
+específicos de Linux são ignorados. A suíte local anterior executou 486
+testes Windows com 13 ignorados, mais a regressão adicional aprovada
+isoladamente; a diferença de um ignorado decorre da permissão de criar
+link simbólico na máquina local. Os 46 testes novos ampliam a base de 441.
 
 As verificações Windows confirmaram diagnóstico controlado em recursão
 com quatro ou dez donos e com doze argumentos pendentes durante outra
