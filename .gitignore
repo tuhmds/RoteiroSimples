@@ -12,3 +12,9 @@ fluxo.png
 
 # Dump da SSA (opcional)
 ssa.json
+
+# Medição de cobertura e campanhas nativas de verificação
+.coverage*
+!.coveragerc
+relatorios/
+.ambiente-verificacao/

@@ -1,0 +1,2 @@
+# Ferramenta opcional de desenvolvimento; não integra os executáveis RS.
+coverage==7.16.2

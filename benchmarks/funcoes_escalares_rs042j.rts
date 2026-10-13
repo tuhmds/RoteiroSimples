@@ -1,0 +1,12 @@
+funcao calcular(numero: inteiro) -> inteiro {
+    seja fator = 3 + 4
+    seja ajuste = 9 * 2
+    retorne numero * fator + ajuste
+}
+inicio {
+    seja total = 0
+    para numero de 0 ate 199999 {
+        total = total + calcular(numero)
+    }
+    escreva(total)
+}
