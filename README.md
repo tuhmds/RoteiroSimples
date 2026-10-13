@@ -1,6 +1,21 @@
-# RoteiroSimples (RS) — versão experimental 0.42G
+# RoteiroSimples (RS) — versão experimental 0.42H
 
-## RS 0.42G — Resultados com propriedade
+## RS 0.42H — Coleções de registros proprietários
+
+`lista[Registro]` agora aceita registros com texto, bytes, listas e subregistros
+proprietários. Inserção e substituição recebem `mova(registro)` ou um valor
+novo. `retire(colecao, indice)` transfere um registro para fora da lista,
+remove sua posição e preserva a ordem. Limpeza, remoção, liberação e saídas
+de escopo descartam os campos de cada elemento antes do armazenamento da lista.
+
+Coleções podem ocupar campos de registros, ser aninhadas e atravessar funções
+e resultados via registros proprietários. O crescimento preserva os ponteiros
+do conteúdo. Registros copiáveis mantêm seu comportamento histórico por valor.
+O [exemplo de catálogo](exemplos/aplicacoes/colecao_documentos_rs042h.rts) usa
+a biblioteca de documentos em RS. [Contrato e limites](docs/COLECOES_PROPRIETARIAS_RS_0_42H.md).
+Leitura de campos de elementos por empréstimo permanece como próxima etapa.
+
+## Histórico: RS 0.42G — Resultados com propriedade
 
 `resultado[texto]`, `resultado[bytes]` e resultados de registros proprietários
 agora transportam donos. `sucesso[T](mova(valor))` recebe o conteúdo sem
@@ -971,7 +986,7 @@ nenhum nível foi criado na RS 0.29. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes na RS 0.42G
+## Recursos presentes na RS 0.42H
 
 | Recurso | Situação |
 |---|---|
@@ -1002,6 +1017,8 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Parâmetros e retornos de registros proprietários | Implementado na 0.42F |
 | Resultados com texto, bytes e registros proprietários | Implementado na 0.42G |
 | Biblioteca de validação e composição de documentos em RS | Implementado na 0.42G |
+| Coleções de registros proprietários, retirada e descarte por elemento | Implementado na 0.42H |
+| Listas de registros em campos e coleções proprietárias aninhadas | Implementado na 0.42H; até 32 níveis |
 | Consultas gerais e seleção de listas em RS | Acrescentadas na 0.42A.1 |
 | ABI e desenrolamento Windows com ensaios reais | Consolidado na 0.41.5; regressões mantidas |
 | Contrato comum de disposição, efeitos e propriedade | Consolidado nas revisões 0.40 e neste marco |
@@ -1013,7 +1030,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Publicação por renomeação, bloqueio não bloqueante e basename variável verificado | Implementado na 0.39 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
-| Coleções de registros proprietários, resultados aninhados/de listas dinâmicas, empréstimos mutáveis, reais/decimais e FFI | Ainda não |
+| Empréstimos de elementos proprietários, resultados aninhados/de listas dinâmicas, empréstimos mutáveis, reais/decimais e FFI | Ainda não |
 
 ## Organização atual
 
@@ -1034,8 +1051,9 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**Continuidade da propriedade:** coleções de registros proprietários precisam
-de regras de transferência e descarte por elemento. Resultados com donos e
+**Continuidade da propriedade:** empréstimos de leitura de elementos e acesso
+seguro aos seus campos precisam preservar a vida da coleção. Coleções,
+resultados com donos e
 registros com texto, bytes e listas já atravessam funções; esse suporte serve
 à construção de bibliotecas em RS, do compilador em RS e do Dados RS.
 Em paralelo, o léxico em RS permite iniciar a análise sintática, e a prova
