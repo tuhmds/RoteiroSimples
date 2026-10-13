@@ -2,9 +2,10 @@
 
 **Situação:** especificação de arquitetura, não implementação de banco de dados.
 
-**Avanço até a RS 0.42G:** texto e bytes dinâmicos estão implementados,
+**Avanço até a RS 0.42H:** texto e bytes dinâmicos estão implementados,
 assim como campos proprietários, transporte de registros entre funções e
-resultados com donos e falhas recuperáveis explícitas.
+resultados com donos e falhas recuperáveis explícitas. Coleções de registros
+proprietários e listas em campos chegaram na 0.42H, com descarte por elemento.
 A biblioteca de codificação binária e a prova entre dois processos com
 100 registros estão em [DADOS_RS_PROVA_BINARIA_V1.md](DADOS_RS_PROVA_BINARIA_V1.md).
 O formato dessa prova não congela o futuro formato do motor. Páginas,
@@ -150,7 +151,8 @@ Prioridades que deverão ser implementadas e validadas na linguagem/núcleo:
    ou garantia absoluta após perda de energia.
 5. Texto dinâmico (0.42A.2), campos proprietários (0.42D) e transporte de
    registros em funções (0.42F) e resultados com conteúdo proprietário
-   (0.42G); coleções de donos ainda exigem contratos próprios.
+   (0.42G); coleções de registros proprietários chegaram na 0.42H.
+   Leitura de campos por empréstimo ainda exige contrato próprio.
 6. Interface de funções externas (ABI C) para drivers existentes.
 7. Rede, TLS e gerenciamento de credenciais para modo servidor e clientes
    remotos, quando necessário.

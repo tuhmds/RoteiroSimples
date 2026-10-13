@@ -4,7 +4,7 @@ from .erros import ErroCompilacao
 from .ast import NoExpressao
 from .propriedade import eh_proprietario, eh_texto, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO
 from .propriedade import eh_bytes, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
-from .propriedade import eh_registro_proprietario
+from .propriedade import eh_registro_proprietario, eh_colecao_proprietaria
 
 class Expressao:
     def __init__(self, tokens, linha, variaveis, importa):
@@ -93,6 +93,15 @@ class Expressao:
                         self.tipos[nome][0] != 'lista_dinamica'):
                     raise ErroCompilacao(f'Linha {self.linha}: empreste() exige lista[] com propriedade.')
                 return NoExpressao(('empreste_lista_dinamica', nome), getattr(token, 'origem', None))
+            if token == 'retire' and self.olhar() == '(':
+                self.consumir('(')
+                nome = self.consumir()
+                self.consumir(',')
+                indice = self.comparacao()
+                self.consumir(')')
+                if not eh_colecao_proprietaria(getattr(self, 'tipos', {}).get(nome), getattr(self, 'registros', {})):
+                    raise ErroCompilacao(f'Linha {self.linha}: retire exige lista proprietaria de registros com donos.')
+                return NoExpressao(('retire_registro_lista', nome, indice), getattr(token, 'origem', None))
             if token == 'tamanho' and self.olhar() == '(':
                 self.consumir('(')
                 nome = self.consumir()

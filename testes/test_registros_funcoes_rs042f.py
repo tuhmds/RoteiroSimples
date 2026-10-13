@@ -235,7 +235,7 @@ inicio {
             ('seja destino = origem', 'copia implicita'),
             ('seja destino: Documento\n    destino = origem', 'nao pode ser copiado'),
             ('escreva(origem == origem)', 'nao admite comparacao'),
-            ('seja documentos: lista[Documento]', 'transferencia por elemento'),
+            ('seja documentos: lista[Documento]\n    adicione(documentos, origem)', 'nao pode copiar dono'),
         ]
         for corpo, mensagem in entradas:
             with self.subTest(corpo=corpo), self.assertRaisesRegex(ErroCompilacao, mensagem):

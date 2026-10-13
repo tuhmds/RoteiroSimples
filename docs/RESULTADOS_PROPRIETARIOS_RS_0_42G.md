@@ -1,5 +1,7 @@
 # RS 0.42G — Resultados com propriedade
 
+Esta nota descreve o marco 0.42G. A [0.42H acrescentou coleções proprietárias](COLECOES_PROPRIETARIAS_RS_0_42H.md), incluindo listas em campos de registros; os limites abaixo relativos a coleções descrevem a entrega original.
+
 ## Tipos e construção
 
 `resultado[texto]`, `resultado[bytes]` e `resultado[MeuRegistro]` com campos

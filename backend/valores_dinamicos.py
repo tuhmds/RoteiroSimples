@@ -62,18 +62,23 @@ def endereco_descritor(g, variaveis, nome, windows):
 
 
 def liberar(g, variaveis, nome, windows, explicito=False):
+    from .colecoes_proprietarias import liberador
     tipo = _exigir_proprietario(g, nome)
     if explicito:
         verificar_vivo(g, variaveis, nome, windows)
     endereco_descritor(g, variaveis, nome, windows)
     g.bytes(b'\xBE' + struct.pack('<I', passo_armazenamento(tipo, g.registros)))
-    g.chamada('rs_valor_liberar_descritor')
+    g.chamada(liberador(tipo, g.registros))
 
 
 def mover(g, variaveis, destino, origem, windows):
     tipo = _exigir_proprietario(g, destino)
     if _exigir_proprietario(g, origem) != tipo or destino == origem:
         raise ErroCompilacao('Movimento exige donos distintos do mesmo tipo.')
+    from compilador.propriedade import eh_colecao_proprietaria
+    if eh_colecao_proprietaria(tipo, g.registros):
+        verificar_vivo(g, variaveis, origem, windows)
+        liberar(g, variaveis, destino, windows)
     endereco_descritor(g, variaveis, destino, windows)
     g.bytes(b'\x48\x83\xEC\x10\x48\x89\x3C\x24')
     endereco_descritor(g, variaveis, origem, windows)

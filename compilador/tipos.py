@@ -4,6 +4,7 @@ from .propriedade import eh_proprietario, eh_emprestimo, eh_texto, TIPO_TEXTO_DI
 from .propriedade import eh_bytes, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
 
 from .propriedade import eh_registro_proprietario, eh_valor_proprietario, donos_do_agregado
+from .propriedade import ORIGENS_PROPRIETARIAS, eh_colecao_proprietaria
 
 MAX_VARIAVEIS = 256  # sem sondagem de pilha/stack probing na versão atual
 
@@ -14,7 +15,7 @@ def _validar_consumos_chamada(expr, linha, tipos, campos):
     A verificação inclui argumentos aninhados, independentemente da ordem
     de avaliação, sem inventar empréstimos persistentes ou copiar donos.
     """
-    consumidos, emprestados = set(), set()
+    consumidos, emprestados, retiradas = set(), set(), set()
     pendentes = [expr]
     while pendentes:
         no = pendentes.pop()
@@ -28,11 +29,15 @@ def _validar_consumos_chamada(expr, linha, tipos, campos):
             consumidos.update(folhas)
         elif no and no[0] in ('empreste_lista_dinamica', 'empreste_texto_dinamico', 'empreste_bytes_dinamicos'):
             emprestados.add(no[1])
+        elif no and no[0] == 'retire_registro_lista':
+            retiradas.add(no[1])
         pendentes.extend(filho for filho in no if isinstance(filho, (tuple, list)))
     conflitos = consumidos & emprestados
     if conflitos:
         nome = sorted(conflitos)[0]
         raise ErroCompilacao(f'Linha {linha}: nao pode emprestar e mover o mesmo dono {nome!r} na mesma chamada.')
+    if retiradas & (consumidos | emprestados):
+        raise ErroCompilacao(f'Linha {linha}: retire nao pode compartilhar a lista com consumo ou emprestimo na mesma chamada.')
 
 
 def tipo_expressao(expr, tipos, linha, funcoes=None, registros=None, campos=None):
@@ -57,11 +62,19 @@ def tipo_expressao(expr, tipos, linha, funcoes=None, registros=None, campos=None
         _validar_consumos_chamada(expr, linha, tipos, campos)
         for posicao, (argumento, esperado) in enumerate(zip(argumentos, parametros), 1):
             recebido = tipo_expressao(argumento, tipos, linha, funcoes, registros, campos)
-            if eh_valor_proprietario(esperado, registros) and argumento[0] not in ('mova_valor_dinamico', 'mova_registro_proprietario', 'chamada'):
+            if eh_valor_proprietario(esperado, registros) and argumento[0] not in ORIGENS_PROPRIETARIAS:
                 raise ErroCompilacao(f'Linha {linha}: argumento {posicao} de {nome!r} exige mova(origem) ou resultado proprietario de funcao; copiar dono unico nao e permitido.')
             if recebido != esperado:
                 raise ErroCompilacao(f'Linha {linha}: argumento {posicao} de {nome!r} exige {esperado}, recebeu {recebido}.')
         return retorno
+    if categoria == 'retire_registro_lista':
+        tipo = tipos.get(expr[1])
+        if not eh_colecao_proprietaria(tipo, registros):
+            raise ErroCompilacao(f'Linha {linha}: retire exige colecao proprietaria.')
+        _validar_consumos_chamada(expr, linha, tipos, campos)
+        if tipo_expressao(expr[2], tipos, linha, funcoes, registros, campos) != 'inteiro':
+            raise ErroCompilacao(f'Linha {linha}: indice de retire deve ser inteiro.')
+        return tipo[1]
     if categoria == 'mova_registro_proprietario':
         tipo = tipos.get(expr[1])
         if not eh_registro_proprietario(tipo, registros):
@@ -114,6 +127,8 @@ def tipo_expressao(expr, tipos, linha, funcoes=None, registros=None, campos=None
         nome, indice = expr[1:]
         if not isinstance(tipos.get(nome), tuple) or tipos[nome][0] != 'lista_emprestada':
             raise ErroCompilacao(f'Linha {linha}: indice exige emprestimo[lista].')
+        if eh_registro_proprietario(tipos[nome][1], registros):
+            raise ErroCompilacao(f'Linha {linha}: registro proprietario nao pode ser copiado por indice; use retire na lista dona.')
         if tipo_expressao(indice, tipos, linha, funcoes, registros, campos) != 'inteiro':
             raise ErroCompilacao(f'Linha {linha}: indice da lista emprestada deve ser inteiro.')
         return tipos[nome][1]
@@ -125,6 +140,8 @@ def tipo_expressao(expr, tipos, linha, funcoes=None, registros=None, campos=None
         nome, indice = expr[1:]
         if not isinstance(tipos.get(nome), tuple) or tipos[nome][0] != 'lista_dinamica':
             raise ErroCompilacao(f'Linha {linha}: índice exige lista dinamica.')
+        if eh_colecao_proprietaria(tipos[nome], registros):
+            raise ErroCompilacao(f'Linha {linha}: registro proprietario nao pode ser copiado por indice; use retire(lista, indice).')
         if tipo_expressao(indice, tipos, linha, funcoes, registros, campos) != 'inteiro':
             raise ErroCompilacao(f'Linha {linha}: índice deve ser inteiro.')
         return tipos[nome][1]

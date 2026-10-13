@@ -110,29 +110,10 @@ class ContextoSemantico:
             novos = []
             for argumento, tipo_parametro in zip(argumentos, parametros):
                 argumento = self._preparar_argumentos_compostos(argumento)
-                if (argumento[0] == 'chamada' and
+                if (argumento[0] in ('chamada', 'retire_registro_lista') and
                         ((isinstance(tipo_parametro, str) and tipo_parametro in self.registros) or
                          isinstance(tipo_parametro, tuple))):
-                    capacidades = contrato_valor(tipo_parametro, self.registros)
-                    if not capacidades.pode_copiar and not eh_valor_proprietario(tipo_parametro, self.registros):
-                        raise ErroCompilacao('Emprestimos e recursos nao podem ser armazenados em temporario composto.')
-                    # Reservar o tipo completo, incluindo os aliases das
-                    # folhas que serão consumidas e inativadas pelo chamado.
-                    nome_temp = f'__rs_temporario_composto_{self.contador + 1}'
-                    self.contador += 1
-                    tamanho = capacidades.palavras
-                    if (self.total_slots + tamanho) * 8 >= 0x7FFF0000:
-                        raise ErroCompilacao('Quadro de execução excede endereço de 32 bits.')
-                    tipo_real = (('registro', tipo_parametro, self.registros[tipo_parametro])
-                                 if isinstance(tipo_parametro, str) and tipo_parametro in self.registros
-                                 else tipo_parametro)
-                    self.variaveis[nome_temp] = self.total_slots
-                    self.tipos[nome_temp] = tipo_real
-                    if isinstance(tipo_real, tuple) and tipo_real[0] == 'registro':
-                        self._criar_campos(nome_temp, tipo_real, self.total_slots)
-                    self.total_slots += tamanho
-                    novos.append(NoExpressao(('temporario_composto', nome_temp, argumento),
-                                              getattr(argumento, 'origem', None)))
+                    novos.append(self.preparar_produtor_composto(argumento, tipo_parametro))
                 else:
                     novos.append(argumento)
             return NoExpressao(('chamada', nome, tuple(novos)), getattr(arvore, 'origem', None))
@@ -148,6 +129,9 @@ class ContextoSemantico:
         if tag == 'neg':
             return NoExpressao(('neg', self._preparar_argumentos_compostos(arvore[1])),
                                getattr(arvore, 'origem', None))
+        if tag == 'retire_registro_lista':
+            return NoExpressao((tag, arvore[1], self._preparar_argumentos_compostos(arvore[2])),
+                               getattr(arvore, 'origem', None))
         if tag in ('indice_bytes', 'indice_lista_dinamica', 'indice_lista_emprestada', 'byte_texto'):
             return NoExpressao((tag, arvore[1],
                                 self._preparar_argumentos_compostos(arvore[2])),
@@ -157,6 +141,23 @@ class ContextoSemantico:
                                 self._preparar_argumentos_compostos(arvore[2]), arvore[3]),
                                getattr(arvore, 'origem', None))
         return arvore
+
+    def preparar_produtor_composto(self, arvore, tipo):
+        if arvore[0] not in ('chamada', 'retire_registro_lista'):
+            return arvore
+        capacidades = contrato_valor(tipo, self.registros)
+        if not capacidades.pode_copiar and not eh_valor_proprietario(tipo, self.registros):
+            raise ErroCompilacao('Emprestimos e recursos nao podem ser armazenados em temporario composto.')
+        self.contador += 1
+        nome = f'__rs_temporario_composto_{self.contador}'
+        if (self.total_slots + capacidades.palavras) * 8 >= 0x7FFF0000:
+            raise ErroCompilacao('Quadro de execução excede endereço de 32 bits.')
+        real = ('registro', tipo, self.registros[tipo]) if isinstance(tipo, str) and tipo in self.registros else tipo
+        self.variaveis[nome], self.tipos[nome] = self.total_slots, real
+        if isinstance(real, tuple) and real[0] == 'registro':
+            self._criar_campos(nome, real, self.total_slots)
+        self.total_slots += capacidades.palavras
+        return NoExpressao(('temporario_composto', nome, arvore), getattr(arvore, 'origem', None))
 
     def expressao_tipada(self, partes, linha, exigir=None):
         coluna = partes[0].origem.coluna if partes and hasattr(partes[0], 'origem') else 1
