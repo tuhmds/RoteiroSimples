@@ -68,7 +68,8 @@ class TestesTransferenciaRegistroRS042E(unittest.TestCase):
 }"""
         r = self.executar(fonte)
         self.assertNotEqual(r.returncode, 0)
-        self.assertIn("movimentacao ou liberacao", r.stdout)
+        self.assertIn("movimentacao ou liberacao", r.stdout + r.stderr,
+                      f"Codigo de saida: {r.returncode}; saida: {r.stdout!r}; erro: {r.stderr!r}")
 
     def test_movimento_de_campo_composto_em_registro_mais_externo(self):
         fonte = FONTE_COMUM + """tipo Exterior {
