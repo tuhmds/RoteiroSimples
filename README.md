@@ -31,7 +31,11 @@ e soma modular. A [aplicação binária](exemplos/aplicacoes/arquivo_binario_rs0
 constrói, transfere, grava e recupera dados, verifica a igualdade e demonstra
 a independência de uma cópia explícita.
 
-Detalhes, provas e limites estão na
+A [CI aprovada](https://github.com/tuhmds/RoteiroSimples/actions/runs/38389802837)
+executou 567 testes por sistema, sem falhas: 555 aprovados e 12 ignorados
+no Windows; 541 aprovados e 26 ignorados no Linux. Há 40 testes novos,
+incluindo dados binários arbitrários, crescimento, transferência,
+falhas simuladas e desenrolamento Windows real. Detalhes, provas e limites estão na
 [nota técnica](docs/BYTES_DINAMICOS_RS_0_42A_3.md). Este marco depende da entrega
 de texto 0.42A.2 e do contrato 0.42A.1; sua branch não representa publicação na
 main. Donos em registros/listas, empréstimos mutáveis e operações posicionais

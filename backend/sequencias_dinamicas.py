@@ -36,6 +36,8 @@ def vista(g, variaveis, tipos, nome, windows):
         g.bytes(b'\x48\x8D\xB5' + struct.pack('<i', dados))
         g.bytes(b'\x48\x8B\x95' + struct.pack('<i', base))
         _emitir(g, '45 31 C0')
+
+
 def emitir_rotinas(g, windows):
     nome = 'rs_sequencia_modificar'
     g.marcar(nome)

@@ -157,7 +157,34 @@ overflow de comprimento e falha de alocação simulada no executável real.
 O ensaio Windows observa 11 alocações e 11 liberações, preservação de oito
 registradores inteiros, dez vetoriais e RSP, ponteiro idêntico durante
 transferências sem alocar/liberar e descarte correto dos escopos.
-Resultados finais da suíte e CI serão registrados depois da execução.
+Windows local: 567 testes encontrados, 554 aprovados, 13 ignorados,
+sem falhas. O ignorado adicional depende da permissão local para criar
+link simbólico. A [CI aprovada](https://github.com/tuhmds/RoteiroSimples/actions/runs/38389802837)
+executou a entrega `b9da8bd` nos dois sistemas, incluindo o exemplo nativo
+e todas as regressões existentes:
+
+| Sistema | Encontrados | Aprovados | Ignorados | Falhas |
+|---|---:|---:|---:|---:|
+| Windows x64 | 567 | 555 | 12 | 0 |
+| Linux x86-64 | 567 | 541 | 26 | 0 |
+
+Os 26 ignorados no Linux incluem os três novos ensaios exclusivos da API
+Windows. Cada sistema executa seus próprios binários; gerar um ELF no
+Windows não foi contabilizado como execução Linux. Os testes portáteis
+de bytes e a aplicação foram executados em ambas as plataformas.
+
+A primeira suíte completa local encontrou uma expectativa antiga que
+exigia rejeitar `grave_arquivo` com bytes fixos. A nova API aceita essa
+operação. O caso foi substituído pela rejeição de cópia de bytes para
+texto, mantendo a separação de tipos; os testes novos verificam a gravação
+binária real. Não houve falha funcional na CI desta entrega.
+
+Implementação: [964f1d0](https://github.com/tuhmds/RoteiroSimples/commit/964f1d0).
+Documentação: [b9da8bd](https://github.com/tuhmds/RoteiroSimples/commit/b9da8bd).
+[PR #4](https://github.com/tuhmds/RoteiroSimples/pull/4), dependente da
+[PR #3](https://github.com/tuhmds/RoteiroSimples/pull/3) e
+[PR #2](https://github.com/tuhmds/RoteiroSimples/pull/2). A entrega continua
+aguardando revisão e integração, sem mesclagem automática.
 
 Permanecem pendentes donos dentro de registros/listas, empréstimos mutáveis,
 fatiamento binário, igualdade direta pela sintaxe, operações posicionais
