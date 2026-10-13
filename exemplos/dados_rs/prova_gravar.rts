@@ -1,0 +1,37 @@
+// Prova inicial de armazenamento Dados RS, sem transacoes.
+// Gera 100 registros (codigo e valor) com cabeçalho versionado.
+// Formato de teste: RSDB (4 bytes), versao u32=1, quantidade u64=100,
+// seguido por registros [codigo u64][valor u64] em ordem pouco significativa.
+// Campos deste exemplo nunca sao negativos. Destino e temporario de teste.
+inicio {
+    seja arquivo: bytes
+    adicione_byte(arquivo, 82)
+    adicione_byte(arquivo, 83)
+    adicione_byte(arquivo, 68)
+    adicione_byte(arquivo, 66)
+    // Versao: 4 bytes, little endian.
+    adicione_byte(arquivo, 1)
+    adicione_byte(arquivo, 0)
+    adicione_byte(arquivo, 0)
+    adicione_byte(arquivo, 0)
+    // Quantidade: 8 bytes.
+    adicione_byte(arquivo, 100)
+    para parte de 1 ate 7 {
+        adicione_byte(arquivo, 0)
+    }
+    para codigo de 1 ate 100 {
+        seja restante = codigo
+        para parte de 0 ate 7 {
+            adicione_byte(arquivo, restante % 256)
+            restante = restante / 256
+        }
+        restante = codigo * 10
+        para parte de 0 ate 7 {
+            adicione_byte(arquivo, restante % 256)
+            restante = restante / 256
+        }
+    }
+    grave_arquivo("entregas.rsd", arquivo)
+    escreva(tamanho(arquivo))
+    escreva(100)
+}
