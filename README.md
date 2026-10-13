@@ -31,14 +31,15 @@ e soma modular. A [aplicação binária](exemplos/aplicacoes/arquivo_binario_rs0
 constrói, transfere, grava e recupera dados, verifica a igualdade e demonstra
 a independência de uma cópia explícita.
 
-A [CI aprovada](https://github.com/tuhmds/RoteiroSimples/actions/runs/38389802837)
-executou 567 testes por sistema, sem falhas: 555 aprovados e 12 ignorados
-no Windows; 541 aprovados e 26 ignorados no Linux. Há 40 testes novos,
+A [CI da revisão aprovada](https://github.com/tuhmds/RoteiroSimples/actions/runs/38393807039)
+executou 569 testes por sistema, sem falhas: 557 aprovados e 12 ignorados
+no Windows; 543 aprovados e 26 ignorados no Linux. Há 42 testes adicionais desde a 0.42A.2,
 incluindo dados binários arbitrários, crescimento, transferência,
 falhas simuladas e desenrolamento Windows real. Detalhes, provas e limites estão na
-[nota técnica](docs/BYTES_DINAMICOS_RS_0_42A_3.md). Este marco depende da entrega
-de texto 0.42A.2 e do contrato 0.42A.1; sua branch não representa publicação na
-main. Donos em registros/listas, empréstimos mutáveis e operações posicionais
+[nota técnica](docs/BYTES_DINAMICOS_RS_0_42A_3.md) e na
+[revisão conjunta](docs/REVISAO_CONJUNTA_RS_0_42A.md). Os marcos foram organizados
+em propriedade 0.42A.1, texto 0.42A.2 e bytes 0.42A.3, com commits preservados.
+Donos em registros/listas, empréstimos mutáveis e operações posicionais
 com buffers dinâmicos permanecem pendentes.
 
 ## RS 0.42A.2 — Texto UTF-8 dinâmico

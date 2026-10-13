@@ -1,8 +1,9 @@
 # RS 0.42A.2 — Texto UTF-8 dinâmico
 
 Esta entrega parte do commit `7603053`, marco de propriedade RS 0.42A.1.
-A branch `rs-0.42a-texto-dinamico` mantém essa dependência; a PR da base
-ainda precisa ser integrada antes de publicar o conjunto na main.
+A branch `rs-0.42a-texto-dinamico` mantém essa dependência. A ordem de
+integração é propriedade, texto e bytes; a
+[revisão conjunta](REVISAO_CONJUNTA_RS_0_42A.md) registra a verificação posterior.
 
 O critério funcional de texto dinâmico está implementado: um programa RS
 pode ler, construir, acrescentar, limpar, transferir, devolver e gravar
