@@ -91,7 +91,7 @@ class TestesAbiCadastroRS042M(unittest.TestCase):
         self.assertTrue({'rs_converter_utf8', 'rs_validar_utf8_recuperavel'} <= set(observado['excecoes']))
         self.assertEqual(observado['quadros'], 2 * len(observado['excecoes']))
 
-    def test_escrita_parcial_sync_fechamento_publicacao_e_leitura_falham_com_codigo(self):
+    def test_escrita_parcial_sincronizacao_fechamento_publicacao_e_leitura_falham_com_codigo(self):
         observado = self.ensaio('arquivos')
         self.assertEqual(observado, {'WriteFile': 31, 'FlushFileBuffers': 32,
             'CloseHandle': 33, 'MoveFileExA': 34, 'ReadFile': 31})
@@ -104,20 +104,20 @@ def executar_memoria():
     vivos, erros = set(), []
     contadores = [0, 0]
     @ct.WINFUNCTYPE(ct.c_void_p, ct.c_void_p, ct.c_size_t, ct.c_uint32, ct.c_uint32)
-    def alocar(endereco, tamanho, flags, protecao):
-        ponteiro = windows.nucleo.VirtualAlloc(endereco, tamanho, flags, protecao)
+    def alocar(endereco, tamanho, sinalizadores, protecao):
+        ponteiro = windows.nucleo.VirtualAlloc(endereco, tamanho, sinalizadores, protecao)
         contadores[0] += 1
         if not ponteiro or ponteiro in vivos:
             erros.append('Alocacao nula ou repetida.')
         vivos.add(ponteiro)
         return ponteiro
     @ct.WINFUNCTYPE(ct.c_int, ct.c_void_p, ct.c_size_t, ct.c_uint32)
-    def liberar(endereco, tamanho, flags):
+    def liberar(endereco, tamanho, sinalizadores):
         contadores[1] += 1
         if endereco not in vivos:
             erros.append('Descarte sem dono ou repetido.')
         vivos.discard(endereco)
-        return windows.nucleo.VirtualFree(endereco, tamanho, flags)
+        return windows.nucleo.VirtualFree(endereco, tamanho, sinalizadores)
     correto = codificar()
     incompleto = corrigir_integridade(correto[:-1])
     duplicado = codificar(((1, 'Um', b'\xff'), (1, 'Dois', b'\0')))
@@ -125,19 +125,19 @@ def executar_memoria():
     invalido[24 + 16 + 2 + 1 + 16] = 255
     invalido = corrigir_integridade(invalido)
     with PeCarregado(windows, pe) as imagem:
-        for nome, callback in (('VirtualAlloc', alocar), ('VirtualFree', liberar)):
-            ct.c_uint64.from_address(imagem.importacoes[nome]).value = ct.cast(callback, ct.c_void_p).value
+        for nome, interceptor in (('VirtualAlloc', alocar), ('VirtualFree', liberar)):
+            ct.c_uint64.from_address(imagem.importacoes[nome]).value = ct.cast(interceptor, ct.c_void_p).value
         def chamar(nome, argumentos):
             return chamar_com_sentinelas(windows, imagem.base + 0x1000 + g.rotulos['funcao_' + nome], argumentos_pilha=argumentos)
         for _ in range(10):
             assert chamar('converter', [0]) == 111
             assert not vivos and not erros, (vivos, erros)
             for dados, esperado in ((correto, 2), (incompleto, 17), (duplicado, 20), (invalido, 21)):
-                buffer = ct.create_string_buffer(dados)
-                descritor = (ct.c_uint64 * 3)(len(dados), len(dados), ct.addressof(buffer))
+                memoria_dados = ct.create_string_buffer(dados)
+                descritor = (ct.c_uint64 * 3)(len(dados), len(dados), ct.addressof(memoria_dados))
                 assert chamar('analisar', [0, ct.addressof(descritor) + 16]) == esperado
                 assert not vivos and not erros, (vivos, erros)
-                assert buffer.raw[:len(dados)] == dados
+                assert memoria_dados.raw[:len(dados)] == dados
     return {'alocacoes': contadores[0], 'liberacoes': contadores[1], 'vivos': len(vivos),
             'casos': 50, 'inteiros': 8, 'vetoriais': 10}
 
@@ -167,16 +167,16 @@ def executar_arquivos():
                 if nome == 'CloseHandle':
                     assert windows.nucleo.CloseHandle(recurso)
                 return 0
-            def publicar(origem, destino, flags):
+            def publicar(origem, destino, sinalizadores):
                 chamadas[0] += 1
                 return 0
-            callback = (transferencia(transferir) if nome in ('WriteFile', 'ReadFile') else
+            interceptor = (transferencia(transferir) if nome in ('WriteFile', 'ReadFile') else
                         publicacao(publicar) if nome == 'MoveFileExA' else fechamento(fechar))
             with tempfile.TemporaryDirectory() as pasta, PeCarregado(windows, pe) as imagem:
                 os.chdir(pasta)
                 anterior = codificar() if nome == 'ReadFile' else b'anterior'
                 Path('cadastro.rsd').write_bytes(anterior)
-                ct.c_uint64.from_address(imagem.importacoes[nome]).value = ct.cast(callback, ct.c_void_p).value
+                ct.c_uint64.from_address(imagem.importacoes[nome]).value = ct.cast(interceptor, ct.c_void_p).value
                 funcao = 'ler' if nome == 'ReadFile' else 'gravar'
                 retorno = chamar_com_sentinelas(windows, imagem.base + 0x1000 + g.rotulos['funcao_' + funcao], argumentos_pilha=[0])
                 assert retorno == codigo and chamadas[0], (nome, retorno, chamadas)

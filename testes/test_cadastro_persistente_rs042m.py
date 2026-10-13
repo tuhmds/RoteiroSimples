@@ -115,7 +115,7 @@ class TestesCadastroPersistenteRS042M(unittest.TestCase):
             dados = bytearray(original); struct.pack_into('<I', dados, posicao, valor)
             self.rejeitar(corrigir_integridade(dados), codigo)
 
-    def test_identificadores_invalidos_duplicados_e_utf8_com_checksum_valido(self):
+    def test_identificadores_invalidos_duplicados_e_utf8_com_integridade_recalculada(self):
         for chave in (0, 9223372036854775808, 18446744073709551615):
             dados = bytearray(codificar(((1, 'RS', b''),)))
             struct.pack_into('<Q', dados, 24, chave)
@@ -127,12 +127,12 @@ class TestesCadastroPersistenteRS042M(unittest.TestCase):
             self.rejeitar(dados, 21)
 
     def test_mutacoes_geradas_rejeitadas_sem_reescrever_arquivo(self):
-        rng = random.Random(4214)
+        gerador = random.Random(4214)
         original = codificar()
         for _ in range(48):
             dados = bytearray(original)
-            posicao = rng.randrange(24, len(dados))
-            dados[posicao] ^= rng.randrange(1, 256)
+            posicao = gerador.randrange(24, len(dados))
+            dados[posicao] ^= gerador.randrange(1, 256)
             self.rejeitar(bytes(dados), 16, niveis=(8,))
 
     def test_limite_global_na_leitura_sem_aceitar_arquivo_maior(self):
@@ -144,7 +144,9 @@ class TestesCadastroPersistenteRS042M(unittest.TestCase):
                 if criar:
                     (Path(pasta)/'cadastro.rsd').mkdir()
                 r = self.executar('ler', pasta)
-                self.assertEqual((r.returncode, r.stdout), (3, '30\n'), r.stderr)
+                # Linux aceita abrir o diretorio; a verificacao de transferencia o rejeita.
+                codigo = 31 if criar and alvo_nativo() == 'linux' else 30
+                self.assertEqual((r.returncode, r.stdout), (3, str(codigo) + '\n'), r.stderr)
 
     def test_provisorio_existente_nao_sobrescreve_snapshot(self):
         with tempfile.TemporaryDirectory() as pasta:

@@ -120,7 +120,9 @@ permanecer parcial ou completo para inspeção. Sua recuperação é manual.
 Carregar usa leitura posicional recuperável e limita a entrada antes de
 acrescentá-la ao buffer. Ao alcançar 8 MiB, lê no máximo mais um byte para
 detectar excesso. Retornos antecipados fecham o recurso pelo descarte de
-escopo. O fechamento normal é explícito para comunicar seu erro.
+escopo. O fechamento normal é explícito para comunicar seu erro. Um diretório
+é rejeitado na abertura no Windows e na transferência no Linux, com os
+códigos correspondentes a cada etapa.
 
 | Código | Motivo |
 |---:|---|

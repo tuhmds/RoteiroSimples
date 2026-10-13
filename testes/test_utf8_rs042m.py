@@ -53,14 +53,14 @@ class TestesUtf8RS042M(unittest.TestCase):
         self.verificar(fonte, '0\n0\nAção 🌱\0\n7\n12\n', tuple(range(9)))
 
     def test_sequencias_invalidas_geradas_preservam_destino_e_origem(self):
-        rng = random.Random(4213)
+        gerador = random.Random(4213)
         casos = [bytes([n]) for n in range(256)] + [
             b'\xc0\x80', b'\xc1\xbf', b'\xe0\x9f\xbf', b'\xed\xa0\x80',
             b'\xf0\x8f\xbf\xbf', b'\xf4\x90\x80\x80', b'\xf5\x80\x80\x80',
             b'\xe2\x82', b'\xf0\x90\x80', b'\xc2A', b'A\x80', b'\xe2\xc2\xa2',
             b'', b'\xc2\x80', b'\xe0\xa0\x80', b'\xed\x9f\xbf',
             b'\xf0\x90\x80\x80', b'\xf4\x8f\xbf\xbf',
-        ] + [rng.randbytes(rng.randrange(2, 8)) for _ in range(80)]
+        ] + [gerador.randbytes(gerador.randrange(2, 8)) for _ in range(80)]
         comandos, esperado = [], []
         for dados in casos:
             try:
