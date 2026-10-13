@@ -12,12 +12,12 @@ INSTRUCOES_IR = frozenset((
     'texto', 'atribua', 'leia_int', 'crie_texto', 'modifique_texto',
     'limpe_texto', 'imprima_texto', 'leia_texto', 'crie_lista',
     'atribua_indice', 'leia_indice', 'imprima_num', 'se', 'enquanto',
-    'para', 'pare', 'continue',
+    'para', 'pare', 'continue', 'retorne',
 ))
 
 EXPRESSOES_IR = frozenset((
     'numero', 'logico', 'var', 'tamanho_texto', 'indice',
-    'neg', 'bin', 'comparacao',
+    'neg', 'bin', 'comparacao', 'chamada',
 ))
 
 # Posicionamento dos filhos que são expressões nos nós suportados.
@@ -26,6 +26,7 @@ EXPRESSOES_DA_INSTRUCAO = {
     'atribua_indice': (2, 3),
     'leia_indice': (2,),
     'imprima_num': (1,),
+    'retorne': (1,),
     'se': (1,),
     'enquanto': (1,),
     'para': (2, 3),
@@ -102,6 +103,25 @@ def motivos_de_cobertura(cobertura):
         [f'expressão ainda sem representação intermediária: {nome}'
          for nome in cobertura.expressoes_ausentes]
     )
+
+
+def funcoes_escalares_representaveis(programa):
+    """Primeiro contrato de funções IR: todos os valores são escalares.
+
+    Chamadas não recebem referências nem donos; ainda não entram no
+    alocador SSA. Operações desconhecidas são rejeitadas pela cobertura.
+    """
+    escalares = ('inteiro', 'logico')
+    if getattr(programa, 'registros', None):
+        return False
+    if any(tipo not in escalares for tipo in programa.tipos.values()):
+        return False
+    for funcao in getattr(programa, 'funcoes', {}).values():
+        if (funcao.retorno not in escalares or
+                any(tipo not in escalares for _, tipo in funcao.parametros) or
+                any(tipo not in escalares for tipo in funcao.programa.tipos.values())):
+            return False
+    return analisar_cobertura(programa).completa
 
 
 def formatar_cobertura(cobertura, decisao=None):

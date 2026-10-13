@@ -1,13 +1,21 @@
 """Conversão AST -> IR tipada -> AST temporária do backend."""
-from .ast import Programa
+from dataclasses import replace
+from .ast import Programa, Funcao, NoExpressao, NoInstrucao
 from .erros import ErroCompilacao
-from .nos_ir import MINIMO, MAXIMO, ExpressaoIR, InstrucaoIR, ProgramaIR
+from .nos_ir import MINIMO, MAXIMO, ExpressaoIR, InstrucaoIR, ProgramaIR, FuncaoIR
 from .otimizador import dobrar_constantes
-from .cobertura_intermediaria import analisar_cobertura, motivos_de_cobertura
+from .cobertura_intermediaria import analisar_cobertura, motivos_de_cobertura, funcoes_escalares_representaveis
 
-def converter_expressao(expr, tipos, otimizar=True, literal_minimo=False):
+def converter_expressao(expr, tipos, otimizar=True, literal_minimo=False, assinaturas=None):
     tag = expr[0]
     origem = getattr(expr, 'origem', None)
+    converter = lambda no: converter_expressao(no, tipos, otimizar, assinaturas=assinaturas)
+    if tag == 'chamada':
+        assinatura = (assinaturas or {}).get(expr[1])
+        if assinatura is None:
+            raise ErroCompilacao(f'Chamada IR sem assinatura: {expr[1]}.')
+        return ExpressaoIR(assinatura[1], 'chamada', expr[1],
+                           tuple(converter(no) for no in expr[2]), origem)
     if tag == 'numero':
         if expr[1] == 1 << 63 and not literal_minimo:
             raise ErroCompilacao('Número positivo fora do intervalo de 64 bits.')
@@ -20,25 +28,26 @@ def converter_expressao(expr, tipos, otimizar=True, literal_minimo=False):
         return ExpressaoIR('inteiro', 'tamanho_texto', expr[1], origem=origem)
     if tag == 'indice':
         return ExpressaoIR('inteiro', 'indice', (expr[1], expr[3]),
-                           filhos=(converter_expressao(expr[2], tipos, otimizar),), origem=origem)
+                           filhos=(converter(expr[2]),), origem=origem)
     if tag == 'neg':
         filho = converter_expressao(expr[1], tipos, otimizar,
-                                   literal_minimo=expr[1] == ('numero', 1 << 63))
+                                   literal_minimo=expr[1] == ('numero', 1 << 63), assinaturas=assinaturas)
         node = ExpressaoIR('inteiro', 'neg', filhos=(filho,), origem=origem)
     elif tag in ('bin', 'comparacao'):
-        esquerdo = converter_expressao(expr[2], tipos, otimizar)
-        direito = converter_expressao(expr[3], tipos, otimizar)
+        esquerdo = converter(expr[2])
+        direito = converter(expr[3])
         node = ExpressaoIR('inteiro' if tag == 'bin' else 'logico', tag,
                            expr[1], (esquerdo, direito), origem=origem)
     else:
         raise ErroCompilacao(f'Expressão IR desconhecida: {tag}.')
     return dobrar_constantes(node) if otimizar else node
 
-def converter_instrucao(instr, tipos, otimizar):
+def converter_instrucao(instr, tipos, otimizar, assinaturas=None):
     tag = instr[0]
     origem = getattr(instr, 'origem', None)
-    expr = lambda n: converter_expressao(n, tipos, otimizar)
-    bloco = lambda b: tuple(converter_instrucao(x, tipos, otimizar) for x in b)
+    expr = lambda n: converter_expressao(n, tipos, otimizar, assinaturas=assinaturas)
+    bloco = lambda b: tuple(converter_instrucao(x, tipos, otimizar, assinaturas) for x in b)
+    if tag == 'retorne': return InstrucaoIR(tag, (expr(instr[1]),), origem)
     if tag == 'texto': return InstrucaoIR(tag, (instr[1],), origem)
     if tag in ('atribua',): return InstrucaoIR(tag, (instr[1], expr(instr[2])), origem)
     if tag == 'leia_int': return InstrucaoIR(tag, (instr[1],), origem)
@@ -63,22 +72,36 @@ def construir_ir(programa, otimizar=True, nivel=1):
     """Constrói IR somente quando a tradução é representável sem perdas."""
     cobertura = analisar_cobertura(programa)
     impedimentos = list(motivos_de_cobertura(cobertura))
-    if getattr(programa, 'funcoes', None):
-        impedimentos.append('funções não são representadas na IR atual')
+    tem_funcoes = bool(getattr(programa, 'funcoes', None))
+    if tem_funcoes and not funcoes_escalares_representaveis(programa):
+        impedimentos.append('funções fora do contrato escalar da IR')
     if getattr(programa, 'registros', None):
         impedimentos.append('registros não são representados na IR atual')
     # Escopos com variáveis já renomeadas internamente podem ter
     # uma IR útil para análise quando todas as operações são conhecidas.
-    # A seleção de código executável continua conservadora para escopos.
+    # Funções escalares usam esses nomes; escopos com recursos continuam
+    # selecionando o gerador conservador pelo contrato de estratégia.
     if impedimentos:
         raise ErroCompilacao(
             'A representação intermediária não está disponível para este programa: '
             + '; '.join(impedimentos) + '. '
             'A compilação nativa permanece disponível pelo gerador conservador.')
-    ir = ProgramaIR(tuple(converter_instrucao(i, programa.tipos, otimizar)
-                          for i in programa.instrucoes),
-                    dict(programa.tipos), dict(programa.variaveis),
-                    programa.importa_matematica)
+    assinaturas = {nome: (funcao.parametros, funcao.retorno)
+                   for nome, funcao in getattr(programa, 'funcoes', {}).items()}
+    def converter_corpo(corpo):
+        ir = ProgramaIR(tuple(converter_instrucao(i, corpo.tipos, otimizar, assinaturas)
+                              for i in corpo.instrucoes),
+                        dict(corpo.tipos), dict(corpo.variaveis),
+                        corpo.importa_matematica, escopos_locais=corpo.escopos_locais)
+        if tem_funcoes and otimizar and nivel >= 2:
+            from .propagacao import propagar_constantes_locais
+            ir = propagar_constantes_locais(ir)
+        return ir
+    ir = converter_corpo(programa)
+    if tem_funcoes:
+        return replace(ir, funcoes={nome: FuncaoIR(nome, funcao.parametros, funcao.retorno,
+            converter_corpo(funcao.programa), funcao.recursiva)
+            for nome, funcao in programa.funcoes.items()})
     if otimizar and nivel >= 2 and not any(isinstance(t, tuple) and t[0] in ('lista', 'texto') for t in programa.tipos.values()):
         from .propagacao import propagar_constantes_locais
         ir = propagar_constantes_locais(ir)
@@ -97,6 +120,12 @@ def construir_ir(programa, otimizar=True, nivel=1):
 
 
 def expressao_para_ast(node):
+    return NoExpressao(_expressao_para_ast(node), node.origem)
+
+
+def _expressao_para_ast(node):
+    if node.operacao == 'chamada':
+        return NoExpressao(('chamada', node.valor, tuple(expressao_para_ast(x) for x in node.filhos)), node.origem)
     if node.operacao in ('numero', 'logico', 'var'):
         return (node.operacao, node.valor)
     if node.operacao == 'tamanho_texto':
@@ -108,6 +137,10 @@ def expressao_para_ast(node):
 
 
 def instrucao_para_ast(node):
+    return NoInstrucao(_instrucao_para_ast(node), node.origem)
+
+
+def _instrucao_para_ast(node):
     t, a = node.operacao, node.argumentos
     bloco = lambda xs: [instrucao_para_ast(x) for x in xs]
     if t == 'texto': return (t, a[0])
@@ -118,6 +151,7 @@ def instrucao_para_ast(node):
     if t == 'leia_indice': return (t, a[0], expressao_para_ast(a[1]), a[2])
     if t == 'atribua': return (t, a[0], expressao_para_ast(a[1]))
     if t == 'imprima_num': return (t, expressao_para_ast(a[0]))
+    if t == 'retorne': return NoInstrucao((t, expressao_para_ast(a[0])), node.origem)
     if t == 'se': return (t, expressao_para_ast(a[0]), bloco(a[1]), bloco(a[2]))
     if t == 'enquanto': return (t, expressao_para_ast(a[0]), bloco(a[1]))
     if t == 'para':
@@ -128,7 +162,10 @@ def instrucao_para_ast(node):
 
 def programa_para_backend(ir):
     return Programa([instrucao_para_ast(i) for i in ir.instrucoes],
-                    dict(ir.variaveis), ir.importa_matematica, dict(ir.tipos))
+                    dict(ir.variaveis), ir.importa_matematica, dict(ir.tipos),
+                    funcoes={nome: Funcao(nome, funcao.parametros, funcao.retorno,
+                        programa_para_backend(funcao.programa), funcao.recursiva)
+                        for nome, funcao in ir.funcoes.items()}, escopos_locais=ir.escopos_locais)
 
 
 def formatar_ir(ir):
@@ -152,4 +189,7 @@ def formatar_ir(ir):
                 if isinstance(x, tuple) and (not x or isinstance(x[0], InstrucaoIR)):
                     percorrer(x, nivel+1)
     percorrer(ir.instrucoes)
+    for nome, funcao in ir.funcoes.items():
+        saida.append(f'funcao {nome}: parametros {funcao.parametros}; retorno {funcao.retorno}')
+        percorrer(funcao.programa.instrucoes, 1)
     return '\n'.join(saida)

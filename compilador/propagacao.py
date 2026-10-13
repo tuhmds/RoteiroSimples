@@ -33,8 +33,10 @@ def propagar_constantes_locais(programa: ProgramaIR):
                 ambiente.pop(nome, None)
                 if exp.operacao in ('numero', 'logico'):
                     ambiente[nome] = exp.valor
-            elif op == 'imprima_num':
+            elif op in ('imprima_num', 'retorne'):
                 resultado.append(replace(ins, argumentos=(otimizar_expressao(args[0], ambiente),)))
+                if op == 'retorne':
+                    ambiente.clear()
             elif op == 'leia_int':
                 ambiente.pop(args[0], None)
                 resultado.append(ins)
@@ -52,5 +54,4 @@ def propagar_constantes_locais(programa: ProgramaIR):
                 resultado.append(ins)
         return tuple(resultado)
 
-    return ProgramaIR(bloco(programa.instrucoes), dict(programa.tipos),
-                      dict(programa.variaveis), programa.importa_matematica)
+    return replace(programa, instrucoes=bloco(programa.instrucoes))

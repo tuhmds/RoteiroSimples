@@ -4,7 +4,7 @@ Aceitar -O 8 não significa necessariamente usar SSA nesse programa.
 O gerador conservador protege construções ainda não representadas pela IR.
 """
 from dataclasses import dataclass
-from .cobertura_intermediaria import analisar_cobertura, motivos_de_cobertura
+from .cobertura_intermediaria import analisar_cobertura, motivos_de_cobertura, funcoes_escalares_representaveis
 from .propriedade import eh_proprietario
 
 
@@ -37,11 +37,13 @@ def decidir_estrategia(programa, nivel=1, otimizar=True):
     tipos = getattr(programa, 'tipos', {})
     instrucoes = tuple(percorrer(programa.instrucoes))
     motivos = []
-    if getattr(programa, 'funcoes', None):
-        motivos.append('funções')
+    tem_funcoes = bool(getattr(programa, 'funcoes', None))
+    funcoes_escalares = tem_funcoes and funcoes_escalares_representaveis(programa)
+    if tem_funcoes and not funcoes_escalares:
+        motivos.append('funções fora do contrato escalar da IR')
     if getattr(programa, 'registros', None):
         motivos.append('registros')
-    if getattr(programa, 'escopos_locais', False):
+    if getattr(programa, 'escopos_locais', False) and not funcoes_escalares:
         motivos.append('escopos locais')
     if any(i[0] == 'copie_composto' for i in instrucoes):
         motivos.append('cópias compostas')
@@ -66,6 +68,12 @@ def decidir_estrategia(programa, nivel=1, otimizar=True):
     if motivos:
         return Estrategia('conservador', nivel, 0,
                           tuple(dict.fromkeys(motivos)), False)
+
+    if tem_funcoes:
+        # Chamadas e retornos tipados passam pela IR, mantendo argumentos,
+        # quadros e salvamentos nativos. SSA de funções ainda não é emitida.
+        nivel_ir = min(nivel, 2) if otimizar else 0
+        return Estrategia('intermediario', nivel, nivel_ir, (), otimizar and nivel > 0)
 
     listas_ou_textos = any(isinstance(t, tuple) and t[0] in ('lista', 'texto')
                            for t in tipos.values())

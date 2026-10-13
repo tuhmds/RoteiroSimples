@@ -1,0 +1,26 @@
+tipo Documento {
+    codigo: inteiro
+    titulo: texto
+}
+funcao criar(numero: inteiro) -> Documento {
+    seja documento: Documento
+    documento.codigo = numero
+    copie(documento.titulo, "Ação RS")
+    retorne mova(documento)
+}
+funcao consultar(documento: emprestimo[Documento]) -> inteiro {
+    retorne documento.codigo + caracteres(documento.titulo)
+}
+inicio {
+    seja documentos: lista[Documento]
+    para numero de 0 ate 256 {
+        adicione(documentos, criar(numero))
+    }
+    seja total = 0
+    para repeticao de 0 ate 199 {
+        para indice de 0 ate tamanho(documentos) - 1 {
+            total = total + consultar(empreste(documentos[indice]))
+        }
+    }
+    escreva(total)
+}

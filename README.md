@@ -1,6 +1,19 @@
-# RoteiroSimples (RS) — versão experimental 0.42I
+# RoteiroSimples (RS) — versão experimental 0.42J
 
-## RS 0.42I — Leitura de registros por empréstimo
+## RS 0.42J — Consolidação e funções escalares na IR
+
+Programas com somente inteiros/lógicos e funções escalares agora passam pela
+representação intermediária tipada. O1 dobra constantes seguras e O2 propaga
+constantes localmente nos corpos, argumentos e retornos. O2–O8 usam nível IR
+efetivo 2 nesse conjunto; chamadas ainda não recebem alocação SSA.
+
+A consolidação acrescenta programas gerados com modelo independente de
+valores/donos/arquivos, reprodução e redução de falhas, cobertura de linhas
+e ramos Python com subprocessos e CI Windows/Linux em Python 3.10/3.11/3.14.
+As medições O0–O8 registram o gerador efetivo e identificam binários iguais.
+[Contrato, verificações e limites](docs/CONSOLIDACAO_RS_0_42J.md).
+
+## Histórico: RS 0.42I — Leitura de registros por empréstimo
 
 Funções com `emprestimo[Registro]` leem os campos de um registro local ou
 de `empreste(colecao[indice])`, conservando o elemento na lista. Texto,
@@ -995,12 +1008,12 @@ python3 compilar.py exemplos/listas_dinamicas.rts --alvo linux -O 8 -o roteiro_l
 python3 -m unittest discover -s testes -v
 ```
 
-O compilador aceita os níveis históricos de otimização **`-O 0` até `-O 8`**;
-nenhum nível foi criado na RS 0.29. Para programas com escopos locais,
-funções ou registros, a geração conservadora prevalece para evitar transformações
-que ainda não compreendem chamadas e identidades de valores compostos.
+O compilador aceita os níveis históricos **`-O 0` até `-O 8`**. Na 0.42J,
+programas escalares com funções elegíveis usam IR com transformações até O2;
+registros, donos, empréstimos e arquivos continuam no gerador conservador.
+`--mostrar-estrategia` informa o caminho e o nível efetivos.
 
-## Recursos presentes na RS 0.42I
+## Recursos presentes na RS 0.42J
 
 | Recurso | Situação |
 |---|---|
@@ -1008,6 +1021,10 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | `escreva`, `leia`, condições, `enquanto`, `para`, `pare` e `continue` | Implementado |
 | Escopos léxicos e ocultação de nomes locais | Implementado desde 0.23 |
 | Funções, parâmetros e retornos numéricos e lógicos | Implementado desde 0.23 |
+| Funções escalares na IR, dobramento e propagação local de constantes | Implementado na 0.42J; nível IR efetivo até 2 |
+| Campanha gerada com oráculo independente, reprodução e redução de falhas | Implementado na 0.42J; corpus estruturado limitado |
+| Cobertura Python de linhas/ramos e matriz CI Python 3.10/3.11/3.14 | Implementado na 0.42J |
+| Medição O0–O8 com gerador, hashes e tempos individuais | Implementado na 0.42J |
 | Tipos compostos com campos escalares e passagem por valor | Implementado desde 0.24 |
 | Recursão direta e indireta com orçamento de pilha | Implementado desde 0.24 |
 | Listas fixas com índices verificados e buffers de texto UTF-8 | Implementado |
@@ -1045,7 +1062,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Recursos `arquivo`, leitura/escrita posicional, sincronização e fechamento automático | Implementado na 0.38 |
 | Publicação por renomeação, bloqueio não bloqueante e basename variável verificado | Implementado na 0.39 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
-| Análises avançadas em funções e registros | Ainda não |
+| CFG/SSA e alocação de registradores em funções e registros | Ainda não; IR escalar chegou na 0.42J |
 | Resultados aninhados/de listas dinâmicas, empréstimos mutáveis, reais/decimais e FFI | Ainda não |
 
 ## Organização atual
@@ -1067,12 +1084,13 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**Aplicação dos recursos da linguagem:** empréstimos de leitura de registros
-e elementos chegaram na 0.42I. A próxima prova útil é um cadastro persistente
-em RS com consulta sem retirada, substituição explícita, texto/binário variável
-e reabertura validada do formato. Coleções, resultados com donos e registros
-já atravessam funções; esse suporte serve às bibliotecas em RS, ao compilador
-em RS e ao Dados RS.
+**Consolidar funções na IR:** a 0.42J iniciou os corpos escalares e a medição
+de cobertura. O próximo passo é definir CFG, parâmetros de entrada e retornos
+por função antes de habilitar SSA/alocação de chamadas. Recursos proprietários
+devem receber contratos explícitos de memória antes de entrar nas mesmas
+transformações. Oráculos, campanhas e medições permanecem como referência.
+Um cadastro persistente em RS com texto/binário variável e reabertura validada
+continua como aplicação posterior para Dados RS e bibliotecas do motor/Studio.
 Em paralelo, o léxico em RS permite iniciar a análise sintática, e a prova
 binária permite especificar um primeiro armazenamento de registros variáveis.
 Novos operadores lógicos e tipos reais/decimais continuam no roteiro.
