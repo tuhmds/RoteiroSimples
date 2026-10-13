@@ -2,14 +2,15 @@
 
 **Situação:** especificação de arquitetura, não implementação de banco de dados.
 
-**Avanço até a RS 0.42H:** texto e bytes dinâmicos estão implementados,
-assim como campos proprietários, transporte de registros entre funções e
-resultados com donos e falhas recuperáveis explícitas. Coleções de registros
-proprietários e listas em campos chegaram na 0.42H, com descarte por elemento.
-A biblioteca de codificação binária e a prova entre dois processos com
-100 registros estão em [DADOS_RS_PROVA_BINARIA_V1.md](DADOS_RS_PROVA_BINARIA_V1.md).
-O formato dessa prova não congela o futuro formato do motor. Páginas,
-transações, índices e recuperação continuam propostas deste contrato.
+**Avanço até a RS 0.42M:** texto e bytes dinâmicos, registros e coleções
+proprietárias, resultados com donos e leitura por empréstimo estão implementados.
+A conversão UTF-8 explícita e o cadastro variável com serialização e persistência
+por snapshot estão em [CADASTRO_PERSISTENTE_RS_0_42M.md](CADASTRO_PERSISTENTE_RS_0_42M.md).
+A prova anterior entre dois processos com 100 registros permanece em
+[DADOS_RS_PROVA_BINARIA_V1.md](DADOS_RS_PROVA_BINARIA_V1.md).
+Estes formatos experimentais não congelam o futuro formato do motor.
+Páginas, transações, índices, concorrência e recuperação continuam propostas
+deste contrato.
 
 ## 1. Decisão de produto
 

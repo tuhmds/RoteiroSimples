@@ -49,7 +49,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if len(cab) != 3 or cab[2] != '{' or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', cab[1]):
                 raise ErroCompilacao(f'Linha {n}: use tipo Nome {{.')
             nome_tipo = str(cab[1])
-            if nome_tipo in registros or nome_tipo in ('inteiro', 'logico', 'texto', 'bytes', 'lista', 'emprestimo', 'empreste', 'retire', 'seja', 'se', 'senao', 'inicio', 'funcao', 'retorne', 'para', 'enquanto', 'tipo', 'leia', 'escreva') or nome_tipo.startswith('__rs_'):
+            if nome_tipo in registros or nome_tipo in ('inteiro', 'logico', 'texto', 'bytes', 'lista', 'emprestimo', 'empreste', 'retire', 'codifique_utf8', 'decodifique_utf8', 'seja', 'se', 'senao', 'inicio', 'funcao', 'retorne', 'para', 'enquanto', 'tipo', 'leia', 'escreva') or nome_tipo.startswith('__rs_'):
                 raise ErroCompilacao(f'Linha {n}: nome de tipo duplicado ou reservado.')
             campos = []
             while linhas and linhas[0][1] != ['}']:
@@ -135,7 +135,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if len(cabecalho) < 8 or cabecalho[2] != '(' or ')' not in cabecalho:
                 raise ErroCompilacao(f'Linha {n}: cabeçalho de função inválido.')
             nome = str(cabecalho[1])
-            if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', nome) or nome in ('inicio', 'seja', 'funcao', 'retorne', 'empreste', 'emprestimo', 'mova'):
+            if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', nome) or nome in ('inicio', 'seja', 'funcao', 'retorne', 'empreste', 'emprestimo', 'mova', 'codifique_utf8', 'decodifique_utf8'):
                 raise ErroCompilacao(f'Linha {n}: nome de função inválido.')
             fim_par = cabecalho.index(')', 3)
             if cabecalho[fim_par+1:fim_par+3] != ['-', '>'] or cabecalho[-1] != '{':
@@ -178,7 +178,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     contexto = _contexto or ContextoSemantico(importa, assinaturas, registros)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'retire', 'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'encerre', 'arquivo', 'abra_arquivo', 'grave_em', 'carregue_de', 'sincronize_arquivo', 'feche_arquivo', 'publique_arquivo', 'bloqueie_arquivo', 'funcao', 'retorne', 'tipo'}
+    reservadas = {'retire', 'codifique_utf8', 'decodifique_utf8', 'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'encerre', 'arquivo', 'abra_arquivo', 'grave_em', 'carregue_de', 'sincronize_arquivo', 'feche_arquivo', 'publique_arquivo', 'bloqueie_arquivo', 'funcao', 'retorne', 'tipo'}
 
     def indice_lista(partes, linha):
         if '[' not in partes or partes[-1] != ']':
@@ -543,6 +543,20 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 if comando == 'carregue_arquivo' and eh_proprietario(tipos[nome]):
                     comando = 'carregue_texto_dinamico' if eh_texto(tipos[nome]) else 'carregue_bytes_dinamicos'
                 adicionar((comando, caminho, nome), n, t)
+            elif t[0] in ('codifique_utf8', 'decodifique_utf8') and t[1:2] == ['('] and t[-1:] == [')']:
+                grupos = argumentos_externos(t, n)
+                if len(grupos) != 3:
+                    raise ErroCompilacao(f'Linha {n}: use {t[0]}(destino, origem, estado).')
+                destino = contexto.resolver_caminho(grupos[0], n)
+                origem = contexto.resolver_caminho(grupos[1], n)
+                estado = estado_nome(grupos[2], n)
+                codificar = t[0] == 'codifique_utf8'
+                esperado = TIPO_BYTES_DINAMICOS if codificar else TIPO_TEXTO_DINAMICO
+                if tipos.get(destino) != esperado:
+                    raise ErroCompilacao(f'Linha {n}: conversao UTF-8 exige destino proprietario ' + ('bytes.' if codificar else 'texto.'))
+                if not (eh_texto(tipos.get(origem)) if codificar else eh_bytes(tipos.get(origem))):
+                    raise ErroCompilacao(f'Linha {n}: origem da conversao UTF-8 possui tipo incompatível.')
+                adicionar((str(t[0]), destino, origem, estado), n, t)
             elif t[0] in ('copie', 'junte') and len(t) >= 6 and t[1] == '(' and t[-1] == ')':
                 if t.count(',') != 1:
                     raise ErroCompilacao(f'Linha {n}: use {t[0]}(destino, origem).')

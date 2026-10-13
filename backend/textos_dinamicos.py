@@ -77,8 +77,9 @@ def limpar(g, nome, variaveis, windows):
     g.bytes(b'\x48\xC7\x85' + struct.pack('<i', base - 8) + b'\x00' * 4)
 
 
-def emitir_validador(g, windows):
-    nome = 'rs_validar_utf8'
+def emitir_validador(g, windows, recuperavel=False):
+    nome = 'rs_validar_utf8_recuperavel' if recuperavel else 'rs_validar_utf8'
+    erro = nome + '_invalido' if recuperavel else 'erro_texto_utf8'
     g.marcar(nome)
     emitir_prologo_auxiliar(g, windows, 32)
     # RSI=conteúdo, RDX=bytes. RAX=escalares; ECX=continuações; R11=restrição.
@@ -91,14 +92,14 @@ def emitir_validador(g, windows):
     _emitir(g, '48 FF C0 41 80 FA 80')
     g.salto(nome + '_volta', 'jb')
     _emitir(g, '41 80 FA C2')
-    g.salto('erro_texto_utf8', 'jb')
+    g.salto(erro, 'jb')
     _emitir(g, '41 80 FA DF')
     g.salto(nome + '_dois', 'jbe')
     _emitir(g, '41 80 FA EF')
     g.salto(nome + '_tres', 'jbe')
     _emitir(g, '41 80 FA F4')
     g.salto(nome + '_quatro', 'jbe')
-    g.salto('erro_texto_utf8')
+    g.salto(erro)
     g.marcar(nome + '_dois')
     _emitir(g, 'B9 01 00 00 00')
     g.salto(nome + '_volta')
@@ -120,21 +121,57 @@ def emitir_validador(g, windows):
         g.salto(nome + '_volta')
     g.marcar(nome + '_continuacao')
     _emitir(g, '41 80 FA 80')
-    g.salto('erro_texto_utf8', 'jb')
+    g.salto(erro, 'jb')
     _emitir(g, '41 80 FA BF')
-    g.salto('erro_texto_utf8', 'ja')
+    g.salto(erro, 'ja')
     for flag, limite, salto in ((1, 0xA0, 'jb'), (2, 0x9F, 'ja'), (3, 0x90, 'jb'), (4, 0x8F, 'ja')):
         rotulo = nome + f'_restricao_{flag}'
         g.bytes(b'\x41\x83\xFB' + bytes((flag,)))
         g.salto(rotulo, 'jne')
         g.bytes(b'\x41\x80\xFA' + bytes((limite,)))
-        g.salto('erro_texto_utf8', salto)
+        g.salto(erro, salto)
         g.marcar(rotulo)
     _emitir(g, 'FF C9 45 31 DB')
     g.salto(nome + '_volta')
     g.marcar(nome + '_fim')
     _emitir(g, '85 C9')
-    g.salto('erro_texto_utf8', 'jnz')
+    g.salto(erro, 'jnz')
+    if recuperavel:
+        g.salto(nome + '_retorno')
+        g.marcar(erro)
+        _emitir(g, '48 C7 C0 FF FF FF FF')
+        g.marcar(nome + '_retorno')
+    _fechar(g, windows, nome)
+
+
+def converter_utf8(g, op, variaveis, tipos, windows):
+    _, destino, origem, estado = op
+    vista(g, variaveis, tipos, origem, windows)
+    valores_dinamicos.endereco_descritor(g, variaveis, destino, windows)
+    g.chamada('rs_converter_utf8')
+    offset = valores_dinamicos.deslocamento_local(variaveis, estado, windows)
+    g.bytes(b'\x48\x89\x85' + struct.pack('<i', offset))
+
+
+def emitir_conversao_utf8(g, windows):
+    emitir_validador(g, windows, recuperavel=True)
+    nome = 'rs_converter_utf8'
+    g.marcar(nome)
+    emitir_prologo_auxiliar(g, windows, 48)
+    _emitir(g, '48 89 7D F8 48 89 75 F0 48 89 55 E8 4C 89 45 E0')
+    # Validar o destino mesmo quando a origem é UTF-8 inválida.
+    _emitir(g, '48 83 7F F8 00')
+    g.salto('erro_valor_inativo', 'jl')
+    g.chamada('rs_validar_utf8_recuperavel')
+    _emitir(g, '48 85 C0')
+    g.salto(nome + '_invalido', 'js')
+    _emitir(g, '48 8B 7D F8 48 8B 75 F0 48 8B 55 E8 4C 8B 45 E0 31 C9')
+    g.chamada('rs_sequencia_modificar')
+    _emitir(g, '31 C0')
+    g.salto(nome + '_fim')
+    g.marcar(nome + '_invalido')
+    _emitir(g, 'B8 01 00 00 00')
+    g.marcar(nome + '_fim')
     _fechar(g, windows, nome)
 
 

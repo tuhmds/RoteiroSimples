@@ -1,0 +1,315 @@
+// Cadastro experimental em memoria e formato RSCV v1, independente da ABI.
+importe "codificacao_binaria.rts" como binario
+importe "utf8.rts" como utf8
+
+publico tipo Registro {
+    codigo: inteiro
+    titulo: texto
+    conteudo: bytes
+}
+
+publico tipo Cadastro {
+    registros: lista[Registro]
+}
+
+// Alteracoes sempre devolvem o cadastro, inclusive quando sao rejeitadas.
+publico tipo ResultadoCadastro {
+    valido: logico
+    codigo_erro: inteiro
+    valor: Cadastro
+}
+
+publico funcao criar() -> Cadastro {
+    seja cadastro: Cadastro
+    retorne mova(cadastro)
+}
+
+funcao responder(cadastro: Cadastro, codigo: inteiro) -> ResultadoCadastro {
+    seja resposta: ResultadoCadastro
+    resposta.valido = codigo == 0
+    resposta.codigo_erro = codigo
+    mova(resposta.valor, cadastro)
+    retorne mova(resposta)
+}
+
+publico funcao codigo(registro: emprestimo[Registro]) -> inteiro {
+    retorne registro.codigo
+}
+
+publico funcao titulo_igual(registro: emprestimo[Registro], titulo: emprestimo[texto]) -> logico {
+    retorne registro.titulo == titulo
+}
+
+publico funcao localizar(cadastro: emprestimo[Cadastro], chave: inteiro) -> inteiro {
+    seja indice = 0
+    enquanto indice < tamanho(cadastro.registros) {
+        se codigo(empreste(cadastro.registros[indice])) == chave {
+            retorne indice
+        }
+        indice = indice + 1
+    }
+    retorne -1
+}
+
+publico funcao pesquisar_titulo(cadastro: emprestimo[Cadastro], titulo: emprestimo[texto]) -> inteiro {
+    seja indice = 0
+    enquanto indice < tamanho(cadastro.registros) {
+        se titulo_igual(empreste(cadastro.registros[indice]), titulo) {
+            retorne indice
+        }
+        indice = indice + 1
+    }
+    retorne -1
+}
+
+funcao validar_registro(registro: emprestimo[Registro]) -> inteiro {
+    se registro.codigo < 1 {
+        retorne 1
+    }
+    se tamanho(registro.titulo) < 1 {
+        retorne 2
+    }
+    se tamanho(registro.titulo) > 1024 {
+        retorne 2
+    }
+    se tamanho(registro.conteudo) > 65536 {
+        retorne 3
+    }
+    retorne 0
+}
+
+publico funcao adicionar(cadastro: Cadastro, registro: Registro) -> ResultadoCadastro {
+    seja erro = validar_registro(empreste(registro))
+    se erro != 0 {
+        retorne responder(mova(cadastro), erro)
+    }
+    se tamanho(cadastro.registros) >= 1024 {
+        retorne responder(mova(cadastro), 4)
+    }
+    se localizar(empreste(cadastro), registro.codigo) >= 0 {
+        retorne responder(mova(cadastro), 5)
+    }
+    adicione(cadastro.registros, mova(registro))
+    retorne responder(mova(cadastro), 0)
+}
+
+publico funcao alterar(cadastro: Cadastro, registro: Registro) -> ResultadoCadastro {
+    seja erro = validar_registro(empreste(registro))
+    se erro != 0 {
+        retorne responder(mova(cadastro), erro)
+    }
+    seja posicao = localizar(empreste(cadastro), registro.codigo)
+    se posicao < 0 {
+        retorne responder(mova(cadastro), 6)
+    }
+    cadastro.registros[posicao] = mova(registro)
+    retorne responder(mova(cadastro), 0)
+}
+
+publico funcao remover(cadastro: Cadastro, chave: inteiro) -> ResultadoCadastro {
+    seja posicao = localizar(empreste(cadastro), chave)
+    se posicao < 0 {
+        retorne responder(mova(cadastro), 6)
+    }
+    seja descartado: Registro = retire(cadastro.registros, posicao)
+    retorne responder(mova(cadastro), 0)
+}
+
+publico funcao tamanho_registro(registro: emprestimo[Registro]) -> inteiro {
+    retorne 16 + tamanho(registro.titulo) + tamanho(registro.conteudo)
+}
+
+funcao serializar_registro(registro: emprestimo[Registro]) -> resultado[bytes] {
+    seja erro = validar_registro(registro)
+    se erro != 0 {
+        retorne falha[bytes](erro)
+    }
+    seja titulo = utf8.codificar(registro.titulo)
+    se titulo.valido == falso {
+        retorne falha[bytes](21)
+    }
+    seja dados: bytes
+    seja id = binario.codificar_u64_positivo(registro.codigo)
+    seja comprimento_titulo = binario.codificar_u32(tamanho(titulo.valor))
+    seja comprimento_conteudo = binario.codificar_u32(tamanho(registro.conteudo))
+    junte(dados, id.dados)
+    junte(dados, comprimento_titulo.dados)
+    junte(dados, comprimento_conteudo.dados)
+    junte(dados, titulo.valor)
+    junte(dados, registro.conteudo)
+    retorne sucesso[bytes](mova(dados))
+}
+
+// Adler-32: integridade acidental, sem autenticacao ou garantia criptografica.
+publico funcao verificar_integridade(dados: emprestimo[bytes], deslocamento: inteiro) -> inteiro {
+    se deslocamento < 0 {
+        retorne -1
+    }
+    se deslocamento > tamanho(dados) {
+        retorne -1
+    }
+    seja primeiro = 1
+    seja segundo = 0
+    seja indice = deslocamento
+    enquanto indice < tamanho(dados) {
+        primeiro = (primeiro + dados[indice]) % 65521
+        segundo = (segundo + primeiro) % 65521
+        indice = indice + 1
+    }
+    retorne segundo * 65536 + primeiro
+}
+
+publico funcao serializar(cadastro: emprestimo[Cadastro]) -> resultado[bytes] {
+    se tamanho(cadastro.registros) > 1024 {
+        retorne falha[bytes](4)
+    }
+    seja previsto = 24
+    seja indice = 0
+    enquanto indice < tamanho(cadastro.registros) {
+        seja chave = codigo(empreste(cadastro.registros[indice]))
+        se localizar(cadastro, chave) != indice {
+            retorne falha[bytes](5)
+        }
+        seja erro = validar_registro(empreste(cadastro.registros[indice]))
+        se erro != 0 {
+            retorne falha[bytes](erro)
+        }
+        previsto = previsto + tamanho_registro(empreste(cadastro.registros[indice]))
+        se previsto > 8388608 {
+            retorne falha[bytes](14)
+        }
+        indice = indice + 1
+    }
+    seja corpo: bytes
+    indice = 0
+    enquanto indice < tamanho(cadastro.registros) {
+        seja registro = serializar_registro(empreste(cadastro.registros[indice]))
+        se registro.valido == falso {
+            retorne falha[bytes](registro.codigo_erro)
+        }
+        junte(corpo, registro.valor)
+        indice = indice + 1
+    }
+    seja dados: bytes
+    adicione_byte(dados, 82)
+    adicione_byte(dados, 83)
+    adicione_byte(dados, 67)
+    adicione_byte(dados, 86)
+    seja versao = binario.codificar_u32(1)
+    seja quantidade = binario.codificar_u32(tamanho(cadastro.registros))
+    seja comprimento = binario.codificar_u32(tamanho(corpo))
+    seja integridade = binario.codificar_u32(verificar_integridade(empreste(corpo), 0))
+    seja reservado = binario.codificar_u32(0)
+    junte(dados, versao.dados)
+    junte(dados, quantidade.dados)
+    junte(dados, comprimento.dados)
+    junte(dados, integridade.dados)
+    junte(dados, reservado.dados)
+    junte(dados, corpo)
+    retorne sucesso[bytes](mova(dados))
+}
+
+funcao copiar_trecho(dados: emprestimo[bytes], deslocamento: inteiro, quantidade: inteiro) -> bytes {
+    seja trecho: bytes
+    seja indice = 0
+    enquanto indice < quantidade {
+        adicione_byte(trecho, dados[deslocamento + indice])
+        indice = indice + 1
+    }
+    retorne mova(trecho)
+}
+
+publico funcao desserializar(dados: emprestimo[bytes]) -> resultado[Cadastro] {
+    se tamanho(dados) < 24 {
+        retorne falha[Cadastro](10)
+    }
+    se tamanho(dados) > 8388608 {
+        retorne falha[Cadastro](14)
+    }
+    se dados[0] != 82 {
+        retorne falha[Cadastro](11)
+    }
+    se dados[1] != 83 {
+        retorne falha[Cadastro](11)
+    }
+    se dados[2] != 67 {
+        retorne falha[Cadastro](11)
+    }
+    se dados[3] != 86 {
+        retorne falha[Cadastro](11)
+    }
+    seja versao = binario.ler_u32(dados, 4)
+    se versao.valor != 1 {
+        retorne falha[Cadastro](12)
+    }
+    seja reservado = binario.ler_u32(dados, 20)
+    se reservado.valor != 0 {
+        retorne falha[Cadastro](13)
+    }
+    seja quantidade = binario.ler_u32(dados, 8)
+    se quantidade.valor > 1024 {
+        retorne falha[Cadastro](14)
+    }
+    seja comprimento = binario.ler_u32(dados, 12)
+    se comprimento.valor != tamanho(dados) - 24 {
+        retorne falha[Cadastro](15)
+    }
+    seja integridade = binario.ler_u32(dados, 16)
+    se integridade.valor != verificar_integridade(dados, 24) {
+        retorne falha[Cadastro](16)
+    }
+    seja cadastro: Cadastro
+    seja posicao = 24
+    seja indice = 0
+    enquanto indice < quantidade.valor {
+        se tamanho(dados) - posicao < 16 {
+            retorne falha[Cadastro](17)
+        }
+        seja chave = binario.ler_u64_positivo(dados, posicao)
+        se chave.valido == falso {
+            retorne falha[Cadastro](19)
+        }
+        se chave.valor < 1 {
+            retorne falha[Cadastro](19)
+        }
+        se localizar(empreste(cadastro), chave.valor) >= 0 {
+            retorne falha[Cadastro](20)
+        }
+        seja titulo = binario.ler_u32(dados, posicao + 8)
+        seja conteudo = binario.ler_u32(dados, posicao + 12)
+        se titulo.valor < 1 {
+            retorne falha[Cadastro](18)
+        }
+        se titulo.valor > 1024 {
+            retorne falha[Cadastro](18)
+        }
+        se conteudo.valor > 65536 {
+            retorne falha[Cadastro](18)
+        }
+        posicao = posicao + 16
+        se titulo.valor > tamanho(dados) - posicao {
+            retorne falha[Cadastro](17)
+        }
+        seja titulo_binario = copiar_trecho(dados, posicao, titulo.valor)
+        seja nome = utf8.decodificar(empreste(titulo_binario))
+        se nome.valido == falso {
+            retorne falha[Cadastro](21)
+        }
+        posicao = posicao + titulo.valor
+        se conteudo.valor > tamanho(dados) - posicao {
+            retorne falha[Cadastro](17)
+        }
+        seja registro: Registro
+        registro.codigo = chave.valor
+        mova(registro.titulo, nome.valor)
+        seja corpo = copiar_trecho(dados, posicao, conteudo.valor)
+        mova(registro.conteudo, corpo)
+        adicione(cadastro.registros, mova(registro))
+        posicao = posicao + conteudo.valor
+        indice = indice + 1
+    }
+    se posicao != tamanho(dados) {
+        retorne falha[Cadastro](17)
+    }
+    retorne sucesso[Cadastro](mova(cadastro))
+}

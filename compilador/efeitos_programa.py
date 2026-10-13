@@ -183,6 +183,9 @@ def efeito_instrucao_arvore(no):
         return _propriedade('liberar', no[1], falha=True)
     if operacao in ('limpe_texto_dinamico', 'limpe_bytes_dinamicos'):
         return _propriedade('limpar', no[1], falha=True)
+    if operacao in ('codifique_utf8', 'decodifique_utf8'):
+        return (_ler(no[2]).combinar(_gravar(no[3]))
+                .combinar(_propriedade('converter_utf8', no[1], falha=True)))
     if operacao == 'libere_escopo_listas':
         e = Efeitos()
         for nome in no[1]:

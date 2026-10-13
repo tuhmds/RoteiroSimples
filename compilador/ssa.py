@@ -119,7 +119,7 @@ class ProgramaSSA:
             return str(x)
         linhas = ['RS 0.12 - SSA tipada (analise, ainda sem baixar para codigo nativo)']
         if self.cfg.nome_funcao is not None or self.cfg.chamadas:
-            linhas = ['RS 0.42L - SSA tipada (análise e emissão nativa em O4–O8)']
+            linhas = ['RS 0.42M - SSA tipada (análise e emissão nativa em O4–O8)']
         for bid, b in self.blocos.items():
             if not b.alcancavel:
                 linhas.append(f'{bid} [{b.papel}] inacessivel')

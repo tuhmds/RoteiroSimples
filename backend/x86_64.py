@@ -955,6 +955,9 @@ def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes
     g.desenrolamentos = []  # contratos reais para .pdata/.xdata
     g.exige_sondagem_pilha = False
     g.funcoes = getattr(programa, 'funcoes', {})
+    tem_conversao_utf8 = any(op[0] in ('codifique_utf8', 'decodifique_utf8')
+        for corpo in [programa, *(f.programa for f in g.funcoes.values())]
+        for op in percorrer_instrucoes(corpo.instrucoes))
     g.quadros_funcoes = {nome: tamanho_quadro(_total_slots(funcao.programa) + 1, windows)
                         for nome, funcao in g.funcoes.items()}
     g.registros = getattr(programa, 'registros', {})
@@ -1121,6 +1124,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes
             elif op[0] == 'publique_arquivo':
                 publicacao_atomica.emitir_comando(
                     g, op, variaveis, windows, mensagens, deslocamento_variavel)
+            elif op[0] in ('codifique_utf8', 'decodifique_utf8'):
+                textos_dinamicos.converter_utf8(g, op, variaveis, tipos, windows)
             elif op[0] == 'leia_texto':
                 nome = op[1]
                 dados, comprimento, capacidade = _endereco_buffer(variaveis, nome, tipos, windows)
@@ -1562,6 +1567,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes
         sequencias_dinamicas.emitir_rotinas(g, windows)
     if tem_texto_novo:
         textos_dinamicos.emitir_rotinas(g, windows, tem_leitura_dinamica)
+    if tem_conversao_utf8:
+        textos_dinamicos.emitir_conversao_utf8(g, windows)
     if windows and (tem_arquivos or tem_recursos or tem_arquivos_posicionais):
         politica_caminhos.emitir_verificacao_windows(g)
     if tem_arquivos:

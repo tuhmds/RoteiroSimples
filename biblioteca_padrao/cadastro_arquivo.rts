@@ -1,0 +1,84 @@
+// Persistencia experimental por snapshot; caminhos locais portaveis.
+importe "cadastro_variavel.rts" como cad
+
+publico funcao salvar(cadastro: emprestimo[cad.Cadastro]) -> resultado[inteiro] {
+    // Validar e serializar antes de abrir o arquivo de trabalho.
+    seja dados = cad.serializar(cadastro)
+    se dados.valido == falso {
+        retorne falha[inteiro](dados.codigo_erro)
+    }
+    seja recurso: arquivo
+    seja estado = 0
+    abra_arquivo("cadastro_provisorio.rsd", recurso, "novo", estado)
+    se estado != 0 {
+        retorne falha[inteiro](30)
+    }
+    seja bloco: bytes[4096]
+    seja posicao = 0
+    enquanto posicao < tamanho(dados.valor) {
+        limpe(bloco)
+        enquanto tamanho(bloco) < 4096 {
+            se posicao + tamanho(bloco) >= tamanho(dados.valor) {
+                pare
+            }
+            adicione_byte(bloco, dados.valor[posicao + tamanho(bloco)])
+        }
+        grave_em(recurso, bloco, posicao, estado)
+        se estado != tamanho(bloco) {
+            retorne falha[inteiro](31)
+        }
+        posicao = posicao + estado
+    }
+    sincronize_arquivo(recurso, estado)
+    se estado != 0 {
+        retorne falha[inteiro](32)
+    }
+    feche_arquivo(recurso, estado)
+    se estado != 0 {
+        retorne falha[inteiro](33)
+    }
+    publique_arquivo("cadastro_provisorio.rsd", "cadastro.rsd", estado)
+    se estado == -9 {
+        // A troca ocorreu, mas a sincronizacao do diretorio falhou.
+        retorne falha[inteiro](35)
+    }
+    se estado != 0 {
+        retorne falha[inteiro](34)
+    }
+    retorne sucesso[inteiro](posicao)
+}
+
+publico funcao carregar() -> resultado[cad.Cadastro] {
+    seja recurso: arquivo
+    seja estado = 0
+    abra_arquivo("cadastro.rsd", recurso, "leitura", estado)
+    se estado != 0 {
+        retorne falha[cad.Cadastro](30)
+    }
+    seja dados: bytes
+    seja bloco: bytes[4096]
+    seja posicao = 0
+    enquanto verdadeiro {
+        seja pedido = 4096
+        se posicao + pedido > 8388608 {
+            pedido = 8388608 - posicao + 1
+        }
+        carregue_de(recurso, bloco, posicao, pedido, estado)
+        se estado < 0 {
+            retorne falha[cad.Cadastro](31)
+        }
+        se estado == 0 {
+            pare
+        }
+        se posicao + estado > 8388608 {
+            retorne falha[cad.Cadastro](14)
+        }
+        junte(dados, bloco)
+        posicao = posicao + estado
+    }
+    feche_arquivo(recurso, estado)
+    se estado != 0 {
+        retorne falha[cad.Cadastro](33)
+    }
+    retorne cad.desserializar(empreste(dados))
+}

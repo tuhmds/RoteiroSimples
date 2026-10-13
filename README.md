@@ -1,6 +1,19 @@
-# RoteiroSimples (RS) — versão experimental 0.42L
+# RoteiroSimples (RS) — versão experimental 0.42M
 
-## RS 0.42L — SSA e alocação nativa das funções escalares
+## RS 0.42M — UTF-8 explícito e cadastro persistente em RS
+
+A linguagem agora converte texto e bytes explicitamente, com UTF-8 inválido
+reportado por estado recuperável e preservação do destino. A biblioteca
+`utf8.rts` fornece resultados proprietários para essas conversões.
+
+O cadastro experimental acrescenta, consulta por empréstimo, altera e remove
+registros com título e conteúdo binário variáveis. Serialização, validação
+com limites e persistência por arquivo provisório são escritas em RS.
+Dois executáveis independentes gravam e reabrem o formato RSCV versionado.
+Os testes cobrem corrupção, falhas de escrita, propriedade e ABI Windows.
+[Contrato, formato, exemplos e limites](docs/CADASTRO_PERSISTENTE_RS_0_42M.md).
+
+## Histórico: RS 0.42L — SSA e alocação nativa das funções escalares
 
 Funções escalares agora têm parâmetros e retornos na SSA e são emitidas
 com alocação de registradores em O4–O8. O3 propaga constantes entre blocos,
@@ -1036,13 +1049,13 @@ python3 compilar.py exemplos/listas_dinamicas.rts --alvo linux -O 8 -o roteiro_l
 python3 -m unittest discover -s testes -v
 ```
 
-O compilador aceita os níveis históricos **`-O 0` até `-O 8`**. Na 0.42L,
+O compilador aceita os níveis históricos **`-O 0` até `-O 8`**. Na 0.42M,
 programas escalares com funções elegíveis usam IR com transformações até O3
 e emissão SSA com alocação em O4–O8;
 registros, donos, empréstimos e arquivos continuam no gerador conservador.
 `--mostrar-estrategia` informa o caminho e o nível efetivos.
 
-## Recursos presentes na RS 0.42L
+## Recursos presentes na RS 0.42M
 
 | Recurso | Situação |
 |---|---|
@@ -1072,6 +1085,8 @@ registros, donos, empréstimos e arquivos continuam no gerador conservador.
 | Parâmetros/retornos de listas proprietárias e `mova(origem)` em expressão | Primeiro marco experimental na 0.42A.1 |
 | Texto UTF-8 dinâmico, funções proprietárias e empréstimos de leitura | Implementado na 0.42A.2 |
 | Contagem Unicode, igualdade de conteúdo e consulta explícita de bytes | Implementado na 0.42A.2 |
+| Conversão explícita UTF-8 entre texto e bytes, com erro recuperável | Implementado na 0.42M |
+| Cadastro variável em RS, serialização versionada e persistência por snapshot | Prova experimental na 0.42M; sem transações ou recuperação automática |
 | Bytes dinâmicos, funções proprietárias e empréstimos de leitura | Implementado na 0.42A.3 |
 | Biblioteca de análise léxica escrita em RS | Implementado na 0.42C |
 | Codificação binária em RS e prova `.rsd` com 100 registros | Implementado; ainda não é um motor de banco |
@@ -1115,23 +1130,20 @@ registros, donos, empréstimos e arquivos continuam no gerador conservador.
 
 ## Próximas prioridades
 
-**Consolidar a linguagem em aplicações:** a 0.42L acrescentou SSA, parâmetros,
-retornos e emissão alocada de funções escalares. Recursos proprietários
-devem receber contratos explícitos de memória antes de entrar nas mesmas
-transformações. Oráculos, campanhas e medições permanecem como referência.
-Um cadastro persistente em RS com texto/binário variável e reabertura validada
-continua como aplicação posterior para Dados RS e bibliotecas do motor/Studio.
-Em paralelo, o léxico em RS permite iniciar a análise sintática, e a prova
-binária permite especificar um primeiro armazenamento de registros variáveis.
-Novos operadores lógicos e tipos reais/decimais continuam no roteiro.
-O Studio depende de diagnósticos e serviços do compilador reutilizáveis,
-além de uma futura base de interface nativa. A autocompilação continua gradual.
+**Consolidar persistência e memória:** a 0.42M entrega um cadastro variável
+em RS com UTF-8 explícito, serialização limitada e reabertura validada.
+A próxima etapa deve especificar e testar recuperação após interrupção,
+coordenação de acesso e orçamento de memória antes de anunciar garantias
+maiores. O formato RSCV é experimental; a prova anterior de 100 registros
+continua disponível. O Dados RS será um projeto próprio, separado do compilador.
 
-O Dados RS já tem uma prova de formato binário versionado com 100 registros;
-o motor ainda precisa de armazenamento variável, recuperação,
-controle de concorrência e outras garantias de persistência. Publicação,
-bloqueio e sincronização existentes não fornecem transações nem durabilidade
-absoluta após queda de energia.
+Recursos proprietários precisam de contratos de memória na IR antes de
+receber as transformações SSA já aplicadas às funções escalares. Oráculos,
+campanhas e medições permanecem como referência. O léxico em RS permite
+avançar gradualmente a análise sintática rumo à autocompilação.
+Novos operadores lógicos e tipos reais/decimais continuam no roteiro.
+O motor e suas bibliotecas devem aproveitar estas bases; o Studio depende
+de diagnósticos e serviços reutilizáveis e de uma futura interface nativa.
 
 O projeto ainda é experimental, não pronto para produção. Não estamos acrescentando níveis de otimização.
 

@@ -1,0 +1,54 @@
+importe "padrao/cadastro_variavel.rts" como cad
+importe "padrao/cadastro_arquivo.rts" como disco
+
+funcao criar_registro(chave: inteiro, titulo: texto[64], quantidade: inteiro) -> cad.Registro {
+    seja registro: cad.Registro
+    registro.codigo = chave
+    copie(registro.titulo, titulo)
+    para indice de 0 ate quantidade - 1 {
+        adicione_byte(registro.conteudo, indice % 256)
+    }
+    retorne mova(registro)
+}
+
+inicio {
+    seja cadastro = cad.criar()
+    seja titulo: texto[64]
+    copie(titulo, "Ação 🌱")
+    seja primeiro = cad.adicionar(mova(cadastro), criar_registro(7, titulo, 5000))
+    se primeiro.valido == falso {
+        encerre(2)
+    }
+    mova(cadastro, primeiro.valor)
+    copie(titulo, "Temporário")
+    seja segundo = cad.adicionar(mova(cadastro), criar_registro(8, titulo, 0))
+    se segundo.valido == falso {
+        encerre(2)
+    }
+    mova(cadastro, segundo.valor)
+    copie(titulo, "Revisão")
+    seja terceiro = cad.adicionar(mova(cadastro), criar_registro(9, titulo, 3))
+    se terceiro.valido == falso {
+        encerre(2)
+    }
+    mova(cadastro, terceiro.valor)
+    copie(titulo, "Revisão concluída")
+    seja alteracao = cad.alterar(mova(cadastro), criar_registro(9, titulo, 257))
+    se alteracao.valido == falso {
+        encerre(2)
+    }
+    mova(cadastro, alteracao.valor)
+    seja remocao = cad.remover(mova(cadastro), 8)
+    se remocao.valido == falso {
+        encerre(2)
+    }
+    mova(cadastro, remocao.valor)
+    escreva(cad.localizar(empreste(cadastro), 9))
+    seja gravacao = disco.salvar(empreste(cadastro))
+    se gravacao.valido == falso {
+        escreva(gravacao.codigo_erro)
+        encerre(3)
+    }
+    escreva(gravacao.valor)
+    escreva(tamanho(cadastro.registros))
+}

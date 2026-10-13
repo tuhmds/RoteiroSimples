@@ -1,0 +1,20 @@
+// Conversao explicita com copia profunda; erro 1: UTF-8 invalido.
+publico funcao codificar(origem: emprestimo[texto]) -> resultado[bytes] {
+    seja dados: bytes
+    seja estado = 0
+    codifique_utf8(dados, origem, estado)
+    se estado != 0 {
+        retorne falha[bytes](estado)
+    }
+    retorne sucesso[bytes](mova(dados))
+}
+
+publico funcao decodificar(origem: emprestimo[bytes]) -> resultado[texto] {
+    seja texto_convertido: texto
+    seja estado = 0
+    decodifique_utf8(texto_convertido, origem, estado)
+    se estado != 0 {
+        retorne falha[texto](estado)
+    }
+    retorne sucesso[texto](mova(texto_convertido))
+}
