@@ -1,6 +1,6 @@
 # RS 0.42D — Propriedade em campos de registros locais
 
-**Estado:** primeiro marco de implementacao, com testes nativos Windows/Linux. Nao equivale ao suporte completo a registros proprietarios como valores transferiveis.
+**Estado histórico da 0.42D:** primeiro marco de implementacao, com testes nativos Windows/Linux. A 0.42E acrescentou movimento do agregado e a [0.42F acrescentou parametros e retornos](REGISTROS_EM_FUNCOES_RS_0_42F.md). As restricoes abaixo descrevem a entrega original; colecoes de donos permanecem pendentes.
 
 ## Funcionalidades implementadas
 

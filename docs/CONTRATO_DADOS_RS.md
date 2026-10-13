@@ -2,6 +2,13 @@
 
 **Situação:** especificação de arquitetura, não implementação de banco de dados.
 
+**Avanço até a RS 0.42F:** texto e bytes dinâmicos estão implementados,
+assim como campos proprietários e transporte de registros entre funções.
+A biblioteca de codificação binária e a prova entre dois processos com
+100 registros estão em [DADOS_RS_PROVA_BINARIA_V1.md](DADOS_RS_PROVA_BINARIA_V1.md).
+O formato dessa prova não congela o futuro formato do motor. Páginas,
+transações, índices e recuperação continuam propostas deste contrato.
+
 ## 1. Decisão de produto
 
 O **Dados RS** será um projeto e repositório próprios, com código do motor e
@@ -131,7 +138,7 @@ injetadas das chamadas do sistema.
 Prioridades que deverão ser implementadas e validadas na linguagem/núcleo:
 
 1. Buffers `bytes[N]`, com escrita/leitura por posição em 64 bits,
-   implementados na RS 0.35 a 0.37; bytes dinâmicos continuam pendentes.
+   implementados na RS 0.35 a 0.37; bytes dinâmicos chegaram na RS 0.42A.3.
 2. Recursos `arquivo` de propriedade única, com abertura persistente,
    fechamento e sincronização implementados na RS 0.38.
 3. Erros recuperáveis em códigos inteiros, adaptáveis à
@@ -140,7 +147,9 @@ Prioridades que deverão ser implementadas e validadas na linguagem/núcleo:
 4. Publicação por renomeação e bloqueio não bloqueante (0.39),
    ainda sem controle transacional de concorrência entre arquivos
    ou garantia absoluta após perda de energia.
-5. Texto dinâmico ou buffers dimensionados seguros para consultas e campos.
+5. Texto dinâmico (0.42A.2), campos proprietários (0.42D) e transporte de
+   registros em funções (0.42F); coleções de donos e resultados com conteúdo
+   proprietário ainda exigem contratos próprios.
 6. Interface de funções externas (ABI C) para drivers existentes.
 7. Rede, TLS e gerenciamento de credenciais para modo servidor e clientes
    remotos, quando necessário.

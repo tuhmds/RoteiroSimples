@@ -1,12 +1,28 @@
-# RoteiroSimples (RS) — versão experimental 0.42E
+# RoteiroSimples (RS) — versão experimental 0.42F
 
-## RS 0.42E — Movimentacao de registros proprietarios completos
+## RS 0.42F — Registros proprietários em funções
 
-A linguagem agora permite `mova(destino, origem)` entre registros proprietarios de mesmo tipo, inclusive com texto, bytes, listas e subregistros. O gerador nativo verifica as folhas proprietarias da origem, descarta os antigos donos do destino, movimenta o agregado e inativa a origem. A transferencia por parametros e retornos de funcao e a inclusao de registros proprietarios em colecoes continuam em desenvolvimento e nao estao disponiveis neste marco. Implementacao: [PR #9](https://github.com/tuhmds/RoteiroSimples/pull/9).
+Funções agora recebem e devolvem registros com campos `texto`, `bytes`, listas
+dinâmicas e subregistros proprietários. Use `mova(origem)` ou uma chamada que
+produza um registro novo. O transporte preserva os ponteiros dos campos;
+escopos, retornos e temporários descartam cada dono restante. Registros sem
+donos continuam copiáveis por valor. O compilador rejeita consumir campos
+sobrepostos ou emprestar um campo e transferir seu registro na mesma chamada.
 
-## RS 0.42D — Campos dinamicos com dono em registros locais
+O [exemplo de documento](exemplos/aplicacoes/documento_registro_rs042f.rts)
+exercita criação, alteração, encaminhamento e consumo. O
+[contrato e os limites](docs/REGISTROS_EM_FUNCOES_RS_0_42F.md) descrevem as
+verificações nativas, incluindo ABI e desenrolamento real no Windows.
+Coleções de registros proprietários e `resultado[T]` com donos ainda dependem
+de contratos próprios de transferência e descarte.
 
-A RS permite, em marco experimental, campos `texto`, `bytes`, `lista[inteiro]` e `lista[logico]` dentro de registros locais, com gerenciamento automatico de seus descritores, transferencia explicita por `mova` e preservacao da geracao nativa. Copias implicitas, parametros e retornos por valor e colecoes de registros proprietarios permanecem rejeitados ate existir transferencia segura do agregado completo. A implementacao e os testes estao na [PR #8](https://github.com/tuhmds/RoteiroSimples/pull/8), com contrato em `docs/REGISTROS_PROPRIETARIOS_RS_0_42D.md`.
+## Histórico: RS 0.42E — Movimentacao de registros proprietarios completos
+
+A linguagem passou a permitir `mova(destino, origem)` entre registros proprietarios de mesmo tipo, inclusive com texto, bytes, listas e subregistros. O gerador nativo verifica as folhas proprietarias da origem, descarta os antigos donos do destino, movimenta o agregado e inativa a origem. Parametros e retornos foram acrescentados na 0.42F; colecoes de registros proprietarios permanecem pendentes. Implementacao: [PR #9](https://github.com/tuhmds/RoteiroSimples/pull/9).
+
+## Histórico: RS 0.42D — Campos dinamicos com dono em registros locais
+
+A RS passou a permitir campos `texto`, `bytes`, `lista[inteiro]` e `lista[logico]` dentro de registros locais, com gerenciamento automatico de seus descritores e transferencia explicita por `mova`. O transporte do agregado chegou nas revisoes 0.42E/0.42F; copias implicitas e colecoes de registros proprietarios continuam rejeitadas. A implementacao e os testes estao na [PR #8](https://github.com/tuhmds/RoteiroSimples/pull/8), com contrato historico em `docs/REGISTROS_PROPRIETARIOS_RS_0_42D.md`.
 
 ## Dados RS — Biblioteca de codificacao binaria (PR #6)
 
@@ -14,7 +30,7 @@ A biblioteca `padrao/codificacao_binaria.rts`, implementada em RS, codifica e le
 
 ## RS 0.42C — Biblioteca lexico em RS (PR #5)
 
-O analisador lexico escrito na propria RS pode ser importado com `importe "padrao/lexico.rts" como lexico`. Recebe bytes por emprestimo, devolve `lista[UnidadeLexica]` com offsets na fonte original e diagnosticos recuperaveis (classes -1 e -2), sem encerrar o processo. Tambem expoe o registro copiavel `DiagnosticoLexico` e `obter_diagnostico`, que devolvem codigo, posicao em bytes, linha e coluna sem encerrar a aplicacao. A ferramenta de exemplo usa o modulo; o Studio podera fazer o mesmo. A revisao corrigiu tambem tipos de registros importados dentro de `lista[Tipo]` no resolvedor de nomes. Testes diferenciais com o lexico Python e um processo que examina codigo invalido e valido verificam o comportamento em Windows/Linux. Dependente da RS 0.42A.3, ainda em revisao: [PR #5](https://github.com/tuhmds/RoteiroSimples/pull/5). Consulte `docs/LEXICO_NATIVO_RS_0_42C.md`.
+O analisador lexico escrito na propria RS pode ser importado com `importe "padrao/lexico.rts" como lexico`. Recebe bytes por emprestimo, devolve `lista[UnidadeLexica]` com offsets na fonte original e diagnosticos recuperaveis (classes -1 e -2), sem encerrar o processo. Tambem expoe o registro copiavel `DiagnosticoLexico` e `obter_diagnostico`, que devolvem codigo, posicao em bytes, linha e coluna sem encerrar a aplicacao. A ferramenta de exemplo usa o modulo; o Studio podera fazer o mesmo. A revisao corrigiu tambem tipos de registros importados dentro de `lista[Tipo]` no resolvedor de nomes. Testes diferenciais com o lexico Python e um processo que examina codigo invalido e valido verificam o comportamento em Windows/Linux. Integrado apos a RS 0.42A.3: [PR #5](https://github.com/tuhmds/RoteiroSimples/pull/5). Consulte `docs/LEXICO_NATIVO_RS_0_42C.md`.
 
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
@@ -55,8 +71,8 @@ falhas simuladas e desenrolamento Windows real. Detalhes, provas e limites estã
 [nota técnica](docs/BYTES_DINAMICOS_RS_0_42A_3.md) e na
 [revisão conjunta](docs/REVISAO_CONJUNTA_RS_0_42A.md). Os marcos foram organizados
 em propriedade 0.42A.1, texto 0.42A.2 e bytes 0.42A.3, com commits preservados.
-Donos em registros/listas, empréstimos mutáveis e operações posicionais
-com buffers dinâmicos permanecem pendentes.
+Donos em registros chegaram nas revisões 0.42D a 0.42F. Coleções de donos,
+empréstimos mutáveis e operações posicionais com buffers dinâmicos permanecem pendentes.
 
 ## RS 0.42A.2 — Texto UTF-8 dinâmico
 
@@ -80,10 +96,9 @@ A [CI aprovada](https://github.com/tuhmds/RoteiroSimples/actions/runs/3838266797
 executou 527 testes por sistema, sem falhas: 12 ignorados no Windows e
 23 no Linux. Sintaxe, provas e limites estão na
 [nota técnica](docs/TEXTO_DINAMICO_RS_0_42A_2.md).
-Bytes dinâmicos são acrescentados no marco 0.42A.3 acima; donos em
-registros/listas e empréstimos mutáveis ficam para próximos marcos.
-Esta entrega continua dependente do primeiro
-marco de propriedade 0.42A.1 e não representa publicação na main.
+Bytes dinâmicos chegaram na 0.42A.3; donos em registros, na 0.42D a 0.42F.
+Coleções de donos e empréstimos mutáveis continuam pendentes.
+Esta entrega foi integrada após o marco de propriedade 0.42A.1.
 
 ## RS 0.42A.1 — Funções que recebem e devolvem listas proprietárias
 
@@ -941,7 +956,7 @@ nenhum nível foi criado na RS 0.29. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes na RS 0.42A.2
+## Recursos presentes na RS 0.42F
 
 | Recurso | Situação |
 |---|---|
@@ -965,6 +980,11 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Parâmetros/retornos de listas proprietárias e `mova(origem)` em expressão | Primeiro marco experimental na 0.42A.1 |
 | Texto UTF-8 dinâmico, funções proprietárias e empréstimos de leitura | Implementado na 0.42A.2 |
 | Contagem Unicode, igualdade de conteúdo e consulta explícita de bytes | Implementado na 0.42A.2 |
+| Bytes dinâmicos, funções proprietárias e empréstimos de leitura | Implementado na 0.42A.3 |
+| Biblioteca de análise léxica escrita em RS | Implementado na 0.42C |
+| Codificação binária em RS e prova `.rsd` com 100 registros | Implementado; ainda não é um motor de banco |
+| Campos dinâmicos em registros aninhados e movimento do agregado | Implementado na 0.42D/0.42E |
+| Parâmetros e retornos de registros proprietários | Implementado na 0.42F |
 | Consultas gerais e seleção de listas em RS | Acrescentadas na 0.42A.1 |
 | ABI e desenrolamento Windows com ensaios reais | Consolidado na 0.41.5; regressões mantidas |
 | Contrato comum de disposição, efeitos e propriedade | Consolidado nas revisões 0.40 e neste marco |
@@ -976,7 +996,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Publicação por renomeação, bloqueio não bloqueante e basename variável verificado | Implementado na 0.39 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
-| Tipos reais/decimais, bytes dinâmicos, donos aninhados, empréstimos mutáveis e FFI | Ainda não |
+| Coleções de registros proprietários, resultados com donos, empréstimos mutáveis, reais/decimais e FFI | Ainda não |
 
 ## Organização atual
 
@@ -997,14 +1017,18 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**Continuidade da RS 0.42A:** revisar os marcos de propriedade e texto UTF-8,
-depois aplicar a memória compartilhada aos bytes dinâmicos. Nomes variáveis
-já podem ser recebidos e gravados; armazená-los dentro de registros e listas
-depende da propriedade de elementos aninhados. Funções e coleções mais gerais, novos operadores lógicos e
-tipos reais/decimais pertencem aos marcos seguintes. A autocompilação continua
-um objetivo gradual, sem substituir a base funcional por anúncios de recursos.
+**Continuidade da propriedade:** resultados com donos e coleções de registros
+proprietários precisam de regras de transferência e descarte por elemento.
+Registros com texto, bytes e listas já atravessam funções; esse suporte serve
+à construção de bibliotecas em RS, do compilador em RS e do Dados RS.
+Em paralelo, o léxico em RS permite iniciar a análise sintática, e a prova
+binária permite especificar um primeiro armazenamento de registros variáveis.
+Novos operadores lógicos e tipos reais/decimais continuam no roteiro.
+O Studio depende de diagnósticos e serviços do compilador reutilizáveis,
+além de uma futura base de interface nativa. A autocompilação continua gradual.
 
-O Dados RS ainda precisa de formato binário versionado, recuperação,
+O Dados RS já tem uma prova de formato binário versionado com 100 registros;
+o motor ainda precisa de armazenamento variável, recuperação,
 controle de concorrência e outras garantias de persistência. Publicação,
 bloqueio e sincronização existentes não fornecem transações nem durabilidade
 absoluta após queda de energia.
