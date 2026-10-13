@@ -57,3 +57,7 @@ A aplicacao exemplos/ferramentas/prova_lexico_recuperavel.rts demonstra que o me
 - Primeira etapa escrita em RS, e nao compilador autocompilado. A compilacao de desenvolvimento segue em Python.
 - Manter a dependencia da ramificacao rs-0.42a-bytes-dinamicos. Nenhuma mesclagem automatica.
 - A etapa seguinte separara a leitura de arquivo do tokenizador, representara erros tipados e implementara a arvore sintatica por indices. Depois: resolucao de nomes, tipos, IR, geracao PE/ELF e compilacao do proprio compilador, com testes diferenciais.
+
+## Diagnostico estruturado
+
+`padrao/lexico.rts` oferece o tipo publico `DiagnosticoLexico` com os campos `encontrado`, `codigo`, `posicao_byte`, `linha` e `coluna`. A funcao `obter_diagnostico(unidades)` permite consultar uma falha lexical sem encerrar o processo. A lista proprietaria de tokens permanece separada porque a transferencia de registros com donos ainda nao foi implementada. Testes nativos conferem erros e documentos validos no mesmo processo.
