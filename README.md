@@ -1,6 +1,20 @@
-# RoteiroSimples (RS) — versão experimental 0.42K
+# RoteiroSimples (RS) — versão experimental 0.42L
 
-## RS 0.42K — Fluxo e efeitos das funções escalares
+## RS 0.42L — SSA e alocação nativa das funções escalares
+
+Funções escalares agora têm parâmetros e retornos na SSA e são emitidas
+com alocação de registradores em O4–O8. O3 propaga constantes entre blocos,
+preservando chamadas e erros. A emissão conserva a convenção interna RS,
+ordem dos argumentos, proteção de pilha e metadados Windows; o Linux
+acrescenta os salvamentos necessários dos registradores alocados.
+
+`--mostrar-ssa`, sua exportação e `--mostrar-alocacao` agora cobrem essas
+funções. A CI inclui ensaios nativos de preservação e desenrolamento e
+medições intercaladas de laços/chamadas dentro dos corpos. Registros,
+donos, empréstimos e arquivos continuam no caminho conservador.
+[Contrato, verificações e limites](docs/SSA_FUNCOES_RS_0_42L.md).
+
+## Histórico: RS 0.42K — Fluxo e efeitos das funções escalares
 
 O compilador agora analisa `inicio` e cada função escalar em grafos separados.
 Parâmetros são definidos na entrada e retornos seguem diretamente à saída da
@@ -1022,12 +1036,13 @@ python3 compilar.py exemplos/listas_dinamicas.rts --alvo linux -O 8 -o roteiro_l
 python3 -m unittest discover -s testes -v
 ```
 
-O compilador aceita os níveis históricos **`-O 0` até `-O 8`**. Na 0.42K,
-programas escalares com funções elegíveis usam IR com transformações até O2;
+O compilador aceita os níveis históricos **`-O 0` até `-O 8`**. Na 0.42L,
+programas escalares com funções elegíveis usam IR com transformações até O3
+e emissão SSA com alocação em O4–O8;
 registros, donos, empréstimos e arquivos continuam no gerador conservador.
 `--mostrar-estrategia` informa o caminho e o nível efetivos.
 
-## Recursos presentes na RS 0.42K
+## Recursos presentes na RS 0.42L
 
 | Recurso | Situação |
 |---|---|
@@ -1035,8 +1050,9 @@ registros, donos, empréstimos e arquivos continuam no gerador conservador.
 | `escreva`, `leia`, condições, `enquanto`, `para`, `pare` e `continue` | Implementado |
 | Escopos léxicos e ocultação de nomes locais | Implementado desde 0.23 |
 | Funções, parâmetros e retornos numéricos e lógicos | Implementado desde 0.23 |
-| Funções escalares na IR, dobramento e propagação local de constantes | Implementado na 0.42J; nível IR efetivo até 2 |
-| CFG/fluxo por função escalar, parâmetros de entrada, retornos e efeitos transitivos | Implementado na 0.42K; sem SSA de chamadas |
+| Funções escalares na IR, dobramento e propagação de constantes | Implementado na 0.42J; propagação SSA entre blocos na 0.42L |
+| CFG/fluxo por função escalar, parâmetros de entrada, retornos e efeitos transitivos | Implementado na 0.42K |
+| SSA e alocação nativa por função escalar, com chamadas e recursão | Implementado na 0.42L em O4–O8 |
 | Campanha gerada com oráculo independente, reprodução e redução de falhas | Implementado na 0.42J; corpus estruturado limitado |
 | Cobertura Python de linhas/ramos e matriz CI Python 3.10/3.11/3.14 | Implementado na 0.42J |
 | Medição O0–O8 com gerador, hashes e tempos individuais | Implementado na 0.42J; execuções intercaladas na 0.42K |
@@ -1077,7 +1093,7 @@ registros, donos, empréstimos e arquivos continuam no gerador conservador.
 | Recursos `arquivo`, leitura/escrita posicional, sincronização e fechamento automático | Implementado na 0.38 |
 | Publicação por renomeação, bloqueio não bloqueante e basename variável verificado | Implementado na 0.39 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
-| SSA e alocação de registradores em funções; IR/CFG de registros | Ainda não; CFG escalar chegou na 0.42K |
+| IR/CFG/SSA de registros, donos, empréstimos e arquivos | Ainda não |
 | Resultados aninhados/de listas dinâmicas, empréstimos mutáveis, reais/decimais e FFI | Ainda não |
 
 ## Organização atual
@@ -1099,9 +1115,8 @@ registros, donos, empréstimos e arquivos continuam no gerador conservador.
 
 ## Próximas prioridades
 
-**Consolidar funções na IR:** a 0.42K acrescentou CFG, parâmetros de entrada,
-retornos e efeitos por função escalar. O próximo passo é construir SSA por
-função e preparar alocação/emissão de chamadas conforme a ABI. Recursos proprietários
+**Consolidar a linguagem em aplicações:** a 0.42L acrescentou SSA, parâmetros,
+retornos e emissão alocada de funções escalares. Recursos proprietários
 devem receber contratos explícitos de memória antes de entrar nas mesmas
 transformações. Oráculos, campanhas e medições permanecem como referência.
 Um cadastro persistente em RS com texto/binário variável e reabertura validada

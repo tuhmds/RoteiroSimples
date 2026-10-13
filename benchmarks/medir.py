@@ -94,7 +94,7 @@ def medir(fonte, alvo, repeticoes=7, niveis=tuple(range(9)), semente=420110):
         registro.update({'mediana_ms': round(statistics.median(tempos), 3),
                          'mínimo_ms': round(min(tempos), 3), 'máximo_ms': round(max(tempos), 3),
                          'tempos_ms': [round(t, 3) for t in tempos], 'resultado': resultado_esperado})
-    return {'versao': 'RS 0.42K', 'alvo': alvo, 'sistema': platform.platform(), 'cpu': platform.processor(),
+    return {'versao': 'RS 0.42L', 'alvo': alvo, 'sistema': platform.platform(), 'cpu': platform.processor(),
             'python': platform.python_version(), 'fonte_sha256': hashlib.sha256(fonte.encode('utf-8')).hexdigest(),
             'medida': 'tempo do processo nativo, incluindo sua inicialização; compilação separada',
             'amostragem': 'rodadas intercaladas; ordem embaralhada com semente fixa; rodada zero aquece',
@@ -104,7 +104,7 @@ def medir(fonte, alvo, repeticoes=7, niveis=tuple(range(9)), semente=420110):
 
 
 def main():
-    p = argparse.ArgumentParser(description='Comparação nativa RS 0.42K, O0–O8 e gerador efetivo')
+    p = argparse.ArgumentParser(description='Comparação nativa RS 0.42L, O0–O8 e gerador efetivo')
     p.add_argument('--fonte', type=Path, default=RAIZ / 'benchmarks' / 'lacos.rts')
     p.add_argument('--repeticoes', type=int, default=7)
     p.add_argument('--niveis', default='0,1,2,3,4,5,6,7,8')
