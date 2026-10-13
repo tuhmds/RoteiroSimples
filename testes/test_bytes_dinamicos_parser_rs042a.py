@@ -89,7 +89,7 @@ class TestesBytesDinamicosParserRS042A(unittest.TestCase):
             self.rejeitar('inicio {\n seja dados: bytes\n seja nome: texto\n' + comando + '\n}')
 
     def test_valores_dinamicos_em_registros_e_listas_continuam_pendentes(self):
-        self.rejeitar('tipo Registro {\n dados: bytes\n}\ninicio {\n escreva(1)\n}')
+        self.assertIn('Registro', analisar_programa('tipo Registro {\n dados: bytes\n}\ninicio {\n escreva(1)\n}').registros)
         self.rejeitar('inicio {\n seja itens: lista[bytes]\n}')
 
     def test_indices_e_valores_exigem_inteiros(self):
