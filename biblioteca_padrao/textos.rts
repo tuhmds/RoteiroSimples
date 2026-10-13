@@ -1,0 +1,17 @@
+// Texto UTF-8 dinamico: copias de conteudo sao explicitas e recebem dono novo.
+publico funcao duplicar(origem: emprestimo[texto]) -> texto {
+    seja resultado: texto
+    copie(resultado, origem)
+    retorne mova(resultado)
+}
+
+publico funcao concatenar(esquerdo: emprestimo[texto], direito: emprestimo[texto]) -> texto {
+    seja resultado: texto
+    copie(resultado, esquerdo)
+    junte(resultado, direito)
+    retorne mova(resultado)
+}
+
+publico funcao vazio(origem: emprestimo[texto]) -> logico {
+    retorne tamanho(origem) == 0
+}

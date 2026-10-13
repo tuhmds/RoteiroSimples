@@ -60,12 +60,16 @@ class TestesAbiProprietariosRS042A(unittest.TestCase):
         })
 
 
-def executar_ensaio():
+def executar_ensaio(fonte=FONTE, conteudo_esperado=None, capacidade_esperada=4,
+                    resultado_esperado=19, elemento_bytes=False, descartes_escopos=0):
     from testes.ensaio_windows_rs0415 import (
         Windows, PeCarregado, gerar_imagem, chamar_com_sentinelas,
     )
     windows = Windows()
-    g, pe, _, _ = gerar_imagem(FONTE)
+    g, pe, _, _ = gerar_imagem(fonte)
+    if conteudo_esperado is None:
+        conteudo_esperado = [17, 23]
+    quantidade_esperada = len(conteudo_esperado)
     contadores = (ct.c_uint64 * 3)()  # alocações, liberações, último ponteiro liberado
     rotinas = []
 
@@ -92,10 +96,11 @@ def executar_ensaio():
             chamar_com_sentinelas(windows, imagem.base + 0x1000 + g.rotulos['funcao_criar'],
                                  argumentos_pilha=[0, ct.addressof(primeiro) + 16])
             capacidade, quantidade, ponteiro = primeiro
-            assert (capacidade, quantidade) == (4, 2)
+            assert (capacidade, quantidade) == (capacidade_esperada, quantidade_esperada)
             assert ponteiro and tuple(contadores[:2]) == (1, 0)
-            conteudo = list((ct.c_uint64 * 2).from_address(ponteiro))
-            assert conteudo == [17, 23]
+            unidade = ct.c_ubyte if elemento_bytes else ct.c_uint64
+            conteudo = list((unidade * quantidade_esperada).from_address(ponteiro))
+            assert conteudo == conteudo_esperado
             segundo = (ct.c_uint64 * 3)()
             chamar_com_sentinelas(
                 windows, imagem.base + 0x1000 + g.rotulos['funcao_encaminhar'],
@@ -106,8 +111,12 @@ def executar_ensaio():
             resultado = chamar_com_sentinelas(
                 windows, imagem.base + 0x1000 + g.rotulos['funcao_consumir'],
                 argumentos_pilha=[0, capacidade, quantidade, ponteiro])
-            assert resultado == 19
+            assert resultado == resultado_esperado
             assert tuple(contadores) == (1, 1, ponteiro), 'Descarte incorreto do parâmetro proprietário.'
+            if descartes_escopos:
+                retorno = chamar_com_sentinelas(windows, imagem.base + 0x1000 + g.rotulos['funcao_exercitar'], argumentos_pilha=[0])
+                assert retorno == 0
+                assert tuple(contadores[:2]) == (1 + descartes_escopos, 1 + descartes_escopos), 'Escopos deixaram donos sem descarte ou descartaram duas vezes.'
             return {
                 'alocacoes': int(contadores[0]), 'liberacoes': int(contadores[1]),
                 'resultado_consumo': int(resultado), 'mesmo_ponteiro': segundo[2] == ponteiro,

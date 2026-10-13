@@ -47,9 +47,9 @@ def montar_pe(g, mensagens):
     deslocamento_absoluto = entrada_trampolim + 2
     base_importacoes = alinhar(base_codigo + len(g.codigo), 0x1000)
     nomes = ['GetStdHandle', 'SetConsoleOutputCP', 'WriteFile', 'ExitProcess']
-    if any(label in g.rotulos for label in ('ler_inteiro', 'ler_buffer_texto')):
+    if any(label in g.rotulos for label in ('ler_inteiro', 'ler_buffer_texto', 'rs_texto_ler_linha')):
         nomes.extend(['ReadFile', 'GetLastError'])
-    if 'ler_buffer_texto' in g.rotulos:
+    if any(label in g.rotulos for label in ('ler_buffer_texto', 'rs_texto_ler_linha')):
         nomes.append('SetConsoleCP')
     if 'rs_lista_alocar' in g.rotulos:
         nomes.extend(['VirtualAlloc', 'VirtualFree'])

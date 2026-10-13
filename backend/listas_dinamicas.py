@@ -6,7 +6,7 @@ A largura de cada elemento segue a disposição de seu tipo. A lista nasce vazia
 A memória cresce geometricamente e é devolvida ao sistema operacional.
 """
 import struct
-from compilador.disposicao_tipos import palavras_tipo
+from compilador.propriedade import passo_armazenamento
 from . import valores_dinamicos
 from .desenrolamento_windows import (
     registrar_quadro_auxiliar, registrar_quadro_empilhado,
@@ -22,10 +22,7 @@ def eh_lista_dinamica(tipo):
 
 def largura_elemento(g, tipo):
     """Usa o mesmo contrato de disposicao da pilha e dos registros."""
-    largura = palavras_tipo(tipo[1], g.registros)
-    if not 1 <= largura <= 0x0FFFFFFF:
-        raise ValueError('Registro excede a largura maxima de elemento nativo.')
-    return largura
+    return passo_armazenamento(tipo, g.registros) // 8
 
 
 def deslocamento(variaveis, nome, windows):
@@ -218,103 +215,23 @@ def liberar_todas(g, variaveis, tipos, windows, preservar_retorno=False):
 
 def emitir_rotinas(g, windows):
     """Emite as cinco rotinas nativas e valida chamadas das APIs do SO."""
-    g.marcar('rs_lista_alocar')
-    if windows:
-        # Entrada: RDI=tamanho em bytes; saída: RAX=ponteiro.
-        g.bytes(b'\x48\x83\xEC\x28')  # reserva fixa desde o prologo
-        g.bytes(b'\x48\x89\xFA')     # mov rdx,rdi
-        g.bytes(b'\x31\xC9')         # xor ecx,ecx
-        g.bytes(b'\x41\xB8\x00\x30\x00\x00')  # r8d=MEM_COMMIT|MEM_RESERVE
-        g.bytes(b'\x41\xB9\x04\x00\x00\x00')  # r9d=PAGE_READWRITE
-        g.relativo(b'\xFF\x15', 'VirtualAlloc')
-        g.bytes(b'\x48\x85\xC0')
-        g.salto('erro_lista_memoria', 'jz')
-    else:
-        # Linux mmap(0, bytes, PROT_READ|WRITE, MAP_PRIVATE|ANON, -1, 0).
-        g.bytes(b'\x48\x89\xFE')  # rsi=rdi tamanho
-        g.bytes(b'\x31\xFF')      # rdi=0 endereço
-        g.bytes(b'\xBA\x03\x00\x00\x00')  # edx=3
-        g.bytes(b'\x41\xBA\x22\x00\x00\x00')  # r10d=0x22
-        g.bytes(b'\x41\xB8\xFF\xFF\xFF\xFF')  # r8d=-1
-        g.bytes(b'\x45\x31\xC9')  # r9d=0
-        g.bytes(b'\xB8\x09\x00\x00\x00\x0F\x05')  # mmap
-        g.bytes(b'\x48\x3D\x01\xF0\xFF\xFF') # cmp rax,-4095 (sign extended)
-        # Trata retornos negativos da faixa de errno como falha.
-        g.salto('erro_lista_memoria', 'jae')
-    if windows:
-        g.bytes(b'\x48\x83\xC4\x28')
-    g.bytes(b'\xC3')
-    if windows:
-        registrar_quadro_empilhado(g, 'rs_lista_alocar', (), 40)
+    from . import memoria_dinamica
+    memoria_dinamica.emitir_rotinas(g, windows)
 
-    g.marcar('rs_lista_desalocar')
-    if windows:
-        # Entrada: RDI=ponteiro; RSI=bytes (Windows ignora tamanho).
-        g.bytes(b'\x48\x83\xEC\x28')
-        g.bytes(b'\x48\x89\xF9')   # mov rcx,rdi
-        g.bytes(b'\x31\xD2')       # xor edx,edx
-        g.bytes(b'\x41\xB8\x00\x80\x00\x00')  # r8d=MEM_RELEASE
-        g.relativo(b'\xFF\x15', 'VirtualFree')
-        g.bytes(b'\x85\xC0')
-        g.salto('erro_lista_memoria', 'jz')
-    else:
-        g.bytes(b'\xB8\x0B\x00\x00\x00\x0F\x05')  # munmap
-        g.bytes(b'\x48\x85\xC0')
-        g.salto('erro_lista_memoria', 'jnz')
-    if windows:
-        g.bytes(b'\x48\x83\xC4\x28')
-    g.bytes(b'\xC3')
-    if windows:
-        registrar_quadro_empilhado(g, 'rs_lista_desalocar', (), 40)
-
-    g.marcar('rs_lista_liberar_descritor')
-    # RDI aponta para [ponteiro, quantidade, capacidade] em ordem descendente.
-    # Se explicitamente liberada, quantidade=-1; saída normal sempre limpa.
-    emitir_prologo_auxiliar(g, windows, 32)
-    g.bytes(b'\x48\x89\x7D\xF8\x48\x89\x75\xF0')  # descritor e largura
-    fim = 'rs_lista_liberar_descritor_fim'
-    marcar = 'rs_lista_liberar_descritor_marcar'
-    g.bytes(b'\x48\x8B\x47\xF8')  # len=[rdi-8]
-    g.bytes(b'\x48\x83\xF8\xFF')  # cmp rax,-1 (já liberada)
-    g.salto(fim, 'je')
-    g.bytes(b'\x48\x8B\x3F')  # rdi=[rdi] = ponteiro
-    g.bytes(b'\x48\x85\xFF')
-    g.salto(marcar, 'jz')
-    g.bytes(b'\x48\x8B\x75\xF8')  # rsi=[rbp-8] = descritor
-    g.bytes(b'\x48\x8B\x76\xF0')  # rsi=capacidade
-    g.bytes(b'\x48\x0F\xAF\x75\xF0')  # imul rsi, [rbp-16] largura
-    g.salto('erro_lista_memoria', 'jo')
-    g.bytes(b'\x48\xC1\xE6\x03')  # bytes=cap*largura*8
-    g.chamada('rs_lista_desalocar')
-    g.marcar(marcar)
-    g.bytes(b'\x48\x8B\x7D\xF8')  # rdi=descritor
-    g.bytes(b'\x31\xC0\x48\x89\x07\x48\x89\x47\xF0')
-    g.bytes(b'\x48\xC7\xC0\xFF\xFF\xFF\xFF')
-    g.bytes(b'\x48\x89\x47\xF8')
-    g.marcar(fim)
-    emitir_epilogo_auxiliar(g, windows)
-
-    if windows:
-        registrar_quadro_auxiliar(g, 'rs_lista_liberar_descritor')
-
-    g.marcar('rs_lista_mover_descritor')
-    # RDI=destino, RSI=origem. Verifica antes de liberar o destino.
-    emitir_prologo_auxiliar(g, windows, 32)
-    g.bytes(b'\x48\x89\x7D\xF8\x48\x89\x75\xF0\x48\x89\x55\xE8')
-    g.bytes(b'\x48\x8B\x46\xF8\x48\x85\xC0')
-    g.salto('erro_lista_liberada', 'js')
-    g.bytes(b'\x48\x8B\x75\xE8') # largura passada na liberação do destino
-    g.chamada('rs_lista_liberar_descritor')
-    g.bytes(b'\x48\x8B\x7D\xF8\x48\x8B\x75\xF0')
-    g.bytes(b'\x48\x8B\x06\x48\x89\x07')
-    g.bytes(b'\x48\x8B\x46\xF8\x48\x89\x47\xF8')
-    g.bytes(b'\x48\x8B\x46\xF0\x48\x89\x47\xF0')
-    g.bytes(b'\x31\xC0\x48\x89\x06\x48\x89\x46\xF0')
-    g.bytes(b'\x48\xC7\x46\xF8\xFF\xFF\xFF\xFF')
-    emitir_epilogo_auxiliar(g, windows)
-
-    if windows:
-        registrar_quadro_auxiliar(g, 'rs_lista_mover_descritor')
+    # Adaptadores históricos: a largura de lista continua em palavras.
+    # O gerenciador comum recebe bytes por unidade do descritor.
+    for nome, registrador, rotina in (
+        ('rs_lista_liberar_descritor', b'\x48\x6B\xF6\x08', 'rs_valor_liberar_descritor'),
+        ('rs_lista_mover_descritor', b'\x48\x6B\xD2\x08', 'rs_valor_mover_descritor'),
+    ):
+        g.marcar(nome)
+        emitir_prologo_auxiliar(g, windows, 32)
+        g.bytes(registrador)
+        g.salto('erro_lista_memoria', 'jo')
+        g.chamada(rotina)
+        emitir_epilogo_auxiliar(g, windows)
+        if windows:
+            registrar_quadro_auxiliar(g, nome)
 
     g.marcar('rs_lista_acrescentar')
     # RDI=descritor, RSI=ponteiro fonte, RDX=palavras por elemento.
@@ -324,46 +241,13 @@ def emitir_rotinas(g, windows):
     g.bytes(b'\x49\x8B\x42\xF8') # quantidade
     g.bytes(b'\x48\x85\xC0')
     g.salto('erro_lista_liberada','js')
-    g.bytes(b'\x49\x3B\x42\xF0') # quantidade < capacidade
-    g.salto('rs_lista_acrescentar_gravar','jl')
-    g.bytes(b'\x49\x8B\x42\xF0')
-    g.bytes(b'\x48\x85\xC0')
-    g.salto('rs_lista_acrescentar_inicio','jz')
-    g.bytes(b'\x48\xD1\xE0')
-    g.salto('erro_lista_memoria','jo')
-    g.salto('rs_lista_acrescentar_capacidade')
-    g.marcar('rs_lista_acrescentar_inicio')
-    g.bytes(b'\xB8\x04\x00\x00\x00')
-    g.marcar('rs_lista_acrescentar_capacidade')
-    g.bytes(b'\x48\x89\x45\xE0') # nova capacidade
-    g.bytes(b'\x48\x0F\xAF\x45\xD8') # largura * capacidade (palavras)
-    g.salto('erro_lista_memoria','jo')
-    g.bytes(b'\x48\x6B\xF8\x08') # bytes
-    g.salto('erro_lista_memoria','jo')
-    g.chamada('rs_lista_alocar')
-    g.bytes(b'\x48\x89\x45\xE8') # novo ponteiro
-    g.bytes(b'\x4C\x8B\x55\xF8')
-    g.bytes(b'\x49\x8B\x32') # ponteiro antigo
-    g.bytes(b'\x48\x85\xF6')
-    g.salto('rs_lista_acrescentar_atualizar','jz')
-    g.bytes(b'\x48\x8B\x7D\xE8')
-    g.bytes(b'\x49\x8B\x4A\xF8') # quantidade de elementos
-    g.bytes(b'\x48\x0F\xAF\x4D\xD8') # quantidade * largura => palavras
-    g.salto('erro_lista_memoria','jo')
-    g.bytes(b'\xFC\xF3\x48\xA5') # rep movsq, heap direto
-    g.bytes(b'\x4C\x8B\x55\xF8')
-    g.bytes(b'\x49\x8B\x3A') # ponteiro antigo
-    g.bytes(b'\x49\x8B\x72\xF0') # capacidade anterior
-    g.bytes(b'\x48\x0F\xAF\x75\xD8') # * largura
-    g.salto('erro_lista_memoria','jo')
-    g.bytes(b'\x48\xC1\xE6\x03')
-    g.chamada('rs_lista_desalocar')
-    g.marcar('rs_lista_acrescentar_atualizar')
-    g.bytes(b'\x4C\x8B\x55\xF8')
-    g.bytes(b'\x48\x8B\x45\xE8')
-    g.bytes(b'\x49\x89\x02')
-    g.bytes(b'\x48\x8B\x45\xE0')
-    g.bytes(b'\x49\x89\x42\xF0')
+    # A mesma reserva é usada pelo texto dinâmico, com passo de um byte.
+    g.bytes(b'\x48\x89\xC6\x48\xFF\xC6')  # minimo = quantidade+1
+    g.salto('erro_lista_memoria', 'jo')
+    g.bytes(b'\x48\x8B\x7D\xF8\x48\x8B\x55\xD8')
+    g.bytes(b'\x48\x6B\xD2\x08')  # passo = palavras * 8
+    g.salto('erro_lista_memoria', 'jo')
+    g.chamada('rs_valor_reservar')
     g.marcar('rs_lista_acrescentar_gravar')
     g.bytes(b'\x4C\x8B\x55\xF8')
     g.bytes(b'\x49\x8B\x3A') # destino base heap

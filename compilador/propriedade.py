@@ -1,6 +1,6 @@
 """Contrato compartilhado de armazenamento e propriedade da RS 0.42A.
 
-A propriedade dinâmica desta entrega pertence às listas já implementadas.
+A propriedade dinâmica pertence às listas tipadas e ao texto UTF-8.
 Texto e bytes de tamanho fixo continuam valores copiáveis. Empréstimos são
 referências temporárias de parâmetros, nunca proprietários do armazenamento.
 """
@@ -12,16 +12,40 @@ ESTADO_INATIVO = -1
 DESLOCAMENTO_PONTEIRO = 0
 DESLOCAMENTO_COMPRIMENTO = -8
 DESLOCAMENTO_CAPACIDADE = -16
+TIPO_TEXTO_DINAMICO = ('texto_dinamico', 'utf8')
+TIPO_TEXTO_EMPRESTADO = ('texto_emprestado', 'utf8')
 
 
 def eh_proprietario(tipo):
     """Identifica os descritores dinâmicos com dono exclusivo disponíveis."""
-    return isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] == 'lista_dinamica'
+    return (isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] == 'lista_dinamica'
+            or tipo == TIPO_TEXTO_DINAMICO)
 
 
 def eh_emprestimo(tipo):
     """Identifica a referência temporária de leitura de um descritor."""
-    return isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] == 'lista_emprestada'
+    return (isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] == 'lista_emprestada'
+            or tipo == TIPO_TEXTO_EMPRESTADO)
+
+
+def eh_texto(tipo):
+    """Conteúdo UTF-8 fixo, proprietário ou emprestado; não inclui bytes."""
+    return (tipo in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO)
+            or isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] == 'texto')
+
+
+def passo_armazenamento(tipo, registros):
+    """Bytes por unidade do comprimento/capacidade no armazenamento dinâmico."""
+    if tipo == TIPO_TEXTO_DINAMICO:
+        return 1
+    if isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] == 'lista_dinamica':
+        from .disposicao_tipos import palavras_tipo
+        palavras = palavras_tipo(tipo[1], registros)
+        if not 1 <= palavras <= 0x0FFFFFFF:
+            from .erros import ErroCompilacao
+            raise ErroCompilacao('Largura do registro excede o limite de armazenamento do gerador nativo.')
+        return 8 * palavras
+    raise ValueError('Tipo sem armazenamento dinamico proprietario.')
 
 
 def classe_valor(tipo):

@@ -6,7 +6,8 @@ from .erros import ErroCompilacao
 from .lexico import tokens
 from .semantica import ContextoSemantico
 from .validacao_caminhos import validar_literal_arquivo
-from .propriedade import eh_proprietario, contrato_valor
+from .propriedade import (eh_proprietario, eh_emprestimo, eh_texto, contrato_valor,
+                         TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO)
 
 def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _retorno=None, _registros=None):
     # O analisador público também compreende resultados genéricos, e não só
@@ -81,6 +82,10 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             nome = str(partes[0])
             if nome in ('inteiro', 'logico') or nome in registros:
                 return nome
+            if nome == 'texto':
+                return TIPO_TEXTO_DINAMICO
+        if partes == ['emprestimo', '[', 'texto', ']']:
+            return TIPO_TEXTO_EMPRESTADO
         if partes == ['lista', '[', ']']:
             return ('lista_dinamica', 'inteiro')
         if len(partes) == 4 and partes == ['emprestimo', '[', 'lista', ']']:
@@ -117,7 +122,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if cabecalho[fim_par+1:fim_par+3] != ['-', '>'] or cabecalho[-1] != '{':
                 raise ErroCompilacao(f'Linha {n}: use funcao nome(parametros) -> tipo {{.')
             retorno = ler_tipo(cabecalho[fim_par+3:-1], n)
-            if isinstance(retorno, tuple) and retorno[0] == 'lista_emprestada':
+            if eh_emprestimo(retorno):
                 raise ErroCompilacao(f'Linha {n}: emprestimo[lista] so pode aparecer em parametros; nao pode ser retornado.')
             partes = cabecalho[3:fim_par]
             parametros = []
@@ -172,9 +177,9 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     def texto_destino(partes, linha):
         nome = contexto.resolver_caminho(partes, linha)
         tipo = tipos.get(nome)
-        if not isinstance(tipo, tuple) or tipo[0] != 'texto':
+        if not eh_texto(tipo):
             raise ErroCompilacao(f'Linha {linha}: caminho não aponta para um buffer de texto.')
-        return nome, tipo[1]
+        return nome, tipo[1] if tipo[0] == 'texto' else None
 
     def texto_origem(partes, linha):
         if len(partes) == 1 and partes[0].startswith('"'):
@@ -343,8 +348,11 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                         adicionar(('leia_indice_dinamico', nome, indice), n, t)
                     else:
                         adicionar(('leia_indice', nome, indice, tamanho), n, t)
-                elif len(destino) == 1 and isinstance(tipos.get(contexto.resolver(str(destino[0]))), tuple) and tipos[contexto.resolver(str(destino[0]))][0] == 'texto':
-                    adicionar(('leia_texto', contexto.resolver(str(destino[0]))), n, t)
+                elif len(destino) == 1 and eh_texto(tipos.get(contexto.resolver(str(destino[0])))):
+                    nome = contexto.resolver(str(destino[0]))
+                    if tipos[nome] == TIPO_TEXTO_EMPRESTADO:
+                        raise ErroCompilacao(f'Linha {n}: emprestimo de texto permite somente leitura.')
+                    adicionar(('leia_texto_dinamico' if tipos[nome] == TIPO_TEXTO_DINAMICO else 'leia_texto', nome), n, t)
                 elif len(destino) == 1 and re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', destino[0]):
                     nome = contexto.resolver(str(destino[0]))
                     if nome not in variaveis:
@@ -357,8 +365,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             elif t[:2] == ['escreva', '('] and t[-1] == ')':
                 expr = t[2:-1]
                 if expr and len(expr) % 2 == 1 and all(expr[k] == '.' for k in range(1, len(expr), 2)) and (
-                    isinstance(tipos.get(contexto.resolver_caminho(expr, n)), tuple) and
-                    tipos[contexto.resolver_caminho(expr, n)][0] == 'texto'):
+                    eh_texto(tipos.get(contexto.resolver_caminho(expr, n)))):
                     adicionar(('imprima_texto', contexto.resolver_caminho(expr, n)), n, t)
                 elif len(expr) == 1 and expr[0].startswith('"'):
                     try:
@@ -504,19 +511,28 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f'Linha {n}: use {t[0]}("arquivo.txt", variavel_texto).')
                 caminho = validar_literal_arquivo(t[2], n)
                 nome, _ = texto_destino([t[4]], n)
-                adicionar((str(t[0]), caminho, nome), n, t)
+                if t[0] == 'carregue_arquivo' and tipos[nome] == TIPO_TEXTO_EMPRESTADO:
+                    raise ErroCompilacao(f'Linha {n}: emprestimo de texto nao pode receber arquivo.')
+                comando = ('carregue_texto_dinamico' if t[0] == 'carregue_arquivo' and tipos[nome] == TIPO_TEXTO_DINAMICO else str(t[0]))
+                adicionar((comando, caminho, nome), n, t)
             elif t[0] in ('copie', 'junte') and len(t) >= 6 and t[1] == '(' and t[-1] == ')':
                 if t.count(',') != 1:
                     raise ErroCompilacao(f'Linha {n}: use {t[0]}(destino, origem).')
                 virgula = t.index(',')
                 nome, capacidade = texto_destino(t[2:virgula], n)
+                if tipos[nome] == TIPO_TEXTO_EMPRESTADO:
+                    raise ErroCompilacao(f'Linha {n}: emprestimo de texto permite somente leitura.')
                 origem = texto_origem(t[virgula+1:-1], n)
-                if t[0] == 'copie' and origem[0] == 'literal' and origem[2] > capacidade:
+                if t[0] == 'copie' and origem[0] == 'literal' and capacidade is not None and origem[2] > capacidade:
                     raise ErroCompilacao(f'Linha {n}: texto exige {origem[2]} bytes; capacidade de {nome} é {capacidade}.')
-                adicionar(('modifique_texto', t[0], nome, origem), n, t)
+                adicionar(('modifique_texto_dinamico' if tipos[nome] == TIPO_TEXTO_DINAMICO else 'modifique_texto', t[0], nome, origem), n, t)
             elif t[0] == 'limpe' and len(t) >= 4 and t[:2] == ['limpe', '('] and t[-1] == ')':
                 nome = contexto.resolver_caminho(t[2:-1], n)
                 tipo_buffer = tipos.get(nome)
+                if tipo_buffer == TIPO_TEXTO_DINAMICO:
+                    adicionar(('limpe_texto_dinamico', nome), n, t)
+                    i += 1
+                    continue
                 if not isinstance(tipo_buffer, tuple) or tipo_buffer[0] not in ('texto', 'bytes'):
                     raise ErroCompilacao(f'Linha {n}: limpe exige texto[N] ou bytes[N].')
                 adicionar(('limpe_bytes' if tipo_buffer[0] == 'bytes' else 'limpe_texto', nome), n, t)
@@ -528,14 +544,19 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 origem = contexto.resolver(str(partes[2]))
                 if destino == origem:
                     raise ErroCompilacao(f'Linha {n}: mova exige origem e destino diferentes.')
-                if (not isinstance(tipos.get(destino), tuple) or
-                        tipos[destino][0] != 'lista_dinamica' or
+                if (not eh_proprietario(tipos.get(destino)) or
                         tipos.get(destino) != tipos.get(origem)):
                     raise ErroCompilacao(f'Linha {n}: mova exige duas listas[] proprietarias.')
-                adicionar(('mova_lista_dinamica', destino, origem), n, t)
+                adicionar(('mova_valor_dinamico_comando' if tipos[destino] == TIPO_TEXTO_DINAMICO else 'mova_lista_dinamica', destino, origem), n, t)
             elif t[0] in ('adicione', 'remova_ultimo', 'limpe_lista', 'libere') and t[1:2] == ['('] and t[-1:] == [')']:
                 operacao = str(t[0])
                 conteudo = t[2:-1]
+                if operacao == 'libere' and len(conteudo) == 1:
+                    nome = contexto.resolver(str(conteudo[0]))
+                    if tipos.get(nome) == TIPO_TEXTO_DINAMICO:
+                        adicionar(('libere_valor_dinamico', nome), n, t)
+                        i += 1
+                        continue
                 if operacao == 'adicione':
                     grupos = argumentos_externos(t, n)
                     if len(grupos) != 2:
@@ -568,6 +589,26 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' duplicada ou reservada.")
                 if len(t) >= 4 and t[2:4] == [':', 'emprestimo']:
                     raise ErroCompilacao(f'Linha {n}: emprestimo[lista] so e permitido como parametro de funcao.')
+                if t[2:4] == [':', 'texto'] and t[4:5] != ['[']:
+                    valor = origem_texto = None
+                    if len(t) != 4:
+                        if t[4:5] != ['='] or len(t) < 6:
+                            raise ErroCompilacao(f'Linha {n}: use seja nome: texto [= literal, mova(origem) ou funcao].')
+                        if len(t) == 6 and t[5].startswith('"'):
+                            origem_texto = texto_origem(t[5:], n)
+                        else:
+                            valor, _ = expressao_tipada(t[5:], n, TIPO_TEXTO_DINAMICO)
+                            if valor[0] not in ('mova_valor_dinamico', 'chamada'):
+                                raise ErroCompilacao(f'Linha {n}: texto tem dono unico; use mova ou copie explicitamente.')
+                    interno = registrar(str(nome), TIPO_TEXTO_DINAMICO, n)
+                    donos_locais.append(interno)
+                    adicionar(('crie_valor_dinamico', interno), n, t)
+                    if valor is not None:
+                        adicionar(('receba_valor_dinamico', interno, valor), n, t)
+                    if origem_texto is not None:
+                        adicionar(('modifique_texto_dinamico', 'copie', interno, origem_texto), n, t)
+                    i += 1
+                    continue
                 if t[2:5] == [':', 'lista', '['] and len(t) >= 6:
                     fim_tipo = None
                     if t[5] == ']':
@@ -684,7 +725,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                         raise ErroCompilacao(f'Linha {n}: lista[] tem dono unico; copiar ou inferir propriedade nao e permitido.')
                     interno = registrar(str(nome), inferido, n)
                     donos_locais.append(interno)
-                    adicionar(('crie_lista_dinamica', interno), n, t)
+                    adicionar(('crie_valor_dinamico' if inferido == TIPO_TEXTO_DINAMICO else 'crie_lista_dinamica', interno), n, t)
                     adicionar(('receba_valor_dinamico', interno, arvore), n, t)
                     i += 1
                     continue
@@ -733,10 +774,10 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f"Linha {n}: variável '{nome}' não foi declarada.")
                 if tipos[nome] == 'arquivo':
                     raise ErroCompilacao(f'Linha {n}: recurso arquivo nao pode ser reatribuido ou copiado.')
-                if isinstance(tipos[nome], tuple) and tipos[nome][0] == 'lista_dinamica':
-                    raise ErroCompilacao(f'Linha {n}: lista[] possui dono unico e nao admite atribuicao.')
-                if isinstance(tipos[nome], tuple) and tipos[nome][0] == 'lista_emprestada':
-                    raise ErroCompilacao(f'Linha {n}: parametro emprestimo[lista] nao pode ser reatribuido.')
+                if eh_proprietario(tipos[nome]):
+                    raise ErroCompilacao(f'Linha {n}: valor dinamico possui dono unico e nao admite atribuicao; use mova(destino, origem) ou copie para texto.')
+                if eh_emprestimo(tipos[nome]):
+                    raise ErroCompilacao(f'Linha {n}: parametro emprestimo nao pode ser reatribuido.')
                 esperado = tipos[nome][1] if isinstance(tipos[nome], tuple) and tipos[nome][0] == 'registro' else tipos[nome]
                 arvore, _ = expressao_tipada(t[2:], n, esperado)
                 if eh_composto(tipos[nome]):

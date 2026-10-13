@@ -39,6 +39,7 @@ _INDICES = frozenset((
 ))
 _CONTAGENS = frozenset(('tamanho_texto', 'tamanho_bytes'))
 _CONSULTAS_DINAMICAS = frozenset((
+    'tamanho_texto_dinamico', 'capacidade_texto_dinamico', 'caracteres_texto', 'empreste_texto_dinamico',
     'quantidade_lista_dinamica',
     'quantidade_lista_emprestada', 'capacidade_lista_dinamica',
     'capacidade_lista_emprestada', 'empreste_lista_dinamica',
@@ -61,7 +62,7 @@ def efeito_expressao_arvore(no):
         return _ler(no[1]).combinar(_risco())
     if operacao == 'mova_valor_dinamico':
         return _propriedade('mover', no[1], falha=True)
-    if operacao in _INDICES:
+    if operacao in _INDICES or operacao == 'byte_texto':
         return _ler(no[1]).combinar(
             efeito_expressao_arvore(no[2])).combinar(_risco())
     if operacao == 'neg':
@@ -73,6 +74,9 @@ def efeito_expressao_arvore(no):
     if operacao == 'comparacao':
         return efeito_expressao_arvore(no[2]).combinar(
             efeito_expressao_arvore(no[3]))
+    if operacao == 'comparacao_texto':
+        return efeito_expressao_arvore(no[2]).combinar(
+            efeito_expressao_arvore(no[3])).combinar(_risco())
     if operacao == 'temporario_composto':
         return _gravar(no[1]).combinar(efeito_expressao_arvore(no[2]))
     if operacao == 'chamada':
@@ -102,19 +106,20 @@ def efeito_instrucao_arvore(no):
         return _gravar(no[1])
     if operacao in ('limpe_texto', 'limpe_bytes'):
         return _gravar(no[1])
-    if operacao == 'modifique_texto':
+    if operacao in ('modifique_texto', 'modifique_texto_dinamico'):
         _, modo, nome, origem = no
-        e = _gravar(nome)
+        e = (_propriedade('modificar', nome, falha=True)
+             if operacao == 'modifique_texto_dinamico' else _gravar(nome))
         if modo == 'junte':
             e = e.combinar(_ler(nome))
         if origem[0] == 'buffer':
             e = e.combinar(_ler(origem[1]))
         return e.combinar(_risco())
     if operacao == 'imprima_texto':
-        return _ler(no[1]).combinar(Efeitos(saida=True))
+        return _ler(no[1]).combinar(Efeitos(saida=True, pode_falhar=True))
     if operacao == 'imprima_num':
         return efeito_expressao_arvore(no[1]).combinar(Efeitos(saida=True))
-    if operacao == 'leia_int' or operacao == 'leia_texto':
+    if operacao in ('leia_int', 'leia_texto', 'leia_texto_dinamico'):
         return _gravar(no[1]).combinar(Efeitos(entrada=True, pode_falhar=True))
     if operacao in ('atribua_indice', 'atribua_byte',
                     'atribua_indice_dinamico'):
@@ -132,9 +137,9 @@ def efeito_instrucao_arvore(no):
                 .combinar(_risco()))
     # Heap de listas com dono: todos os mutadores são barreiras, inclusive
     # quando a operação simples parece não tocar variáveis compartilhadas.
-    if operacao == 'crie_lista_dinamica':
+    if operacao in ('crie_lista_dinamica', 'crie_valor_dinamico'):
         return _propriedade('criar', no[1], falha=True)
-    if operacao == 'mova_lista_dinamica':
+    if operacao in ('mova_lista_dinamica', 'mova_valor_dinamico_comando'):
         destino, origem = no[1:3]
         return (_propriedade('receber', destino, falha=True)
                 .combinar(_propriedade('mover', origem, falha=True)))
@@ -146,8 +151,10 @@ def efeito_instrucao_arvore(no):
                 .combinar(efeito_expressao_arvore(no[2])))
     if operacao in ('limpe_lista_dinamica', 'remova_ultimo_lista_dinamica'):
         return _propriedade('alterar', no[1], falha=True)
-    if operacao == 'libere_lista_dinamica':
+    if operacao in ('libere_lista_dinamica', 'libere_valor_dinamico'):
         return _propriedade('liberar', no[1], falha=True)
+    if operacao == 'limpe_texto_dinamico':
+        return _propriedade('limpar', no[1], falha=True)
     if operacao == 'libere_escopo_listas':
         e = Efeitos()
         for nome in no[1]:
@@ -156,6 +163,8 @@ def efeito_instrucao_arvore(no):
                                        arquivo=True, falha=True))
         return e
 
+    if operacao == 'carregue_texto_dinamico':
+        return _propriedade('preencher', no[2], arquivo=True, falha=True)
     if operacao in ('grave_arquivo', 'carregue_arquivo'):
         _, caminho, nome = no
         return Efeitos(leituras=frozenset((nome,)) if operacao == 'grave_arquivo'

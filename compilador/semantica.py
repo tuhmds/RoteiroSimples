@@ -5,7 +5,7 @@ from .lexico import Token
 from .ast import NoExpressao
 from .tipos import MAX_VARIAVEIS, tipo_expressao
 from .disposicao_tipos import palavras_tipo
-from .propriedade import eh_proprietario, contrato_valor
+from .propriedade import eh_proprietario, contrato_valor, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO
 
 
 class ContextoSemantico:
@@ -77,6 +77,11 @@ class ContextoSemantico:
         i = 0
         while i < len(partes):
             token = partes[i]
+            if (str(token) in ('caracteres', 'byte_em') and i + 1 < len(partes)
+                    and partes[i+1] == '(' and str(token) not in self.funcoes):
+                saida.append(token)
+                i += 1
+                continue
             if i + 2 < len(partes) and partes[i+1] == '.':
                 fim = i + 3
                 while fim + 1 < len(partes) and partes[fim] == '.':
@@ -124,7 +129,11 @@ class ContextoSemantico:
                 else:
                     novos.append(argumento)
             return NoExpressao(('chamada', nome, tuple(novos)), getattr(arvore, 'origem', None))
-        if tag in ('bin', 'comparacao'):
+        if tag == 'comparacao' and any(
+                filho[0] == 'var' and self.tipos.get(filho[1]) in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO)
+                for filho in arvore[2:4]):
+            tag = 'comparacao_texto'
+        if tag in ('bin', 'comparacao', 'comparacao_texto'):
             return NoExpressao((tag, arvore[1],
                                 self._preparar_argumentos_compostos(arvore[2]),
                                 self._preparar_argumentos_compostos(arvore[3])),
@@ -132,7 +141,7 @@ class ContextoSemantico:
         if tag == 'neg':
             return NoExpressao(('neg', self._preparar_argumentos_compostos(arvore[1])),
                                getattr(arvore, 'origem', None))
-        if tag in ('indice_bytes', 'indice_lista_dinamica', 'indice_lista_emprestada'):
+        if tag in ('indice_bytes', 'indice_lista_dinamica', 'indice_lista_emprestada', 'byte_texto'):
             return NoExpressao((tag, arvore[1],
                                 self._preparar_argumentos_compostos(arvore[2])),
                                getattr(arvore, 'origem', None))
