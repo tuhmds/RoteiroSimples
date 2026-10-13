@@ -1,5 +1,9 @@
 # RoteiroSimples (RS) — versão experimental 0.42A.3
 
+## Dados RS — Biblioteca de codificacao binaria (PR #6)
+
+A biblioteca `padrao/codificacao_binaria.rts`, implementada em RS, codifica e le inteiros nao negativos little-endian em blocos de 4/8 bytes, com resultados e falhas recuperaveis. O gravador e o leitor da prova `entregas.rsd` usam o mesmo modulo, com 100 registros verificados entre processos e testes de truncamento/corrupcao. O suporte a valores de 64 bits esta restrito ao intervalo positivo de `inteiro` assinado. Nao ha transacoes, indices, diario de recuperacao ou garantias ACID. [PR #6](https://github.com/tuhmds/RoteiroSimples/pull/6), com detalhes em `docs/DADOS_RS_PROVA_BINARIA_V1.md`.
+
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
 (ELF64), sem etapa intermediária obrigatória em C, LLVM ou montador externo. Os
