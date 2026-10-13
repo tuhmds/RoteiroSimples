@@ -57,11 +57,11 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 parte_tipo = t[2:]
                 if len(parte_tipo) == 1:
                     tipo_campo = str(parte_tipo[0])
-                    if tipo_campo not in ('inteiro', 'logico') and tipo_campo not in registros:
+                    if tipo_campo in ('texto', 'bytes'):
+                        tipo_campo = (TIPO_TEXTO_DINAMICO if tipo_campo == 'texto'
+                                      else TIPO_BYTES_DINAMICOS)
+                    elif tipo_campo not in ('inteiro', 'logico') and tipo_campo not in registros:
                         raise ErroCompilacao(f'Linha {n_campo}: tipo de campo desconhecido: {tipo_campo}.')
-                elif len(parte_tipo) == 1 and parte_tipo[0] in ('texto', 'bytes'):
-                    tipo_campo = (TIPO_TEXTO_DINAMICO if parte_tipo[0] == 'texto'
-                                  else TIPO_BYTES_DINAMICOS)
                 elif (len(parte_tipo) == 4 and parte_tipo[:2] == ['lista', '[']
                       and parte_tipo[-1] == ']' and parte_tipo[2] in ('inteiro', 'logico')):
                     tipo_campo = ('lista_dinamica', str(parte_tipo[2]))
