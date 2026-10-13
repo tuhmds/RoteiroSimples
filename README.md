@@ -1,4 +1,8 @@
-# RoteiroSimples (RS) — versão experimental 0.42A.3
+# RoteiroSimples (RS) — versão experimental 0.42E
+
+## RS 0.42E — Movimentacao de registros proprietarios completos
+
+A linguagem agora permite `mova(destino, origem)` entre registros proprietarios de mesmo tipo, inclusive com texto, bytes, listas e subregistros. O gerador nativo verifica as folhas proprietarias da origem, descarta os antigos donos do destino, movimenta o agregado e inativa a origem. A transferencia por parametros e retornos de funcao e a inclusao de registros proprietarios em colecoes continuam em desenvolvimento e nao estao disponiveis neste marco. Implementacao: [PR #9](https://github.com/tuhmds/RoteiroSimples/pull/9).
 
 ## RS 0.42D — Campos dinamicos com dono em registros locais
 

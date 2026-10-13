@@ -152,6 +152,50 @@ def _composto(tipo, registros):
         isinstance(tipo, tuple) and tipo[0] in ('registro', 'lista', 'texto', 'bytes'))
 
 
+def _donos_de_registro(g, nome):
+    """Folhas com dono em um agregado. Cada caminho aponta para o mesmo quadro."""
+    encontrados = []
+
+    def visitar(caminho):
+        for filho in g.campos_atual.get(caminho, {}).values():
+            tipo = g.tipos_atual[filho]
+            if eh_proprietario(tipo):
+                encontrados.append(filho)
+            elif isinstance(tipo, tuple) and tipo[0] == 'registro':
+                visitar(filho)
+
+    visitar(nome)
+    return encontrados
+
+
+def _transferir_registro_proprietario(g, variaveis, tipos, destino, origem, windows):
+    """Move um agregado sem copiar donos ativos nem liberar a origem duas vezes.
+
+    Primeiro valida todas as folhas de origem. Depois descarta as folhas
+    antigas do destino, copia a representacao completa e inativa as folhas
+    originais. Desse modo, mesmo campos aninhados tem propriedade unica.
+    """
+    tipo = tipos[origem]
+    if (destino == origem or tipos[destino] != tipo or
+            not isinstance(tipo, tuple) or tipo[0] != 'registro'):
+        raise ErroCompilacao('Movimento de registro exige agregados distintos do mesmo tipo.')
+    donos_origem = _donos_de_registro(g, origem)
+    donos_destino = _donos_de_registro(g, destino)
+    if not donos_origem or len(donos_origem) != len(donos_destino):
+        raise ErroCompilacao('Movimento de registro exige proprietarios correspondentes.')
+    # Uma origem parcialmente movida e rejeitada antes de afetar o destino.
+    for nome in donos_origem:
+        valores_dinamicos.verificar_vivo(g, variaveis, nome, windows)
+    for nome in reversed(donos_destino):
+        valores_dinamicos.liberar(g, variaveis, nome, windows)
+    _copiar_palavras(
+        g, deslocamento_variavel(variaveis, origem, windows),
+        deslocamento_variavel(variaveis, destino, windows),
+        _palavras_tipo(tipo, g.registros))
+    for nome in donos_origem:
+        valores_dinamicos.inativar(g, variaveis, nome, windows)
+
+
 def _copiar_palavras(g, origem, destino, quantidade):
     """Copia valores completos sem extrapolar os quadros de pilha locais."""
     if origem == destino:
@@ -1067,6 +1111,9 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                     expressao(g, origem, variaveis, windows, destino_composto=destino)
                 else:
                     raise ErroCompilacao('Recebimento dinamico exige transferencia ou chamada proprietaria.')
+            elif op[0] == 'mova_registro_proprietario':
+                _transferir_registro_proprietario(
+                    g, variaveis, tipos, op[1], op[2], windows)
             elif op[0] == 'mova_lista_dinamica':
                 listas_dinamicas.mover(g, variaveis, op[1], op[2], windows,
                                        listas_dinamicas.largura_elemento(g, tipos[op[1]]))
