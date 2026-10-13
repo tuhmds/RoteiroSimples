@@ -15,12 +15,12 @@ class TestesMedicaoRS042J(unittest.TestCase):
         resultado = medir(FONTE, alvo_nativo(), repeticoes=2)
         linhas = resultado['resultados']
         self.assertEqual([r['nivel'] for r in linhas], list(range(9)))
-        self.assertTrue(all(r['gerador'] == 'intermediario' for r in linhas))
-        self.assertEqual([r['nivel_ir'] for r in linhas], [0, 1, 2, 2, 2, 2, 2, 2, 2])
+        self.assertEqual([r['gerador'] for r in linhas], ['intermediario'] * 4 + ['ssa'] * 5)
+        self.assertEqual([r['nivel_ir'] for r in linhas], [0, 1, 2, 3, 3, 3, 3, 3, 3])
         self.assertTrue(all(len(r['tempos_ms']) == 2 for r in linhas))
         self.assertTrue(all(r['resultado'] == (0, '60\n', '') for r in linhas))
         self.assertNotEqual(linhas[0]['sha256'], linhas[8]['sha256'])
-        self.assertEqual(linhas[8]['mesmo_binario_que'], 2)
+        self.assertEqual(linhas[8]['mesmo_binario_que'], 6)
 
     def test_conservador_identifica_binarios_iguais_sem_prometer_otimizacao(self):
         fonte = 'inicio {\n seja valores: lista[]\n adicione(valores, 42)\n escreva(valores[0])\n}'
