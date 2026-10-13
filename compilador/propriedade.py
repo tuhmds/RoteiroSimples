@@ -1,6 +1,6 @@
 """Contrato compartilhado de armazenamento e propriedade da RS 0.42A.
 
-A propriedade dinâmica pertence às listas tipadas e ao texto UTF-8.
+A propriedade dinâmica pertence às listas tipadas, texto UTF-8 e bytes.
 Texto e bytes de tamanho fixo continuam valores copiáveis. Empréstimos são
 referências temporárias de parâmetros, nunca proprietários do armazenamento.
 """
@@ -14,18 +14,20 @@ DESLOCAMENTO_COMPRIMENTO = -8
 DESLOCAMENTO_CAPACIDADE = -16
 TIPO_TEXTO_DINAMICO = ('texto_dinamico', 'utf8')
 TIPO_TEXTO_EMPRESTADO = ('texto_emprestado', 'utf8')
+TIPO_BYTES_DINAMICOS = ('bytes_dinamicos', 'binario')
+TIPO_BYTES_EMPRESTADOS = ('bytes_emprestados', 'binario')
 
 
 def eh_proprietario(tipo):
     """Identifica os descritores dinâmicos com dono exclusivo disponíveis."""
     return (isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] == 'lista_dinamica'
-            or tipo == TIPO_TEXTO_DINAMICO)
+            or tipo in (TIPO_TEXTO_DINAMICO, TIPO_BYTES_DINAMICOS))
 
 
 def eh_emprestimo(tipo):
     """Identifica a referência temporária de leitura de um descritor."""
     return (isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] == 'lista_emprestada'
-            or tipo == TIPO_TEXTO_EMPRESTADO)
+            or tipo in (TIPO_TEXTO_EMPRESTADO, TIPO_BYTES_EMPRESTADOS))
 
 
 def eh_texto(tipo):
@@ -36,7 +38,8 @@ def eh_texto(tipo):
 
 def passo_armazenamento(tipo, registros):
     """Bytes por unidade do armazenamento apontado pelo dono ou empréstimo."""
-    if tipo in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO):
+    if tipo in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO,
+                TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS):
         return 1
     if isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] in ('lista_dinamica', 'lista_emprestada'):
         from .disposicao_tipos import palavras_tipo
@@ -46,6 +49,12 @@ def passo_armazenamento(tipo, registros):
             raise ErroCompilacao('Largura do registro excede o limite de armazenamento do gerador nativo.')
         return 8 * palavras
     raise ValueError('Tipo sem armazenamento dinamico.')
+
+
+def eh_bytes(tipo):
+    """Dados binários arbitrários, sem conversão implícita para texto."""
+    return (tipo in (TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS)
+            or isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] == 'bytes')
 
 
 def classe_valor(tipo):

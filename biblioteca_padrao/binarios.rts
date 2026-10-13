@@ -1,0 +1,39 @@
+// Algoritmos binarios na propria RS; nenhuma conversao para texto.
+// duplicar e concatenar realizam copias profundas explicitamente solicitadas.
+funcao duplicar(dados: emprestimo[bytes]) -> bytes {
+    seja copia: bytes
+    copie(copia, dados)
+    retorne mova(copia)
+}
+
+funcao concatenar(a: emprestimo[bytes], b: emprestimo[bytes]) -> bytes {
+    seja resultado: bytes
+    copie(resultado, a)
+    junte(resultado, b)
+    retorne mova(resultado)
+}
+
+funcao iguais(a: emprestimo[bytes], b: emprestimo[bytes]) -> logico {
+    se tamanho(a) != tamanho(b) {
+        retorne falso
+    }
+    seja indice = 0
+    enquanto indice < tamanho(a) {
+        se a[indice] != b[indice] {
+            retorne falso
+        }
+        indice = indice + 1
+    }
+    retorne verdadeiro
+}
+
+// Soma modular de bytes; detecta alteracoes simples, sem garantia criptografica.
+funcao soma_verificacao(dados: emprestimo[bytes]) -> inteiro {
+    seja resultado = 0
+    seja indice = 0
+    enquanto indice < tamanho(dados) {
+        resultado = (resultado + dados[indice]) % 65536
+        indice = indice + 1
+    }
+    retorne resultado
+}

@@ -11,7 +11,7 @@ from compilador.propriedade import (
     eh_proprietario, PALAVRAS_DESCRITOR, ESTADO_INATIVO,
     DESLOCAMENTO_PONTEIRO, DESLOCAMENTO_COMPRIMENTO,
     DESLOCAMENTO_CAPACIDADE,
-    passo_armazenamento, TIPO_TEXTO_DINAMICO,
+    passo_armazenamento, TIPO_TEXTO_DINAMICO, TIPO_BYTES_DINAMICOS,
 )
 
 
@@ -48,7 +48,7 @@ def inicializar_inativos(g, variaveis, tipos, windows):
 
 
 def verificar_vivo(g, variaveis, nome, windows, erro='erro_lista_liberada'):
-    if getattr(g, 'tipos_atual', {}).get(nome) == TIPO_TEXTO_DINAMICO:
+    if getattr(g, 'tipos_atual', {}).get(nome) in (TIPO_TEXTO_DINAMICO, TIPO_BYTES_DINAMICOS):
         erro = 'erro_valor_inativo'
     base = deslocamento_local(variaveis, nome, windows)
     g.bytes(b'\x48\x8B\x85' + struct.pack('<i', base + DESLOCAMENTO_COMPRIMENTO))

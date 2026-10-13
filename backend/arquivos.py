@@ -1,12 +1,12 @@
-"""Operações nativas de persistência de texto com comprimento explícito.
+"""Persistência nativa de texto UTF-8 e bytes com comprimento explícito.
 
 O chamador passa RDI=caminho NUL ASCII, RSI=bytes e RDX=tamanho/capacidade.
 Ambas rotinas devolvem em RAX o número efetivo de bytes gravados/lidos.
 Erros encerram o processo com diagnóstico; nunca há truncamento silencioso.
 """
 import struct
-from . import politica_caminhos, textos_dinamicos, valores_dinamicos
-from compilador.propriedade import TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO
+from . import politica_caminhos, sequencias_dinamicas, valores_dinamicos
+from compilador.propriedade import eh_proprietario, eh_emprestimo, eh_texto
 from .desenrolamento_windows import (
     registrar_quadro_auxiliar, emitir_prologo_auxiliar,
     emitir_epilogo_auxiliar,
@@ -20,9 +20,9 @@ def _emitir(g, hexadecimais):
 def emitir_comando(g, instrucao, variaveis, tipos, windows, mensagens,
                     endereco_buffer, deslocamento_variavel):
     modo, caminho, nome = instrucao
-    if tipos[nome] in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO):
+    if eh_proprietario(tipos[nome]) or eh_emprestimo(tipos[nome]):
         if modo == 'grave_arquivo':
-            textos_dinamicos.vista(g, variaveis, tipos, nome, windows)
+            sequencias_dinamicas.vista(g, variaveis, tipos, nome, windows)
         else:
             valores_dinamicos.verificar_vivo(g, variaveis, nome, windows)
             valores_dinamicos.endereco_descritor(g, variaveis, nome, windows)
@@ -30,6 +30,8 @@ def emitir_comando(g, instrucao, variaveis, tipos, windows, mensagens,
         numero = len(mensagens)
         mensagens[numero] = caminho + '\x00'
         g.relativo(b'\x48\x8D\x3D', f'mensagem_{numero}')
+        if modo != 'grave_arquivo':
+            g.bytes(b'\xB9' + struct.pack('<I', int(eh_texto(tipos[nome]))))
         g.chamada('rs_arquivo_gravar' if modo == 'grave_arquivo' else 'rs_arquivo_carregar_dinamico')
         return
     dados, comprimento, capacidade = endereco_buffer(variaveis, nome, tipos, windows)
@@ -222,7 +224,7 @@ def _rotina(g, windows, gravar):
     _fecho(g, windows)
 
 
-def emitir_rotinas(g, windows, dinamico=False):
+def emitir_rotinas(g, windows, dinamico=False, validar_texto=True):
     _rotina(g, windows, True)
     if windows:
         registrar_quadro_auxiliar(g, 'rs_arquivo_gravar')
@@ -230,14 +232,15 @@ def emitir_rotinas(g, windows, dinamico=False):
     if windows:
         registrar_quadro_auxiliar(g, 'rs_arquivo_carregar')
     if dinamico:
-        _carregar_dinamico(g, windows)
+        _carregar_dinamico(g, windows, validar_texto)
 
 
-def _carregar_dinamico(g, windows):
+def _carregar_dinamico(g, windows, validar_texto):
+    # RSI=descritor; RCX=1 exige UTF-8, RCX=0 preserva binário arbitrário.
     nome = 'rs_arquivo_carregar_dinamico'
     g.marcar(nome)
     _prologo(g, windows)
-    _emitir(g, '48 89 75 B0 48 83 7E F8 00')
+    _emitir(g, '48 89 4D B8 48 89 75 B0 48 83 7E F8 00')
     g.salto('erro_valor_inativo', 'jl')
     _emitir(g, '48 C7 46 F8 00 00 00 00')
     _abrir(g, windows, False)
@@ -286,8 +289,12 @@ def _carregar_dinamico(g, windows):
     g.salto(nome + '_volta')
     g.marcar(nome + '_fim')
     _fechar(g, windows)
-    _emitir(g, '4C 8B 55 B0 49 8B 32 49 8B 52 F8')
-    g.chamada('rs_validar_utf8')
+    if validar_texto:
+        _emitir(g, '48 83 7D B8 00')
+        g.salto(nome + '_sem_utf8', 'je')
+        _emitir(g, '4C 8B 55 B0 49 8B 32 49 8B 52 F8')
+        g.chamada('rs_validar_utf8')
+        g.marcar(nome + '_sem_utf8')
     _fecho(g, windows)
     if windows:
         registrar_quadro_auxiliar(g, nome)
