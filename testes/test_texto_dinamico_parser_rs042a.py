@@ -128,7 +128,7 @@ class TestesTextoDinamicoParserRS042A(unittest.TestCase):
         self.assertTrue(e.arquivos and e.pode_falhar)
         self.assertIn('preencher:destino', e.propriedade)
 
-    def test_literal_com_surrogate_isolado_e_rejeitado(self):
+    def test_literal_com_substituto_utf16_isolado_e_rejeitado(self):
         self.rejeitar('inicio {\n seja nome: texto = "\\ud800"\n}', 'literal de texto')
 
     def test_funcoes_historicas_com_nome_de_consulta_continuam_validas(self):

@@ -144,7 +144,19 @@ ou permissão de link simbólico. Os 40 testes novos incluem listas históricas 
 comum, texto vazio/grande, UTF-8 com NUL, limites legais, codificações inválidas,
 expansão/reutilização, arquivo maior que 1 MiB, transferência e escopos,
 falha de alocação simulada, overflow de tamanho e recursão controlada.
-A execução Linux e a contagem final da CI serão registradas após a PR.
+A [CI aprovada](https://github.com/tuhmds/RoteiroSimples/actions/runs/38382667977)
+executou o commit `1fabb24` nos dois sistemas, incluindo a correção e a
+regressão de registros emprestados. Cada sistema executa seu próprio binário.
+
+| Sistema | Encontrados | Aprovados | Ignorados | Falhas |
+|---|---:|---:|---:|---:|
+| Windows x64 | 527 | 515 | 12 | 0 |
+| Linux x86-64 | 527 | 504 | 23 | 0 |
+
+Os ignorados são específicos da plataforma; os três ensaios novos da API
+Windows não são executados no Linux. O ignorado adicional local decorre
+da permissão de criar link simbólico. A PR depende da PR de propriedade;
+nenhuma das entregas foi mesclada automaticamente.
 
 A primeira CI detectou uma regressão na leitura de registros emprestados
 após a centralização da largura: o cálculo do passo aceitava apenas o tipo
