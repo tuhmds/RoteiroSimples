@@ -1,6 +1,20 @@
-# RoteiroSimples (RS) — versão experimental 0.42H
+# RoteiroSimples (RS) — versão experimental 0.42I
 
-## RS 0.42H — Coleções de registros proprietários
+## RS 0.42I — Leitura de registros por empréstimo
+
+Funções com `emprestimo[Registro]` leem os campos de um registro local ou
+de `empreste(colecao[indice])`, conservando o elemento na lista. Texto,
+bytes, subregistros e coleções aninhadas têm vistas de leitura que podem
+atravessar chamadas. O compilador rejeita alteração, descarte, armazenamento
+ou retorno do empréstimo e consumo da mesma coleção na árvore de chamada.
+
+A biblioteca de documentos acrescenta busca por título e soma dos tamanhos,
+inteiramente em RS. O [exemplo de pesquisa](exemplos/aplicacoes/pesquisa_documentos_rs042i.rts)
+consulta e mostra documentos sem retirá-los. Não há alocação de conteúdo;
+as palavras e buffers fixos da vista usam temporários contabilizados na pilha.
+[Contrato, custos e limites](docs/EMPRESTIMOS_REGISTROS_RS_0_42I.md).
+
+## Histórico: RS 0.42H — Coleções de registros proprietários
 
 `lista[Registro]` agora aceita registros com texto, bytes, listas e subregistros
 proprietários. Inserção e substituição recebem `mova(registro)` ou um valor
@@ -13,7 +27,7 @@ e resultados via registros proprietários. O crescimento preserva os ponteiros
 do conteúdo. Registros copiáveis mantêm seu comportamento histórico por valor.
 O [exemplo de catálogo](exemplos/aplicacoes/colecao_documentos_rs042h.rts) usa
 a biblioteca de documentos em RS. [Contrato e limites](docs/COLECOES_PROPRIETARIAS_RS_0_42H.md).
-Leitura de campos de elementos por empréstimo permanece como próxima etapa.
+Leitura de campos de elementos por empréstimo chegou na RS 0.42I.
 
 ## Histórico: RS 0.42G — Resultados com propriedade
 
@@ -986,7 +1000,7 @@ nenhum nível foi criado na RS 0.29. Para programas com escopos locais,
 funções ou registros, a geração conservadora prevalece para evitar transformações
 que ainda não compreendem chamadas e identidades de valores compostos.
 
-## Recursos presentes na RS 0.42H
+## Recursos presentes na RS 0.42I
 
 | Recurso | Situação |
 |---|---|
@@ -1019,6 +1033,8 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Biblioteca de validação e composição de documentos em RS | Implementado na 0.42G |
 | Coleções de registros proprietários, retirada e descarte por elemento | Implementado na 0.42H |
 | Listas de registros em campos e coleções proprietárias aninhadas | Implementado na 0.42H; até 32 níveis |
+| Empréstimos de registros e elementos de coleções para leitura dos campos | Implementado na 0.42I; duração da chamada |
+| Busca por título e totalização de conteúdo na biblioteca de documentos em RS | Implementado na 0.42I |
 | Consultas gerais e seleção de listas em RS | Acrescentadas na 0.42A.1 |
 | ABI e desenrolamento Windows com ensaios reais | Consolidado na 0.41.5; regressões mantidas |
 | Contrato comum de disposição, efeitos e propriedade | Consolidado nas revisões 0.40 e neste marco |
@@ -1030,7 +1046,7 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 | Publicação por renomeação, bloqueio não bloqueante e basename variável verificado | Implementado na 0.39 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | Análises avançadas em funções e registros | Ainda não |
-| Empréstimos de elementos proprietários, resultados aninhados/de listas dinâmicas, empréstimos mutáveis, reais/decimais e FFI | Ainda não |
+| Resultados aninhados/de listas dinâmicas, empréstimos mutáveis, reais/decimais e FFI | Ainda não |
 
 ## Organização atual
 
@@ -1051,11 +1067,12 @@ que ainda não compreendem chamadas e identidades de valores compostos.
 
 ## Próximas prioridades
 
-**Continuidade da propriedade:** empréstimos de leitura de elementos e acesso
-seguro aos seus campos precisam preservar a vida da coleção. Coleções,
-resultados com donos e
-registros com texto, bytes e listas já atravessam funções; esse suporte serve
-à construção de bibliotecas em RS, do compilador em RS e do Dados RS.
+**Aplicação dos recursos da linguagem:** empréstimos de leitura de registros
+e elementos chegaram na 0.42I. A próxima prova útil é um cadastro persistente
+em RS com consulta sem retirada, substituição explícita, texto/binário variável
+e reabertura validada do formato. Coleções, resultados com donos e registros
+já atravessam funções; esse suporte serve às bibliotecas em RS, ao compilador
+em RS e ao Dados RS.
 Em paralelo, o léxico em RS permite iniciar a análise sintática, e a prova
 binária permite especificar um primeiro armazenamento de registros variáveis.
 Novos operadores lógicos e tipos reais/decimais continuam no roteiro.
