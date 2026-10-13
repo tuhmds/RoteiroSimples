@@ -194,6 +194,31 @@ class TestesTextoDinamicoNativoRS042A(unittest.TestCase):
         }'''
         self.verificar(fonte, b'1\n1\n1\n195\n5\n')
 
+    def test_memoria_compartilhada_preserva_leitura_de_registro_emprestado(self):
+        fonte = '''tipo Marcacao {
+            codigo: inteiro
+            nome: texto[8]
+        }
+        funcao consultar(itens: emprestimo[lista[Marcacao]]) -> inteiro {
+            seja local: Marcacao = itens[0]
+            retorne local.codigo + tamanho(local.nome)
+        }
+        inicio {
+            seja itens: lista[Marcacao]
+            seja local: Marcacao
+            local.codigo = 17
+            copie(local.nome, "ação")
+            adicione(itens, local)
+            escreva(consultar(empreste(itens)))
+            seja nome: texto = "lido"
+            escreva(nome)
+        }'''
+        p = analisar_programa(fonte)
+        for nivel in range(9):
+            for alvo in ('windows', 'linux'):
+                self.assertTrue(compilar(p, alvo, nivel=nivel, otimizar=nivel > 0))
+        self.verificar(fonte, b'23\nlido\n')
+
     def test_entrada_grande_crlf_e_cache_compartilhado_com_inteiros(self):
         nome = 'ação😀' * 5000
         fonte = '''inicio {

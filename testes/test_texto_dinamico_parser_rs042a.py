@@ -26,7 +26,9 @@ class TestesTextoDinamicoParserRS042A(unittest.TestCase):
         self.assertEqual((texto.palavras, texto.pode_copiar, texto.precisa_descartar), (3, False, True))
         self.assertEqual((emprestimo.palavras, emprestimo.pode_copiar, emprestimo.precisa_descartar), (1, False, False))
         self.assertEqual(passo_armazenamento(TIPO_TEXTO_DINAMICO, {}), 1)
+        self.assertEqual(passo_armazenamento(TIPO_TEXTO_EMPRESTADO, {}), 1)
         self.assertEqual(passo_armazenamento(('lista_dinamica', 'inteiro'), {}), 8)
+        self.assertEqual(passo_armazenamento(('lista_emprestada', 'inteiro'), {}), 8)
         self.assertTrue(contrato_valor(('texto', 17)).pode_copiar)
 
     def test_assinaturas_inferencia_e_ambos_geradores(self):

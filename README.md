@@ -28,8 +28,8 @@ a [aplicação de documento UTF-8](exemplos/aplicacoes/documento_utf8_rs042a.rts
 recebe um nome de comprimento variável, constrói, transfere, grava e
 recupera o documento. Os executáveis continuam independentes de Python.
 
-Windows local: suíte de 525 testes aprovada, mais a verificação adicional
-de largura de registros aprovada separadamente. A CI dos dois sistemas
+Windows local: suíte completa de 527 testes aprovada, sem falhas,
+com 13 ignorados por plataforma/permissão. A CI dos dois sistemas
 será registrada na [nota técnica](docs/TEXTO_DINAMICO_RS_0_42A_2.md).
 Bytes dinâmicos, donos em registros/listas e empréstimos mutáveis ficam
 para os próximos marcos. Esta entrega continua dependente do primeiro

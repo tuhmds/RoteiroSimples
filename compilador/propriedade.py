@@ -35,17 +35,17 @@ def eh_texto(tipo):
 
 
 def passo_armazenamento(tipo, registros):
-    """Bytes por unidade do comprimento/capacidade no armazenamento dinâmico."""
-    if tipo == TIPO_TEXTO_DINAMICO:
+    """Bytes por unidade do armazenamento apontado pelo dono ou empréstimo."""
+    if tipo in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO):
         return 1
-    if isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] == 'lista_dinamica':
+    if isinstance(tipo, tuple) and len(tipo) == 2 and tipo[0] in ('lista_dinamica', 'lista_emprestada'):
         from .disposicao_tipos import palavras_tipo
         palavras = palavras_tipo(tipo[1], registros)
         if not 1 <= palavras <= 0x0FFFFFFF:
             from .erros import ErroCompilacao
             raise ErroCompilacao('Largura do registro excede o limite de armazenamento do gerador nativo.')
         return 8 * palavras
-    raise ValueError('Tipo sem armazenamento dinamico proprietario.')
+    raise ValueError('Tipo sem armazenamento dinamico.')
 
 
 def classe_valor(tipo):

@@ -139,13 +139,19 @@ zero alocações ou liberações durante o movimento, um descarte final,
 descarte correto em laços/saídas e oito registradores inteiros/dez vetoriais/RSP.
 Essa instrumentação de teste não oferece interoperabilidade na linguagem.
 
-Windows local: 525 testes encontrados, sem falhas, 13 ignorados por plataforma
-ou permissão de link simbólico; depois passou a regressão adicional da largura
-do registro. Os 39 testes novos incluem listas históricas por gerenciador
+Windows local: 527 testes encontrados, sem falhas, 13 ignorados por plataforma
+ou permissão de link simbólico. Os 40 testes novos incluem listas históricas por gerenciador
 comum, texto vazio/grande, UTF-8 com NUL, limites legais, codificações inválidas,
 expansão/reutilização, arquivo maior que 1 MiB, transferência e escopos,
 falha de alocação simulada, overflow de tamanho e recursão controlada.
 A execução Linux e a contagem final da CI serão registradas após a PR.
+
+A primeira CI detectou uma regressão na leitura de registros emprestados
+após a centralização da largura: o cálculo do passo aceitava apenas o tipo
+proprietário. O passo agora reconhece a mesma representação do conteúdo para
+donos e empréstimos, preservando suas regras distintas de disposição e
+descarte. A regressão específica compila os dois alvos e executa O0–O8;
+a suíte completa local foi repetida e aprovada depois da correção.
 
 ```text
 python -m unittest testes.test_texto_dinamico_parser_rs042a testes.test_texto_dinamico_nativo_rs042a testes.test_abi_texto_dinamico_rs042a -v
