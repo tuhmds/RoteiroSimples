@@ -22,9 +22,7 @@ class TestesBibliotecaLexicoRS(unittest.TestCase):
             alvo = "linux"
         else:
             self.skipTest("Exige x86-64 Linux ou Windows")
-        fontes = carregar_fontes(PROVA).texto
-        print('DEBUG EXPANSAO LEXICO:\\n' + '\\n'.join(f'{i}: {l}' for i, l in enumerate(fontes.splitlines(), 1) if 94 <= i <= 115))
-        programa = analisar_programa(fontes)
+        programa = analisar_programa(carregar_fontes(PROVA).texto)
         with tempfile.TemporaryDirectory(prefix="rs_lexico_recuperacao_") as pasta:
             exe = Path(pasta) / ("prova.exe" if alvo == "windows" else "prova")
             exe.write_bytes(compilar(programa, alvo, nivel=0, otimizar=False))
