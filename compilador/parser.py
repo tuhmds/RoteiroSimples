@@ -59,6 +59,12 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     tipo_campo = str(parte_tipo[0])
                     if tipo_campo not in ('inteiro', 'logico') and tipo_campo not in registros:
                         raise ErroCompilacao(f'Linha {n_campo}: tipo de campo desconhecido: {tipo_campo}.')
+                elif len(parte_tipo) == 1 and parte_tipo[0] in ('texto', 'bytes'):
+                    tipo_campo = (TIPO_TEXTO_DINAMICO if parte_tipo[0] == 'texto'
+                                  else TIPO_BYTES_DINAMICOS)
+                elif (len(parte_tipo) == 4 and parte_tipo[:2] == ['lista', '[']
+                      and parte_tipo[-1] == ']' and parte_tipo[2] in ('inteiro', 'logico')):
+                    tipo_campo = ('lista_dinamica', str(parte_tipo[2]))
                 elif (len(parte_tipo) == 4 and parte_tipo[0] in ('lista', 'texto', 'bytes')
                       and parte_tipo[1] == '[' and parte_tipo[-1] == ']'
                       and parte_tipo[2].isascii() and parte_tipo[2].isdecimal()):
@@ -78,6 +84,15 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if not campos:
                 raise ErroCompilacao(f'Linha {n}: registro precisa de pelo menos um campo.')
             registros[nome_tipo] = tuple(campos)
+    def possui_dono_registro(tipo):
+        return not contrato_valor(tipo, registros).pode_copiar
+
+    def exigir_copiavel_em_colecao(tipo, linha):
+        if isinstance(tipo, str) and tipo in registros and possui_dono_registro(tipo):
+            raise ErroCompilacao(
+                f'Linha {linha}: lista de registros proprietarios exige '
+                'transferencia por elemento, ainda nao implementada.')
+
     def ler_tipo(partes, linha):
         if len(partes) == 1:
             nome = str(partes[0])
@@ -97,11 +112,13 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             return ('lista_emprestada', 'inteiro')
         if (len(partes) == 7 and partes[:4] == ['emprestimo', '[', 'lista', '[']
                 and partes[-2:] == [']', ']'] and (partes[4] in ('inteiro', 'logico') or partes[4] in registros)):
+            exigir_copiavel_em_colecao(str(partes[4]), linha)
             return ('lista_emprestada', str(partes[4]))
         if len(partes) == 4 and partes[1] == '[' and partes[3] == ']':
             categoria = str(partes[0])
             valor = str(partes[2])
             if categoria == 'lista' and (valor in ('inteiro', 'logico') or valor in registros):
+                exigir_copiavel_em_colecao(valor, linha)
                 return ('lista_dinamica', valor)
             if categoria in ('lista', 'texto', 'bytes') and valor.isascii() and valor.isdecimal():
                 tamanho = int(valor)
@@ -127,6 +144,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if cabecalho[fim_par+1:fim_par+3] != ['-', '>'] or cabecalho[-1] != '{':
                 raise ErroCompilacao(f'Linha {n}: use funcao nome(parametros) -> tipo {{.')
             retorno = ler_tipo(cabecalho[fim_par+3:-1], n)
+            if isinstance(retorno, str) and retorno in registros and possui_dono_registro(retorno):
+                raise ErroCompilacao(f'Linha {n}: retorno de registro proprietario ainda exige ABI de transferencia; proibido para evitar copia do dono.')
             if eh_emprestimo(retorno):
                 raise ErroCompilacao(f'Linha {n}: emprestimo[lista] so pode aparecer em parametros; nao pode ser retornado.')
             partes = cabecalho[3:fim_par]
@@ -144,6 +163,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     if grupo[0] in (x[0] for x in parametros):
                         raise ErroCompilacao(f'Linha {n}: parâmetro duplicado: {grupo[0]}.')
                     tipo_parametro = ler_tipo(grupo[2:], n)
+                    if isinstance(tipo_parametro, str) and tipo_parametro in registros and possui_dono_registro(tipo_parametro):
+                        raise ErroCompilacao(f'Linha {n}: parametro com registro proprietario nao admite copia implicita; transferencia ainda nao implementada.')
                     parametros.append((str(grupo[0]), tipo_parametro))
             if nome in assinaturas or nome in registros:
                 raise ErroCompilacao(f'Linha {n}: função {nome!r} já foi declarada.')
@@ -559,10 +580,11 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 adicionar(('limpe_bytes' if tipo_buffer[0] == 'bytes' else 'limpe_texto', nome), n, t)
             elif t[0] == 'mova' and t[1:2] == ['('] and t[-1:] == [')']:
                 partes = t[2:-1]
-                if len(partes) != 3 or partes[1] != ',':
+                grupos = argumentos_externos(t, n)
+                if len(grupos) != 2:
                     raise ErroCompilacao(f'Linha {n}: use mova(destino, origem).')
-                destino = contexto.resolver(str(partes[0]))
-                origem = contexto.resolver(str(partes[2]))
+                destino = contexto.resolver_caminho(grupos[0], n)
+                origem = contexto.resolver_caminho(grupos[1], n)
                 if destino == origem:
                     raise ErroCompilacao(f'Linha {n}: mova exige origem e destino diferentes.')
                 if (not eh_proprietario(tipos.get(destino)) or
@@ -583,9 +605,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     if len(grupos) != 2:
                         raise ErroCompilacao(f'Linha {n}: use adicione(lista, valor).')
                     nome_parte, valor_parte = grupos
-                    if len(nome_parte) != 1:
-                        raise ErroCompilacao(f'Linha {n}: adicione exige nome de lista proprietaria.')
-                    nome = contexto.resolver(str(nome_parte[0]))
+                    nome = contexto.resolver_caminho(nome_parte, n)
                     if not isinstance(tipos.get(nome), tuple) or tipos[nome][0] != 'lista_dinamica':
                         raise ErroCompilacao(f'Linha {n}: adicione exige lista dinamica proprietaria.')
                     valor, _ = expressao_tipada(valor_parte, n, tipos[nome][1])
@@ -593,9 +613,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                         raise ErroCompilacao(f'Linha {n}: adicione com registro exige variavel de mesmo tipo.')
                     adicionar(('adicione_lista_dinamica', nome, valor), n, t)
                 else:
-                    if len(conteudo) != 1:
-                        raise ErroCompilacao(f'Linha {n}: {operacao} exige nome de lista proprietaria.')
-                    nome = contexto.resolver(str(conteudo[0]))
+                    nome = contexto.resolver_caminho(conteudo, n)
                     if not isinstance(tipos.get(nome), tuple) or tipos[nome][0] != 'lista_dinamica':
                         raise ErroCompilacao(f'Linha {n}: {operacao} exige lista dinamica proprietaria.')
                     mapa = {'libere': 'libere_lista_dinamica',
@@ -653,6 +671,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                           (t[5] in ('inteiro', 'logico') or t[5] in registros)):
                         elemento, fim_tipo = str(t[5]), 7
                     if fim_tipo is not None:
+                        exigir_copiavel_em_colecao(elemento, n)
                         tipo_dono = ('lista_dinamica', elemento)
                         valor = None
                         if len(t) != fim_tipo:
@@ -679,7 +698,20 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     interno = registrar(str(nome), ('registro', tipo_nome, registros[tipo_nome]), n)
                     if len(t) == 4:
                         adicionar(('crie_registro', interno, tuple(contexto.campos_registro[interno].values())), n, t)
+                        # Cada campo proprietario aponta para os slots do registro.
+                        # O campo participa da liberacao do escopo, sem copiar dono.
+                        def registrar_donos(campos):
+                            for caminho in campos.values():
+                                if eh_proprietario(tipos[caminho]):
+                                    donos_locais.append(caminho)
+                                if caminho in contexto.campos_registro:
+                                    registrar_donos(contexto.campos_registro[caminho])
+                        registrar_donos(contexto.campos_registro[interno])
                     elif len(t) >= 6 and t[4] == '=':
+                        if possui_dono_registro(tipo_nome):
+                            raise ErroCompilacao(
+                                f'Linha {n}: registro com dono dinamico nao pode ser copiado; '
+                                'declare vazio e use mova() nos campos.')
                         arvore, _ = expressao_tipada(t[5:], n, tipo_nome)
                         if arvore[0] not in ('var', 'chamada', 'indice_lista_dinamica', 'indice_lista_emprestada'):
                             raise ErroCompilacao(f'Linha {n}: registro precisa de origem composta.')
@@ -785,6 +817,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 esperado = (tipo_destino[1] if isinstance(tipo_destino, tuple) and
                             tipo_destino[0] == 'registro' else tipo_destino)
                 valor, _ = expressao_tipada(t[igual+1:], n, esperado)
+                if not contrato_valor(tipo_destino, registros).pode_copiar:
+                    raise ErroCompilacao(f'Linha {n}: campo proprietario nao pode receber atribuicao implicita; use mova, copie ou junte.')
                 if eh_composto(tipo_destino):
                     if valor[0] not in ('var', 'chamada'):
                         raise ErroCompilacao(f'Linha {n}: campo composto exige variável ou função.')
@@ -816,6 +850,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f'Linha {n}: parametro emprestimo nao pode ser reatribuido.')
                 esperado = tipos[nome][1] if isinstance(tipos[nome], tuple) and tipos[nome][0] == 'registro' else tipos[nome]
                 arvore, _ = expressao_tipada(t[2:], n, esperado)
+                if not contrato_valor(tipos[nome], registros).pode_copiar:
+                    raise ErroCompilacao(f'Linha {n}: registro proprietario nao pode ser copiado; use mova nos campos.')
                 if eh_composto(tipos[nome]):
                     if arvore[0] not in ('var', 'chamada', 'indice_lista_dinamica', 'indice_lista_emprestada'):
                         raise ErroCompilacao(f'Linha {n}: atribuição composta exige variável, função ou índice de lista tipada.')
