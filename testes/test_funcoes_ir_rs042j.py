@@ -151,7 +151,7 @@ inicio {
             for nivel in (0, 1, 2, 8):
                 observado, _ = rodar(compilar(programa, alvo_nativo(), nivel=nivel, otimizar=nivel > 0))
                 self.assertEqual(observado.returncode, 1)
-                self.assertTrue(observado.stdout.startswith('ANTES\nErro:'))
+                self.assertTrue((observado.stdout + observado.stderr).startswith('ANTES\nErro:'))
                 self.assertNotIn('INDEVIDO', observado.stdout)
                 resultados.append((observado.returncode, observado.stdout, observado.stderr))
             self.assertTrue(all(r == resultados[0] for r in resultados))

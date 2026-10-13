@@ -86,7 +86,7 @@ class TestesCampanhaRS042J(unittest.TestCase):
         for nivel in (0, 8):
             resultado = avaliar(replace(caso, fonte=fonte), nivel)
             self.assertEqual(resultado['classe'], 'execucao:1')
-            self.assertIn('liberacao', resultado['saida'])
+            self.assertIn('liberacao', resultado['saida'] + resultado['erros'])
 
     def test_argumentos_invalidos_da_campanha_nao_executam_programas(self):
         resultado = subprocess.run([sys.executable, '-m', 'verificacao.campanha', '--niveis', '9'],

@@ -31,6 +31,9 @@ localmente, inclusive em argumentos e retornos. Nenhuma chamada é avaliada
 pelo compilador, eliminada ou reordenada. Divisão por zero, divisão de
 INT64_MIN por -1 e estouros preservam a falha em execução.
 Chamadas são barreiras de efeito desconhecido e possível falha.
+Diagnósticos fatais mantêm os canais históricos: saída de erros no Linux
+e saída normal no Windows. Os testes conferem ambos e preservam o código
+de retorno, o texto anterior à falha e a ausência de execução posterior.
 
 | Programa | O0 | O1 | O2–O8 |
 |---|---|---|---|
