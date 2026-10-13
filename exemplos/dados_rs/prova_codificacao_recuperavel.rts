@@ -1,0 +1,45 @@
+// A biblioteca nunca encerra ao receber offsets e valores invalidos.
+importe "padrao/codificacao_binaria.rts" como binario
+
+inicio {
+    seja negativo = binario.codificar_u32(-1)
+    escreva(negativo.codigo_erro)
+    seja excesso = binario.codificar_u32(4294967296)
+    escreva(excesso.codigo_erro)
+    seja invalido = binario.codificar_u64_positivo(-1)
+    escreva(invalido.codigo_erro)
+    seja vazio: bytes
+    seja incompleto = binario.ler_u32(empreste(vazio), 0)
+    escreva(incompleto.codigo_erro)
+    seja fora = binario.ler_u64_positivo(empreste(vazio), -1)
+    escreva(fora.codigo_erro)
+    seja grande: bytes
+    para indice de 0 ate 6 {
+        adicione_byte(grande, 0)
+    }
+    adicione_byte(grande, 128)
+    seja estouro = binario.ler_u64_positivo(empreste(grande), 0)
+    escreva(estouro.codigo_erro)
+    seja maximo = binario.codificar_u32(4294967295)
+    se maximo.valido == falso {
+        encerre(2)
+    }
+    seja quatro: bytes
+    junte(quatro, maximo.dados)
+    seja valor = binario.ler_u32(empreste(quatro), 0)
+    se valor.valido == falso {
+        encerre(3)
+    }
+    escreva(valor.valor)
+    seja grande_valido = binario.codificar_u64_positivo(9223372036854775807)
+    se grande_valido.valido == falso {
+        encerre(4)
+    }
+    seja oito: bytes
+    junte(oito, grande_valido.dados)
+    seja recuperado = binario.ler_u64_positivo(empreste(oito), 0)
+    se recuperado.valido == falso {
+        encerre(5)
+    }
+    escreva(recuperado.valor)
+}

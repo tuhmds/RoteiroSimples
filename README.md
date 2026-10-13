@@ -4,6 +4,14 @@
 
 A RS permite, em marco experimental, campos `texto`, `bytes`, `lista[inteiro]` e `lista[logico]` dentro de registros locais, com gerenciamento automatico de seus descritores, transferencia explicita por `mova` e preservacao da geracao nativa. Copias implicitas, parametros e retornos por valor e colecoes de registros proprietarios permanecem rejeitados ate existir transferencia segura do agregado completo. A implementacao e os testes estao na [PR #8](https://github.com/tuhmds/RoteiroSimples/pull/8), com contrato em `docs/REGISTROS_PROPRIETARIOS_RS_0_42D.md`.
 
+## Dados RS — Biblioteca de codificacao binaria (PR #6)
+
+A biblioteca `padrao/codificacao_binaria.rts`, implementada em RS, codifica e le inteiros nao negativos little-endian em blocos de 4/8 bytes, com resultados e falhas recuperaveis. O gravador e o leitor da prova `entregas.rsd` usam o mesmo modulo, com 100 registros verificados entre processos e testes de truncamento/corrupcao. O suporte a valores de 64 bits esta restrito ao intervalo positivo de `inteiro` assinado. Nao ha transacoes, indices, diario de recuperacao ou garantias ACID. [PR #6](https://github.com/tuhmds/RoteiroSimples/pull/6), com detalhes em `docs/DADOS_RS_PROVA_BINARIA_V1.md`.
+
+## RS 0.42C — Biblioteca lexico em RS (PR #5)
+
+O analisador lexico escrito na propria RS pode ser importado com `importe "padrao/lexico.rts" como lexico`. Recebe bytes por emprestimo, devolve `lista[UnidadeLexica]` com offsets na fonte original e diagnosticos recuperaveis (classes -1 e -2), sem encerrar o processo. Tambem expoe o registro copiavel `DiagnosticoLexico` e `obter_diagnostico`, que devolvem codigo, posicao em bytes, linha e coluna sem encerrar a aplicacao. A ferramenta de exemplo usa o modulo; o Studio podera fazer o mesmo. A revisao corrigiu tambem tipos de registros importados dentro de `lista[Tipo]` no resolvedor de nomes. Testes diferenciais com o lexico Python e um processo que examina codigo invalido e valido verificam o comportamento em Windows/Linux. Dependente da RS 0.42A.3, ainda em revisao: [PR #5](https://github.com/tuhmds/RoteiroSimples/pull/5). Consulte `docs/LEXICO_NATIVO_RS_0_42C.md`.
+
 **Linguagem de programação em português brasileiro** com compilador de desenvolvimento
 em Python 3.10+ que gera diretamente executáveis nativos x86-64 Windows (PE32+) e Linux
 (ELF64), sem etapa intermediária obrigatória em C, LLVM ou montador externo. Os

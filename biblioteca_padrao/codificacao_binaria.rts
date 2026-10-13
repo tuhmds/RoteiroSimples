@@ -1,0 +1,107 @@
+// Codificacao binaria independente do Dados RS e reutilizavel pelo compilador.
+// Inteiros nao negativos em ordem pouco significativa; sem ponteiros nem ABI externa.
+// Erros retornam em registros copiaveis, sem encerrar a aplicacao.
+publico tipo ResultadoLeitura {
+    valido: logico
+    valor: inteiro
+    codigo_erro: inteiro
+}
+
+publico tipo ResultadoGravacao4 {
+    valido: logico
+    dados: bytes[4]
+    codigo_erro: inteiro
+}
+
+publico tipo ResultadoGravacao8 {
+    valido: logico
+    dados: bytes[8]
+    codigo_erro: inteiro
+}
+
+// 1: valor negativo, 2: excede 32 bits nao negativos.
+publico funcao codificar_u32(valor: inteiro) -> ResultadoGravacao4 {
+    seja resposta: ResultadoGravacao4
+    se valor < 0 {
+        resposta.codigo_erro = 1
+        retorne resposta
+    }
+    se valor > 4294967295 {
+        resposta.codigo_erro = 2
+        retorne resposta
+    }
+    seja restante = valor
+    para indice de 0 ate 3 {
+        adicione_byte(resposta.dados, restante % 256)
+        restante = restante / 256
+    }
+    resposta.valido = verdadeiro
+    retorne resposta
+}
+
+// A RS ainda usa inteiro assinado: limite no maximo de 63 bits positivos.
+publico funcao codificar_u64_positivo(valor: inteiro) -> ResultadoGravacao8 {
+    seja resposta: ResultadoGravacao8
+    se valor < 0 {
+        resposta.codigo_erro = 1
+        retorne resposta
+    }
+    seja restante = valor
+    para indice de 0 ate 7 {
+        adicione_byte(resposta.dados, restante % 256)
+        restante = restante / 256
+    }
+    resposta.valido = verdadeiro
+    retorne resposta
+}
+
+// 1: deslocamento invalido, 2: trecho incompleto, 3: fora do inteiro RS.
+publico funcao ler_u32(dados: emprestimo[bytes], deslocamento: inteiro) -> ResultadoLeitura {
+    seja resposta: ResultadoLeitura
+    se deslocamento < 0 {
+        resposta.codigo_erro = 1
+        retorne resposta
+    }
+    se deslocamento > tamanho(dados) {
+        resposta.codigo_erro = 1
+        retorne resposta
+    }
+    se tamanho(dados) - deslocamento < 4 {
+        resposta.codigo_erro = 2
+        retorne resposta
+    }
+    seja valor = 0
+    para indice de 3 ate 0 passo -1 {
+        valor = valor * 256 + dados[deslocamento + indice]
+    }
+    resposta.valido = verdadeiro
+    resposta.valor = valor
+    retorne resposta
+}
+
+publico funcao ler_u64_positivo(dados: emprestimo[bytes], deslocamento: inteiro) -> ResultadoLeitura {
+    seja resposta: ResultadoLeitura
+    se deslocamento < 0 {
+        resposta.codigo_erro = 1
+        retorne resposta
+    }
+    se deslocamento > tamanho(dados) {
+        resposta.codigo_erro = 1
+        retorne resposta
+    }
+    se tamanho(dados) - deslocamento < 8 {
+        resposta.codigo_erro = 2
+        retorne resposta
+    }
+    se dados[deslocamento + 7] >= 128 {
+        resposta.codigo_erro = 3
+        retorne resposta
+    }
+    seja valor = 0
+    para indice de 7 ate 0 passo -1 {
+        valor = valor * 256 + dados[deslocamento + indice]
+    }
+    resposta.valido = verdadeiro
+    resposta.valor = valor
+    retorne resposta
+}

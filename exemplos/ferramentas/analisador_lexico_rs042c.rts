@@ -1,0 +1,31 @@
+// Demonstracao do analisador da biblioteca RS com entrada de arquivo fixa.
+importe "padrao/lexico.rts" como lexico
+
+inicio {
+    seja codigo: bytes
+    carregue_arquivo("codigo_fonte.rts", codigo)
+    seja unidades = lexico.analisar(empreste(codigo))
+    seja indice_erro = lexico.primeiro_erro(empreste(unidades))
+    se indice_erro >= 0 {
+        seja erro: lexico.UnidadeLexica = unidades[indice_erro]
+        se erro.classe == -2 {
+            escreva("Erro lexico: texto sem aspas de fechamento.")
+        } senao {
+            escreva("Erro lexico: caractere invalido.")
+        }
+        escreva(erro.linha)
+        escreva(erro.coluna)
+        encerre(2)
+    }
+    escreva(tamanho(unidades))
+    seja indice = 0
+    enquanto indice < tamanho(unidades) {
+        seja unidade: lexico.UnidadeLexica = unidades[indice]
+        escreva(unidade.classe)
+        escreva(unidade.inicio_byte)
+        escreva(unidade.comprimento_byte)
+        escreva(unidade.linha)
+        escreva(unidade.coluna)
+        indice = indice + 1
+    }
+}
