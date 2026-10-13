@@ -1,0 +1,38 @@
+// Primeiro registro com tres proprietarios dinamicos em codigo RS.
+// Cada campo tem descritor proprio; a copia implicita do registro e proibida.
+tipo Documento {
+    titulo: texto
+    conteudo: bytes
+    numeros: lista[inteiro]
+}
+
+inicio {
+    seja documento: Documento
+    copie(documento.titulo, "Relatorio RS")
+    adicione_byte(documento.conteudo, 65)
+    adicione_byte(documento.conteudo, 0)
+    adicione(documento.numeros, 12)
+    adicione(documento.numeros, 30)
+    escreva(documento.titulo)
+    escreva(tamanho(documento.conteudo))
+    escreva(documento.conteudo[0])
+    escreva(tamanho(documento.numeros))
+    escreva(documento.numeros[1])
+
+    // Mover o descritor nao duplica nem transfere a memoria de outro campo.
+    seja destino: bytes
+    mova(destino, documento.conteudo)
+    escreva(tamanho(destino))
+    mova(documento.conteudo, destino)
+    adicione_byte(documento.conteudo, 90)
+    escreva(documento.conteudo[2])
+
+    se verdadeiro {
+        seja temporario: Documento
+        copie(temporario.titulo, "Dentro do bloco")
+        adicione_byte(temporario.conteudo, 255)
+        adicione(temporario.numeros, 8)
+        escreva(tamanho(temporario.numeros))
+    }
+    escreva(tamanho(documento.numeros))
+}
