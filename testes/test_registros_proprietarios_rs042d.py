@@ -78,6 +78,41 @@ inicio { escreva(1) }""",
             with self.subTest(fonte=fonte[:70]), self.assertRaises(ErroCompilacao):
                 analisar_programa(fonte)
 
+    def test_retorno_antecipado_e_descarte_de_campos_em_funcao(self):
+        fonte = """tipo Caixa {
+  texto_livre: texto
+  conteudo: bytes
+}
+funcao verificar(escolha: inteiro) -> inteiro {
+  seja caixa: Caixa
+  copie(caixa.texto_livre, "abc")
+  adicione_byte(caixa.conteudo, 90)
+  se escolha == 1 {
+    retorne tamanho(caixa.conteudo)
+  }
+  retorne caracteres(caixa.texto_livre)
+}
+inicio {
+  escreva(verificar(1))
+  escreva(verificar(0))
+}"""
+        programa = analisar_programa(fonte)
+        if sys.platform == "win32":
+            alvo = "windows"
+        elif sys.platform == "linux" and os.uname().machine == "x86_64":
+            alvo = "linux"
+        else:
+            self.skipTest("Exige Windows/Linux x86-64")
+        with tempfile.TemporaryDirectory(prefix="rs_registro_retorno_") as pasta:
+            exe = Path(pasta) / ("retorno.exe" if alvo == "windows" else "retorno")
+            exe.write_bytes(compilar(programa, alvo, nivel=8))
+            if alvo == "linux":
+                exe.chmod(0o700)
+            r = subprocess.run([str(exe)], cwd=pasta, capture_output=True,
+                               text=True, encoding="utf-8", timeout=20)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertEqual(r.stdout.strip().splitlines(), ["1", "3"])
+
     def test_registro_simples_e_valor_copiavel(self):
         fonte = """tipo Pessoa {
   idade: inteiro
