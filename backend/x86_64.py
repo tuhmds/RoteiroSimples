@@ -2,6 +2,7 @@
 import struct
 from compilador.erros import ErroCompilacao
 from compilador.propriedade import eh_proprietario, eh_emprestimo, eh_texto, eh_bytes, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
+from compilador.propriedade import eh_registro_proprietario, donos_do_agregado, contrato_valor
 from . import valores_dinamicos, memoria_dinamica, sequencias_dinamicas, textos_dinamicos, listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros, arquivos_abertos, publicacao_atomica, politica_caminhos
 from compilador.disposicao_tipos import palavras_tipo as _palavras_tipo
 from .base import Emissor, alinhar
@@ -153,19 +154,28 @@ def _composto(tipo, registros):
 
 
 def _donos_de_registro(g, nome):
-    """Folhas com dono em um agregado. Cada caminho aponta para o mesmo quadro."""
-    encontrados = []
+    return donos_do_agregado(nome, g.tipos_atual, g.campos_atual)
 
-    def visitar(caminho):
-        for filho in g.campos_atual.get(caminho, {}).values():
-            tipo = g.tipos_atual[filho]
-            if eh_proprietario(tipo):
-                encontrados.append(filho)
-            elif isinstance(tipo, tuple) and tipo[0] == 'registro':
-                visitar(filho)
 
-    visitar(nome)
-    return encontrados
+def _validar_registro_vivo(g, variaveis, nome, windows):
+    for folha in _donos_de_registro(g, nome):
+        valores_dinamicos.verificar_vivo(g, variaveis, folha, windows)
+
+
+def _inativar_registro(g, variaveis, nome, windows):
+    for folha in _donos_de_registro(g, nome):
+        valores_dinamicos.inativar(g, variaveis, folha, windows)
+
+
+def _empilhar_palavras(g, variaveis, origem, quantidade, windows):
+    numero = g.proxima_condicao
+    g.proxima_condicao += 1
+    rotulo = f'empilhar_valor_{numero}'
+    g.bytes(b'\x4C\x8D\x95' + struct.pack('<i', deslocamento_variavel(variaveis, origem, windows)))
+    g.bytes(b'\xB9' + struct.pack('<I', quantidade))
+    g.marcar(rotulo)
+    g.bytes(b'\x49\x8B\x02\x50\x49\x83\xEA\x08\xFF\xC9')
+    g.salto(rotulo, 'jnz')
 
 
 def _transferir_registro_proprietario(g, variaveis, tipos, destino, origem, windows):
@@ -289,6 +299,20 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
                 if g.tipos_atual.get(origem) != tipo_parametro:
                     raise ErroCompilacao('Transferencia de argumento exige o mesmo tipo dinamico.')
                 valores_dinamicos.empilhar_transferencia(g, variaveis, origem, windows)
+            elif eh_registro_proprietario(tipo_parametro, g.registros):
+                if argumento[0] == 'temporario_composto':
+                    origem = argumento[1]
+                    expressao(g, argumento[2], variaveis, windows, registradores,
+                              pilha_extra + ajustar + empilhados, destino_composto=origem)
+                elif argumento[0] == 'mova_registro_proprietario':
+                    origem = argumento[1]
+                else:
+                    raise ErroCompilacao('Parametro de registro proprietario exige mova ou chamada.')
+                if g.tipos_atual[origem][1] != tipo_parametro:
+                    raise ErroCompilacao('Transferencia de registro exige o mesmo tipo.')
+                _validar_registro_vivo(g, variaveis, origem, windows)
+                _empilhar_palavras(g, variaveis, origem, quantidade, windows)
+                _inativar_registro(g, variaveis, origem, windows)
             elif _composto(tipo_parametro, g.registros):
                 if argumento[0] == 'temporario_composto':
                     expressao(g, argumento[2], variaveis, windows, registradores,
@@ -299,17 +323,8 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
                     origem = argumento[1]
                 else:
                     raise ValueError('Argumento composto exige variável ou chamada válida.')
-                offset = deslocamento_variavel(variaveis, origem, windows)
                 # A ordem da pilha acompanha os campos/palavras do valor.
-                numero = g.proxima_condicao
-                g.proxima_condicao += 1
-                rotulo = f'empilhar_valor_{numero}'
-                g.bytes(b'\x4C\x8D\x95' + struct.pack('<i', offset))
-                g.bytes(b'\xB9' + struct.pack('<I', quantidade))
-                g.marcar(rotulo)
-                g.bytes(b'\x49\x8B\x02\x50') # mov rax,[r10]; push rax
-                g.bytes(b'\x49\x83\xEA\x08\xFF\xC9')
-                g.salto(rotulo, 'jnz')
+                _empilhar_palavras(g, variaveis, origem, quantidade, windows)
             else:
                 expressao(g, argumento, variaveis, windows, registradores,
                          pilha_extra + ajustar + empilhados)
@@ -332,7 +347,7 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
                 g.bytes(b'\x48\x83\xC4' + struct.pack('<B', limpar))
             else:
                 g.bytes(b'\x48\x81\xC4' + struct.pack('<I', limpar))
-    elif tipo == 'mova_valor_dinamico':
+    elif tipo in ('mova_valor_dinamico', 'mova_registro_proprietario'):
         raise ErroCompilacao('Transferencia dinamica exige parametro, retorno ou declaracao proprietaria.')
     elif tipo in ('empreste_texto_dinamico', 'empreste_bytes_dinamicos'):
         valores_dinamicos.verificar_vivo(g, variaveis, expr[1], windows)
@@ -1111,6 +1126,16 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                     expressao(g, origem, variaveis, windows, destino_composto=destino)
                 else:
                     raise ErroCompilacao('Recebimento dinamico exige transferencia ou chamada proprietaria.')
+            elif op[0] == 'receba_registro_proprietario':
+                destino, origem = op[1:]
+                if origem[0] == 'mova_registro_proprietario':
+                    _transferir_registro_proprietario(g, variaveis, tipos, destino, origem[1], windows)
+                elif origem[0] == 'chamada':
+                    if g.funcoes[origem[1]].retorno != tipos[destino][1]:
+                        raise ErroCompilacao('Retorno de registro exige o mesmo tipo.')
+                    expressao(g, origem, variaveis, windows, destino_composto=destino)
+                else:
+                    raise ErroCompilacao('Recebimento de registro proprietario exige mova ou chamada.')
             elif op[0] == 'mova_registro_proprietario':
                 _transferir_registro_proprietario(
                     g, variaveis, tipos, op[1], op[2], windows)
@@ -1212,7 +1237,7 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                         g.salto(rotulo, 'jnz')
             elif op[0] == 'copie_composto':
                 destino, origem = op[1], op[2]
-                if eh_proprietario(tipos.get(destino)):
+                if not contrato_valor(tipos[destino], g.registros).pode_copiar:
                     raise ErroCompilacao('Copia composta nao pode duplicar um proprietario dinamico.')
                 if origem[0] == 'chamada':
                     expressao(g, origem, variaveis, windows, destino_composto=destino)
@@ -1311,6 +1336,21 @@ def montar_codigo(programa, windows, emissor_alternativo=None):
                                  destino_composto='__rs_retorno_externo')
                     else:
                         raise ErroCompilacao('Retorno proprietario exige mova(origem) ou chamada proprietaria.')
+                elif eh_registro_proprietario(tipo_retorno, g.registros):
+                    if op[1][0] == 'mova_registro_proprietario':
+                        origem = op[1][1]
+                        if tipos[origem][1] != tipo_retorno:
+                            raise ErroCompilacao('Retorno de registro exige o mesmo tipo.')
+                        _validar_registro_vivo(g, variaveis, origem, windows)
+                        _copiar_para_retorno(g, deslocamento_variavel(variaveis, origem, windows),
+                                           _palavras_tipo(tipo_retorno, g.registros), windows)
+                        _inativar_registro(g, variaveis, origem, windows)
+                    elif op[1][0] == 'chamada':
+                        if g.funcoes[op[1][1]].retorno != tipo_retorno:
+                            raise ErroCompilacao('Retorno de registro exige chamada do mesmo tipo.')
+                        expressao(g, op[1], variaveis, windows, destino_composto='__rs_retorno_externo')
+                    else:
+                        raise ErroCompilacao('Retorno de registro proprietario exige mova ou chamada.')
                 elif _composto(tipo_retorno, g.registros):
                     if op[1][0] == 'chamada':
                         expressao(g, op[1], variaveis, windows,
