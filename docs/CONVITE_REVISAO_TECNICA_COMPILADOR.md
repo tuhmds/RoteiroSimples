@@ -46,8 +46,10 @@ Idealmente, classifique suas observações em **bloqueantes**, **importantes**, 
 
 ## Acordo de colaboração
 
-A contribuição ideal começa por um parecer ou uma proposta em *issue*. Quando houver código, ele deverá ser submetido por **pull request**, para análise e aceitação do mantenedor antes de entrar na `main`. Os testes e a revisão serão critérios de integração; não se espera aprovação automática.
+A contribuição ideal começa por um parecer ou proposta em *issue*. Quando houver código, o fluxo preferido no repositório público é: **fork próprio → ramificação de trabalho → pull request → revisão do mantenedor antes de incorporar na `main`**. Um fork não exige acesso de escrita ao repositório original.
 
-**Atenção:** esta exigência só é tecnicamente obrigatória com a proteção da `main` configurada no GitHub. O repositório permanece privado, e o acesso de colaborador será oferecido apenas depois de confirmar a configuração segura de permissões. Isso protege a continuidade da experiência, sem limitar o conteúdo da crítica ou das sugestões.
+Critérios de integração: comportamento observável preservado ou alteração intencional documentada, testes reprodutíveis, avaliação de riscos e revisão técnica. Não se espera aprovação automática.
 
-Não queremos apenas elogios: queremos saber **onde estamos errando, quais riscos ainda não percebemos e como transformar a RS num compilador sério**.
+A equipe utiliza IA intensamente, mas dá valor especial à crítica humana independente. Não queremos apenas elogios: queremos saber **onde estamos errando, quais riscos ainda não percebemos e como transformar a RS num compilador sério**.
+
+A proteção obrigatória da `main` depende das regras do GitHub; um texto de colaboração não equivale a uma barreira técnica.
