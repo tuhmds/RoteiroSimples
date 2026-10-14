@@ -2,10 +2,26 @@
 from .nos_ir import ExpressaoIR, MINIMO, MAXIMO
 
 def dobrar_constantes(node):
-    """Dobra apenas constantes 64-bit sem exceção observável na execução."""
+    """Dobra constantes e ramos lógicos comprovadamente dispensados.
+
+    Somente o operando ESQUERDO literal pode dispensar o direito. Um
+    direito constante nunca autoriza apagar chamada ou falha à esquerda.
+    """
+    if node.operacao == 'logica' and node.filhos[0].operacao == 'logico':
+        esquerdo = bool(node.filhos[0].valor)
+        if ((node.valor == 'e' and not esquerdo) or
+                (node.valor == 'ou' and esquerdo)):
+            return ExpressaoIR('logico', 'logico', int(esquerdo), origem=node.origem)
     if any(f.operacao not in ('numero', 'logico') for f in node.filhos):
         return node
-    if node.operacao == 'neg':
+    if node.operacao == 'nao':
+        v = int(not node.filhos[0].valor)
+    elif node.operacao == 'logica':
+        a, b = (bool(x.valor) for x in node.filhos)
+        if node.valor not in ('e', 'ou'):
+            return node
+        v = int(a and b if node.valor == 'e' else a or b)
+    elif node.operacao == 'neg':
         v = -node.filhos[0].valor
     elif node.operacao in ('bin', 'comparacao'):
         a, b = (x.valor for x in node.filhos)

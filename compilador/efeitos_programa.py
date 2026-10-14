@@ -78,6 +78,14 @@ def efeito_expressao_arvore(no):
             efeito_expressao_arvore(no[2])).combinar(_risco())
     if operacao == 'neg':
         return efeito_expressao_arvore(no[1]).combinar(_risco())
+    if operacao == 'nao':
+        return efeito_expressao_arvore(no[1])
+    if operacao == 'logica':
+        # Dependências potenciais de ambos os lados. O resumo não significa
+        # execução obrigatória do direito nem autoriza antecipá-lo.
+        return (efeito_expressao_arvore(no[2])
+                .combinar(efeito_expressao_arvore(no[3]))
+                .combinar(Efeitos(controle=True)))
     if operacao == 'bin':
         return (efeito_expressao_arvore(no[2])
                 .combinar(efeito_expressao_arvore(no[3]))

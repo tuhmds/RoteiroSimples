@@ -33,7 +33,11 @@ def efeito_expressao(expr, resumos=None):
         # Toda chamada conserva a verificação de orçamento de pilha.
         return e.combinar(replace(chamado, leituras=frozenset(), escritas=frozenset(),
                                  encerra=False)).combinar(Efeitos(pode_falhar=True, controle=True))
-    if expr.operacao in ('numero', 'logico', 'comparacao'):
+    if expr.operacao == 'logica':
+        # União conservadora: o direito pode não executar, mas suas leituras,
+        # falhas e efeitos nunca ficam disponíveis para especulação.
+        return e.combinar(Efeitos(controle=True))
+    if expr.operacao in ('numero', 'logico', 'comparacao', 'nao'):
         return e
     # Falha segura: novas expressões IR não se tornam puras por omissão.
     return e.combinar(Efeitos(pode_falhar=True, desconhecido=True))

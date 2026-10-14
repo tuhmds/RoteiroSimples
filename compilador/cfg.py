@@ -33,6 +33,18 @@ class GrafoCFG:
     retorno: str | None = None
     chamadas: tuple = ()
 
+    def tem_curto_circuito(self):
+        """O CFG mantém decisões internas de e/ou dentro de ExpressaoIR."""
+        pendentes = [x for bloco in self.blocos.values()
+                     for instr in bloco.instrucoes for x in instr.argumentos]
+        while pendentes:
+            no = pendentes.pop()
+            if isinstance(no, ExpressaoIR):
+                if no.operacao == 'logica':
+                    return True
+                pendentes.extend(no.filhos)
+        return False
+
     def validar_para_ssa(self):
         if (self.retorno is not None and self.retorno not in ('inteiro', 'logico') or
                 any(tipo not in ('inteiro', 'logico') for _, tipo in self.parametros)):
@@ -62,6 +74,9 @@ class GrafoCFG:
 
     def formatar(self):
         saida = ['RS CFG v1 (analise de fluxo)']
+        if self.tem_curto_circuito():
+            saida.append('Expressões e/ou preservam curto-circuito na emissão nativa; '
+                         'este grafo não expande seus desvios internos.')
         if self.nome_funcao is not None:
             saida.append(f'funcao {self.nome_funcao}: {self.parametros} -> {self.retorno}')
         for ident, bloco in self.blocos.items():

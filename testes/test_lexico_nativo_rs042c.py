@@ -48,6 +48,8 @@ def referencia(fonte):
                 classe = 5
             elif valor.isascii() and valor.isdecimal():
                 classe = 2
+            elif valor in ("e", "ou", "nao"):
+                classe = 6
             elif re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", valor):
                 classe = 1
             else:
@@ -144,6 +146,23 @@ class TestesLexicoEmRS(unittest.TestCase):
 
     def test_fonte_vazia(self):
         self.comparar("")
+
+    def test_operadores_logicos_de_palavra_e_fronteiras_rs042o(self):
+        fonte = 'e ou nao e1 outro ou2 nao_ativo naox E OU NAO _e\n'
+        self.comparar(fonte)
+        processo = self.executar(fonte)
+        numeros = [int(v) for v in processo.stdout.strip().splitlines()]
+        classes = numeros[1::5]
+        self.assertEqual(classes, [6, 6, 6] + [1] * 9)
+
+    def test_logicos_com_comparacoes_texto_e_comentarios_rs042o(self):
+        self.comparar(
+            'inicio {\r\n'
+            '\tse nao idade >= 18 ou ativo e verdadeiro {\r\n'
+            '\t\tescreva("nao e ou ação") // e ou nao\r\n'
+            '\t}\r\n'
+            '}\r\n'
+        )
 
     def test_caractere_invalido(self):
         for fonte in ("inicio { @ }\n", "inicio { seja ação = 3 }\n"):

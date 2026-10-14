@@ -5,6 +5,7 @@ from .ast import Programa, Funcao, NoInstrucao, PosicaoFonte
 from .erros import ErroCompilacao
 from .lexico import tokens
 from .semantica import ContextoSemantico
+from .expressoes import PALAVRAS_LOGICAS
 from .validacao_caminhos import validar_literal_arquivo
 from .propriedade import (eh_proprietario, eh_emprestimo, eh_texto, contrato_valor,
                          TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO)
@@ -49,6 +50,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if len(cab) != 3 or cab[2] != '{' or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', cab[1]):
                 raise ErroCompilacao(f'Linha {n}: use tipo Nome {{.')
             nome_tipo = str(cab[1])
+            if nome_tipo in PALAVRAS_LOGICAS:
+                raise ErroCompilacao(f'Linha {n}: palavra {nome_tipo!r} reservada para operador lógico; não pode nomear um tipo.')
             if nome_tipo in registros or nome_tipo in ('inteiro', 'logico', 'texto', 'bytes', 'lista', 'emprestimo', 'empreste', 'retire', 'codifique_utf8', 'decodifique_utf8', 'consulte_arquivo', 'seja', 'se', 'senao', 'inicio', 'funcao', 'retorne', 'para', 'enquanto', 'tipo', 'leia', 'escreva') or nome_tipo.startswith('__rs_'):
                 raise ErroCompilacao(f'Linha {n}: nome de tipo duplicado ou reservado.')
             campos = []
@@ -57,6 +60,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                 if (len(t) < 3 or t[1] != ':' or
                         not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', t[0])):
                     raise ErroCompilacao(f'Linha {n_campo}: declare campo: tipo.')
+                if t[0] in PALAVRAS_LOGICAS:
+                    raise ErroCompilacao(f'Linha {n_campo}: palavra {t[0]!r} reservada para operador lógico; não pode nomear um campo.')
                 parte_tipo = t[2:]
                 if len(parte_tipo) == 1:
                     tipo_campo = str(parte_tipo[0])
@@ -135,6 +140,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if len(cabecalho) < 8 or cabecalho[2] != '(' or ')' not in cabecalho:
                 raise ErroCompilacao(f'Linha {n}: cabeçalho de função inválido.')
             nome = str(cabecalho[1])
+            if nome in PALAVRAS_LOGICAS:
+                raise ErroCompilacao(f'Linha {n}: palavra {nome!r} reservada para operador lógico; não pode nomear uma função.')
             if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', nome) or nome in ('inicio', 'seja', 'funcao', 'retorne', 'empreste', 'emprestimo', 'mova', 'codifique_utf8', 'decodifique_utf8', 'consulte_arquivo'):
                 raise ErroCompilacao(f'Linha {n}: nome de função inválido.')
             fim_par = cabecalho.index(')', 3)
@@ -179,6 +186,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
     reservadas = {'retire', 'codifique_utf8', 'decodifique_utf8', 'consulte_arquivo', 'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'encerre', 'arquivo', 'abra_arquivo', 'grave_em', 'carregue_de', 'sincronize_arquivo', 'feche_arquivo', 'publique_arquivo', 'bloqueie_arquivo', 'funcao', 'retorne', 'tipo'}
+    reservadas.update(PALAVRAS_LOGICAS)
 
     def indice_lista(partes, linha):
         if '[' not in partes or partes[-1] != ']':

@@ -1,6 +1,20 @@
-# RoteiroSimples (RS) — versão experimental 0.42N
+# RoteiroSimples (RS) — versão experimental 0.42O
 
-## RS 0.42N — Retomada coordenada de cadastro em RS
+## RS 0.42O — Operadores lógicos em português
+
+Expressões agora combinam valores `logico` com `e`, `ou` e `nao`.
+`e` avalia o lado direito somente quando o esquerdo é verdadeiro; `ou`
+somente quando é falso. A ordem de avaliação preserva chamadas e erros.
+Comparações têm precedência sobre `nao`, seguido de `e` e depois `ou`.
+Por exemplo, `nao idade >= 18` equivale a `nao (idade >= 18)`.
+
+O compilador verifica os dois lados mesmo quando um deles será pulado na
+execução. As três palavras passam a ser reservadas; programas antigos que
+as usavam como nomes precisam renomeá-los. A biblioteca de léxico em RS
+acrescenta a classe 6 para esses operadores, preservando as classes 1–5.
+[Contrato, exemplos, verificações e limites](docs/OPERADORES_LOGICOS_RS_0_42O.md).
+
+## Histórico: RS 0.42N — Retomada coordenada de cadastro em RS
 
 O cadastro experimental agora usa duas cópias alternadas, geração e marcador
 de confirmação. Leitores e gravadores cooperantes usam uma trava estável;
@@ -1105,6 +1119,7 @@ registros, donos, empréstimos e arquivos continuam no gerador conservador.
 | `consulte_arquivo` com ausência distinta de falha e recusa de links finais | Implementado na 0.42N; nome literal ASCII simples no diretório corrente |
 | Bytes dinâmicos, funções proprietárias e empréstimos de leitura | Implementado na 0.42A.3 |
 | Biblioteca de análise léxica escrita em RS | Implementado na 0.42C |
+| `e`, `ou` e `nao` com operandos lógicos, precedência e curto-circuito | Implementado na 0.42O; palavras reservadas e classe léxica 6 em RS |
 | Codificação binária em RS e prova `.rsd` com 100 registros | Implementado; ainda não é um motor de banco |
 | Campos dinâmicos em registros aninhados e movimento do agregado | Implementado na 0.42D/0.42E |
 | Parâmetros e retornos de registros proprietários | Implementado na 0.42F |
@@ -1160,7 +1175,9 @@ Recursos proprietários precisam de contratos de memória na IR antes de
 receber as transformações SSA já aplicadas às funções escalares. Oráculos,
 campanhas e medições permanecem como referência. O léxico em RS permite
 avançar gradualmente a análise sintática rumo à autocompilação.
-Novos operadores lógicos e tipos reais/decimais continuam no roteiro.
+A 0.42O acrescenta os operadores lógicos em português. Tipos reais/decimais,
+expansão dos desvios internos dessas expressões no CFG e uma análise sintática
+escrita em RS continuam no roteiro.
 O motor e suas bibliotecas devem aproveitar estas bases; o Studio depende
 de diagnósticos e serviços reutilizáveis e de uma futura interface nativa.
 

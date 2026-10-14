@@ -58,12 +58,12 @@ def formatar_ast(programa):
     def exibir_expr(e, nivel):
         linhas.append('  ' * nivel + f'{origem(e)} expressao:{e[0]}')
         tag = e[0]
-        if tag == 'neg':
+        if tag in ('neg', 'nao'):
             exibir_expr(e[1], nivel + 1)
         elif tag == 'chamada':
             for argumento in e[2]:
                 exibir_expr(argumento, nivel + 1)
-        elif tag in ('bin', 'comparacao'):
+        elif tag in ('bin', 'comparacao', 'comparacao_texto', 'logica'):
             exibir_expr(e[2], nivel + 1)
             exibir_expr(e[3], nivel + 1)
 

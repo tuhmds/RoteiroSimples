@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 
 from .erros import ErroCompilacao
+from .expressoes import PALAVRAS_LOGICAS
 from .lexico import tokens
 from .modulos import FontesReunidas, OrigemLinha
 from .importacoes_padrao import resolver_importacao
@@ -15,7 +16,7 @@ RESERVADOS = frozenset({'inicio', 'funcao', 'tipo', 'importe', 'publico', 'priva
                         'como', 'seja', 'retorne', 'inteiro', 'logico', 'lista',
                         'texto', 'bytes', 'adicione_byte', 'encerre', 'arquivo', 'abra_arquivo',
                         'feche_arquivo', 'sincronize_arquivo', 'bloqueie_arquivo',
-                        'grave_em', 'carregue_de', 'publique_arquivo', 'escreva', 'leia', 'para', 'se', 'senao', 'enquanto'})
+                        'grave_em', 'carregue_de', 'publique_arquivo', 'escreva', 'leia', 'para', 'se', 'senao', 'enquanto'}) | PALAVRAS_LOGICAS
 
 
 @dataclass(frozen=True)
@@ -148,6 +149,8 @@ def carregar_com_espacos(principal):
                     principal_atual = tuple(bloco)
                 else:
                     nome_simbolo = partes[1]
+                    if nome_simbolo in PALAVRAS_LOGICAS:
+                        erro(origem, f'palavra {nome_simbolo!r} reservada para operador lógico; não pode nomear um símbolo.')
                     if (not IDENTIFICADOR.fullmatch(nome_simbolo) or
                             nome_simbolo.startswith(PREFIXO_INTERNO)):
                         erro(origem, f'nome de símbolo inválido ou reservado: {nome_simbolo!r}.')

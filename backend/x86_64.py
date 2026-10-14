@@ -427,6 +427,28 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
         else:
             offset = deslocamento_variavel(variaveis, expr[1], windows)
             g.bytes(b'\x48\x8B\x85' + struct.pack('<i', offset))
+    elif tipo == 'nao':
+        expressao(g, expr[1], variaveis, windows, registradores, pilha_extra)
+        g.bytes(b'\x48\x85\xC0\x0F\x94\xC0\x0F\xB6\xC0')
+    elif tipo == 'logica':
+        _, operador, esquerda, direita = expr
+        if operador not in ('e', 'ou'):
+            raise ValueError(f'Operador logico desconhecido: {operador}.')
+        numero = g.proxima_condicao
+        g.proxima_condicao += 1
+        curta = f'logica_curta_{numero}'
+        fim = f'logica_fim_{numero}'
+        # Os dois caminhos mantem a mesma profundidade de pilha. A direita
+        # so e avaliada se a esquerda ainda nao determinar o resultado.
+        expressao(g, esquerda, variaveis, windows, registradores, pilha_extra)
+        g.bytes(b'\x48\x85\xC0')
+        g.salto(curta, 'jz' if operador == 'e' else 'jnz')
+        expressao(g, direita, variaveis, windows, registradores, pilha_extra)
+        g.bytes(b'\x48\x85\xC0\x0F\x95\xC0\x0F\xB6\xC0')
+        g.salto(fim)
+        g.marcar(curta)
+        carregar_numero(g, 0 if operador == 'e' else 1)
+        g.marcar(fim)
     elif tipo == 'neg':
         if expr[1] == ('numero', 1 << 63):
             # Menor inteiro: o valor positivo 2^63 não cabe, mas sua negação sim.

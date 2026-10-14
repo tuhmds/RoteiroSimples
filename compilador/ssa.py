@@ -113,13 +113,18 @@ class ProgramaSSA:
                     return str(x.valor)
                 if x.operacao == 'neg':
                     return '-' + renderizar(x.filhos[0])
+                if x.operacao == 'nao':
+                    return 'nao(' + renderizar(x.filhos[0]) + ')'
                 if x.operacao == 'chamada':
                     return str(x.valor) + '(' + ', '.join(renderizar(f) for f in x.filhos) + ')'
                 return '(' + renderizar(x.filhos[0]) + ' ' + str(x.valor) + ' ' + renderizar(x.filhos[1]) + ')'
             return str(x)
         linhas = ['RS 0.12 - SSA tipada (analise, ainda sem baixar para codigo nativo)']
         if self.cfg.nome_funcao is not None or self.cfg.chamadas:
-            linhas = ['RS 0.42N - SSA tipada (análise e emissão nativa em O4–O8)']
+            linhas = ['RS 0.42O - SSA tipada (análise e emissão nativa em O4–O8)']
+        if self.cfg.tem_curto_circuito():
+            linhas.append('Expressões e/ou: filhos com avaliação por curto-circuito; '
+                          'o CFG conserva dependências potenciais dos dois lados.')
         for bid, b in self.blocos.items():
             if not b.alcancavel:
                 linhas.append(f'{bid} [{b.papel}] inacessivel')

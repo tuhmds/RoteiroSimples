@@ -5,13 +5,34 @@ from .otimizador import dobrar_constantes
 
 
 def otimizar_expressao(expr, ambiente):
+    """Reescreve na ordem de avaliação e invalida conhecimentos após chamada.
+
+    Um ramo lógico comprovadamente dispensado não é percorrido: sua chamada
+    não acontece. Quando o direito ainda pode executar, sua invalidação é
+    conservada para as expressões e instruções seguintes.
+    """
     if expr.operacao == 'var' and expr.valor in ambiente:
         return ExpressaoIR(expr.tipo, 'logico' if expr.tipo == 'logico' else 'numero',
                            ambiente[expr.valor], origem=expr.origem)
     if not expr.filhos:
+        if expr.operacao == 'chamada':
+            ambiente.clear()
         return expr
-    reescrita = replace(expr, filhos=tuple(otimizar_expressao(f, ambiente)
-                                          for f in expr.filhos))
+    if expr.operacao == 'logica':
+        esquerdo = otimizar_expressao(expr.filhos[0], ambiente)
+        reescrita = replace(expr, filhos=(esquerdo, expr.filhos[1]))
+        reduzida = dobrar_constantes(reescrita)
+        if reduzida.operacao == 'logico':
+            return reduzida
+        direito = otimizar_expressao(expr.filhos[1], ambiente)
+        reescrita = replace(expr, filhos=(esquerdo, direito))
+    else:
+        reescrita = replace(expr, filhos=tuple(otimizar_expressao(f, ambiente)
+                                              for f in expr.filhos))
+    if expr.operacao == 'chamada':
+        # Chamadas escalares atuais não alteram locais do chamador. Ainda
+        # assim, não propagar suposições além desta fronteira de efeitos.
+        ambiente.clear()
     return dobrar_constantes(reescrita)
 
 

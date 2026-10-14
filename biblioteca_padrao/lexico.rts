@@ -55,6 +55,33 @@ privado funcao espaco(valor: inteiro) -> logico {
     retorne falso
 }
 
+// Classes 1..5 permanecem estaveis. A classe 6 reconhece somente as
+// palavras inteiras e, ou e nao; prefixos de identificadores nao mudam.
+privado funcao classe_palavra(fonte: emprestimo[bytes], deslocamento: inteiro, comprimento: inteiro) -> inteiro {
+    se comprimento == 1 {
+        se fonte[deslocamento] == 101 {
+            retorne 6
+        }
+    }
+    se comprimento == 2 {
+        se fonte[deslocamento] == 111 {
+            se fonte[deslocamento + 1] == 117 {
+                retorne 6
+            }
+        }
+    }
+    se comprimento == 3 {
+        se fonte[deslocamento] == 110 {
+            se fonte[deslocamento + 1] == 97 {
+                se fonte[deslocamento + 2] == 111 {
+                    retorne 6
+                }
+            }
+        }
+    }
+    retorne 1
+}
+
 privado funcao simbolo(valor: inteiro) -> logico {
     se valor == 40 {
         retorne verdadeiro
@@ -142,7 +169,8 @@ publico funcao primeiro_erro(unidades: emprestimo[lista[UnidadeLexica]]) -> inte
 }
 
 // Contrato experimental:
-// classe: 1 identificador, 2 numero, 3 texto, 4 simbolo, 5 operador duplo.
+// classe: 1 identificador ou outra palavra reservada, 2 numero, 3 texto,
+// 4 simbolo, 5 operador duplo, 6 operador logico de palavra (e, ou, nao).
 // Um erro torna-se um token negativo; o chamador decide como tratar.
 // Converte o token de erro em registro tipado; nao encerra a aplicacao.
 // Quando encontrado=falso, os demais campos permanecem zero.
@@ -227,6 +255,7 @@ publico funcao analisar(fonte: emprestimo[bytes]) -> lista[UnidadeLexica] {
                         }
                     }
                 }
+                classe = classe_palavra(fonte, inicio_byte, indice - inicio_byte)
             } senao {
                 se digito(primeiro) {
                     classe = 2

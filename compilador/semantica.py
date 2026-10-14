@@ -1,6 +1,6 @@
 """Escopos léxicos e verificação estática dos símbolos do RoteiroSimples."""
 from .erros import ErroCompilacao
-from .expressoes import Expressao
+from .expressoes import Expressao, PALAVRAS_LOGICAS
 from .lexico import Token
 from .ast import NoExpressao
 from .tipos import MAX_VARIAVEIS, tipo_expressao
@@ -88,6 +88,10 @@ class ContextoSemantico:
         i = 0
         while i < len(partes):
             token = partes[i]
+            if token in PALAVRAS_LOGICAS:
+                saida.append(token)
+                i += 1
+                continue
             if (str(token) in ('caracteres', 'byte_em') and i + 1 < len(partes)
                     and partes[i+1] == '(' and str(token) not in self.funcoes):
                 saida.append(token)
@@ -138,13 +142,13 @@ class ContextoSemantico:
                 filho[0] == 'var' and self.tipos.get(filho[1]) in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO)
                 for filho in arvore[2:4]):
             tag = 'comparacao_texto'
-        if tag in ('bin', 'comparacao', 'comparacao_texto'):
+        if tag in ('bin', 'comparacao', 'comparacao_texto', 'logica'):
             return NoExpressao((tag, arvore[1],
                                 self._preparar_argumentos_compostos(arvore[2]),
                                 self._preparar_argumentos_compostos(arvore[3])),
                                getattr(arvore, 'origem', None))
-        if tag == 'neg':
-            return NoExpressao(('neg', self._preparar_argumentos_compostos(arvore[1])),
+        if tag in ('neg', 'nao'):
+            return NoExpressao((tag, self._preparar_argumentos_compostos(arvore[1])),
                                getattr(arvore, 'origem', None))
         if tag == 'retire_registro_lista':
             return NoExpressao((tag, arvore[1], self._preparar_argumentos_compostos(arvore[2])),
@@ -198,6 +202,8 @@ class ContextoSemantico:
         return arvore, tipo
 
     def registrar(self, nome, tipo, linha):
+        if nome in PALAVRAS_LOGICAS:
+            raise ErroCompilacao(f'Linha {linha}: palavra {nome!r} reservada para operador lógico.')
         if self.declarado_neste_escopo(nome):
             raise ErroCompilacao(f'Linha {linha}: variável {nome!r} duplicada no mesmo escopo.')
         if nome.startswith('__rs_'):
