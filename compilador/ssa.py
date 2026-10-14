@@ -121,7 +121,7 @@ class ProgramaSSA:
             return str(x)
         linhas = ['RS 0.12 - SSA tipada (analise, ainda sem baixar para codigo nativo)']
         if self.cfg.nome_funcao is not None or self.cfg.chamadas:
-            linhas = ['RS 0.42O - SSA tipada (análise e emissão nativa em O4–O8)']
+            linhas = ['RS 0.42P - SSA tipada (análise e emissão nativa em O4–O8)']
         if self.cfg.tem_curto_circuito():
             linhas.append('Expressões e/ou: filhos com avaliação por curto-circuito; '
                           'o CFG conserva dependências potenciais dos dois lados.')

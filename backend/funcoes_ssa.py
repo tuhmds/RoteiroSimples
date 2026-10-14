@@ -6,6 +6,8 @@ from compilador.ir import programa_para_backend
 from compilador.ssa_funcoes import construir_ssa_programa
 from .ssa_x86_64 import emissor_ssa
 from .x86_64 import montar_codigo
+from compilador.cfg import construir_cfg_programa
+from compilador.medicao_compilacao import etapa
 
 
 @dataclass
@@ -20,18 +22,32 @@ class BackendFuncoesSSA:
         return '\n'.join(linhas)
 
 
-def construir_backend_funcoes_ssa(ir, coalescer=False):
-    programa = construir_ssa_programa(ir)
+def construir_backend_funcoes_ssa(ir, coalescer=False, medidor=None):
+    with etapa(medidor, 'cfg_funcoes'):
+        grafos = construir_cfg_programa(ir)
+    with etapa(medidor, 'ssa_funcoes'):
+        programa = construir_ssa_programa(ir, grafos)
     # O montador destes quadros aplica sondagem e o limite global de 768 KiB.
     # O limite antigo de 256 vagas continua no caminho SSA sem funções.
-    alocacoes = {'inicio': alocar_registradores(programa.principal, coalescer=coalescer, limite_vagas=None)}
-    alocacoes.update({nome: alocar_registradores(ssa, coalescer=coalescer, limite_vagas=None)
-                     for nome, ssa in programa.funcoes.items()})
+    with etapa(medidor, 'alocacao_registradores'):
+        alocacoes = {'inicio': alocar_registradores(programa.principal, coalescer=coalescer, limite_vagas=None)}
+        alocacoes.update({nome: alocar_registradores(ssa, coalescer=coalescer, limite_vagas=None)
+                         for nome, ssa in programa.funcoes.items()})
+    if medidor is not None:
+        medidor.contar('blocos_cfg', len(grafos.principal.blocos) + sum(len(g.blocos) for g in grafos.funcoes.values()))
+        medidor.contar('vagas_pilha', sum(a.vagas_pilha for a in alocacoes.values()))
     return BackendFuncoesSSA(programa, alocacoes)
 
 
-def montar_funcoes_ssa(ir, windows, nivel=4):
-    plano = construir_backend_funcoes_ssa(ir, coalescer=nivel >= 6)
+def montar_funcoes_ssa(ir, windows, nivel=4, medidor=None):
+    plano = construir_backend_funcoes_ssa(ir, coalescer=nivel >= 6, medidor=medidor)
+    with etapa(medidor, 'preparacao_emissor_funcoes'):
+        legado, principal, emissores = _preparar_emissores(ir, plano, windows, nivel)
+    with etapa(medidor, 'emissao_nativa'):
+        return montar_codigo(legado, windows, principal, emissores)
+
+
+def _preparar_emissores(ir, plano, windows, nivel):
     legado = programa_para_backend(ir)
     principal = plano.alocacoes['inicio']
     legado.variaveis = {f'__rs_ssa_vaga_{n}': n for n in range(principal.vagas_pilha + 1)}
@@ -52,6 +68,6 @@ def montar_funcoes_ssa(ir, windows, nivel=4):
         emissores[nome] = emissor_ssa(ir.funcoes[nome].programa, ssa, aloc,
             otimizar_layout=nivel >= 5, otimizar_copias=nivel >= 6, saltos_curtos=nivel >= 6,
             prefixo=f'ssa_funcao_{nome}_', salvamentos_linux=salvamentos)
-    return montar_codigo(legado, windows, emissor_ssa(ir, plano.programa.principal, principal,
+    return legado, emissor_ssa(ir, plano.programa.principal, principal,
         otimizar_layout=nivel >= 5, otimizar_copias=nivel >= 6, saltos_curtos=nivel >= 6,
-        prefixo='ssa_inicio_'), emissores)
+        prefixo='ssa_inicio_'), emissores

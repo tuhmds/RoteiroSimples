@@ -1,11 +1,12 @@
 # Atualizações da RoteiroSimples (RS)
 
-Índice das entregas técnicas verificáveis. A RS permanece **experimental**: uma versão registrada não significa que a linguagem está pronta para produção. Os detalhes de implementação, testes e limitações de cada etapa estão nas notas vinculadas. A entrada atual do compilador é `compilar.py`, e a versão documentada é **0.42O**.
+Índice das entregas técnicas verificáveis. A RS permanece **experimental**: uma versão registrada não significa que a linguagem está pronta para produção. Os detalhes de implementação, testes e limitações de cada etapa estão nas notas vinculadas. A entrada atual do compilador é `compilar.py`, e a versão documentada é **0.42P**.
 
 ## Revisões recentes
 
 | Marco | Evolução | Documentação |
 | --- | --- | --- |
+| **0.42P** | Medições de crescimento da compilação e compactação de saltos com bytes preservados | [Nota técnica](CONSOLIDACAO_CRESCIMENTO_RS_0_42P.md) |
 | **0.42O** | Operadores `e`, `ou` e `nao` com curto-circuito, preservando efeitos e erros observáveis | [Nota técnica](OPERADORES_LOGICOS_RS_0_42O.md) |
 | **0.42N** | Retomada coordenada de cadastro experimental entre processos cooperantes | [Nota técnica](RETOMADA_COORDENADA_RS_0_42N.md) |
 | **0.42M** | Conversão UTF-8 explícita e cadastro persistente de conteúdo variável | [Nota técnica](CADASTRO_PERSISTENTE_RS_0_42M.md) |
