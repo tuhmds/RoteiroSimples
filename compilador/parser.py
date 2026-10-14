@@ -38,7 +38,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     normalizadas = []
     for n, t in linhas:
         if t == ['}', 'senao', '{']:
-            normalizadas.extend([(n, ['}']), (n, ['senao', '{'])])
+            normalizadas.extend([(n, t[:1]), (n, t[1:])])
         else:
             normalizadas.append((n, t))
     linhas = normalizadas
@@ -49,7 +49,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if len(cab) != 3 or cab[2] != '{' or not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', cab[1]):
                 raise ErroCompilacao(f'Linha {n}: use tipo Nome {{.')
             nome_tipo = str(cab[1])
-            if nome_tipo in registros or nome_tipo in ('inteiro', 'logico', 'texto', 'bytes', 'lista', 'emprestimo', 'empreste', 'retire', 'codifique_utf8', 'decodifique_utf8', 'seja', 'se', 'senao', 'inicio', 'funcao', 'retorne', 'para', 'enquanto', 'tipo', 'leia', 'escreva') or nome_tipo.startswith('__rs_'):
+            if nome_tipo in registros or nome_tipo in ('inteiro', 'logico', 'texto', 'bytes', 'lista', 'emprestimo', 'empreste', 'retire', 'codifique_utf8', 'decodifique_utf8', 'consulte_arquivo', 'seja', 'se', 'senao', 'inicio', 'funcao', 'retorne', 'para', 'enquanto', 'tipo', 'leia', 'escreva') or nome_tipo.startswith('__rs_'):
                 raise ErroCompilacao(f'Linha {n}: nome de tipo duplicado ou reservado.')
             campos = []
             while linhas and linhas[0][1] != ['}']:
@@ -135,7 +135,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             if len(cabecalho) < 8 or cabecalho[2] != '(' or ')' not in cabecalho:
                 raise ErroCompilacao(f'Linha {n}: cabeçalho de função inválido.')
             nome = str(cabecalho[1])
-            if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', nome) or nome in ('inicio', 'seja', 'funcao', 'retorne', 'empreste', 'emprestimo', 'mova', 'codifique_utf8', 'decodifique_utf8'):
+            if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', nome) or nome in ('inicio', 'seja', 'funcao', 'retorne', 'empreste', 'emprestimo', 'mova', 'codifique_utf8', 'decodifique_utf8', 'consulte_arquivo'):
                 raise ErroCompilacao(f'Linha {n}: nome de função inválido.')
             fim_par = cabecalho.index(')', 3)
             if cabecalho[fim_par+1:fim_par+3] != ['-', '>'] or cabecalho[-1] != '{':
@@ -178,7 +178,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     contexto = _contexto or ContextoSemantico(importa, assinaturas, registros)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'retire', 'codifique_utf8', 'decodifique_utf8', 'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'encerre', 'arquivo', 'abra_arquivo', 'grave_em', 'carregue_de', 'sincronize_arquivo', 'feche_arquivo', 'publique_arquivo', 'bloqueie_arquivo', 'funcao', 'retorne', 'tipo'}
+    reservadas = {'retire', 'codifique_utf8', 'decodifique_utf8', 'consulte_arquivo', 'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'encerre', 'arquivo', 'abra_arquivo', 'grave_em', 'carregue_de', 'sincronize_arquivo', 'feche_arquivo', 'publique_arquivo', 'bloqueie_arquivo', 'funcao', 'retorne', 'tipo'}
 
     def indice_lista(partes, linha):
         if '[' not in partes or partes[-1] != ']':
@@ -416,6 +416,15 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f'Linha {n}: adicione_byte exige bytes modificaveis.')
                 valor, _ = expressao_tipada(grupos[1], n, 'inteiro')
                 adicionar(('adicione_byte_dinamico' if tipos[nome] == TIPO_BYTES_DINAMICOS else 'adicione_byte', nome, valor), n, t)
+            elif t[0] == 'consulte_arquivo' and t[1:2] == ['('] and t[-1:] == [')']:
+                grupos = argumentos_externos(t, n)
+                if len(grupos) != 2:
+                    raise ErroCompilacao(f'Linha {n}: use consulte_arquivo("nome", estado).')
+                caminho = validar_caminho(grupos[0], n)
+                if '/' in caminho or not re.fullmatch(r'[A-Za-z0-9_-][A-Za-z0-9_.-]*', caminho, re.ASCII):
+                    raise ErroCompilacao(f'Linha {n}: consulta exige nome simples no diretorio corrente.')
+                estado = estado_nome(grupos[1], n)
+                adicionar(('consulte_arquivo', caminho, estado), n, t)
             elif t[0] == 'publique_arquivo' and t[1:2] == ['('] and t[-1:] == [')']:
                 grupos = argumentos_externos(t,n)
                 if len(grupos) != 3:

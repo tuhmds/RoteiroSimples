@@ -1,4 +1,5 @@
 """Emissão nativa de instruções AMD64, leitura/escrita e saltos."""
+from . import consulta_arquivo
 import struct
 from compilador.erros import ErroCompilacao
 from compilador.propriedade import eh_proprietario, eh_emprestimo, eh_texto, eh_bytes, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
@@ -958,6 +959,9 @@ def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes
     tem_conversao_utf8 = any(op[0] in ('codifique_utf8', 'decodifique_utf8')
         for corpo in [programa, *(f.programa for f in g.funcoes.values())]
         for op in percorrer_instrucoes(corpo.instrucoes))
+    tem_consulta_arquivo = any(op[0] == 'consulte_arquivo'
+        for corpo in [programa, *(f.programa for f in g.funcoes.values())]
+        for op in percorrer_instrucoes(corpo.instrucoes))
     g.quadros_funcoes = {nome: tamanho_quadro(_total_slots(funcao.programa) + 1, windows)
                         for nome, funcao in g.funcoes.items()}
     g.registros = getattr(programa, 'registros', {})
@@ -1121,6 +1125,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes
             elif op[0] in ('abra_recurso','feche_recurso','sincronize_recurso','bloqueie_recurso','grave_em','carregue_de'):
                 arquivos_abertos.emitir_comando(g, op, variaveis, tipos, windows,
                     mensagens, _endereco_buffer, expressao)
+            elif op[0] == 'consulte_arquivo':
+                consulta_arquivo.emitir_comando(g, op, variaveis, windows, mensagens, deslocamento_variavel)
             elif op[0] == 'publique_arquivo':
                 publicacao_atomica.emitir_comando(
                     g, op, variaveis, windows, mensagens, deslocamento_variavel)
@@ -1567,6 +1573,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes
         sequencias_dinamicas.emitir_rotinas(g, windows)
     if tem_texto_novo:
         textos_dinamicos.emitir_rotinas(g, windows, tem_leitura_dinamica)
+    if tem_consulta_arquivo:
+        consulta_arquivo.emitir_rotina(g, windows)
     if tem_conversao_utf8:
         textos_dinamicos.emitir_conversao_utf8(g, windows)
     if windows and (tem_arquivos or tem_recursos or tem_arquivos_posicionais):

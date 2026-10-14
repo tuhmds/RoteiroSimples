@@ -1,0 +1,381 @@
+// Protocolo experimental de duas copias, confirmacao e trava estavel.
+importe "cadastro_variavel.rts" como cad
+importe "codificacao_binaria.rts" como binario
+
+tipo Copia {
+    estado: inteiro
+    codigo_erro: inteiro
+    geracao: inteiro
+    valor: cad.Cadastro
+}
+
+publico tipo Leitura {
+    valido: logico
+    codigo_erro: inteiro
+    geracao: inteiro
+    copia: inteiro
+    recuperado: logico
+    valor: cad.Cadastro
+}
+
+publico tipo Gravacao {
+    valido: logico
+    codigo_erro: inteiro
+    geracao: inteiro
+}
+
+funcao responder(codigo: inteiro, geracao: inteiro) -> Gravacao {
+    seja resposta: Gravacao
+    resposta.valido = codigo == 0
+    resposta.codigo_erro = codigo
+    resposta.geracao = geracao
+    retorne resposta
+}
+
+funcao caminho_copia(indice: inteiro) -> texto[64] {
+    seja caminho: texto[64]
+    se indice == 0 {
+        copie(caminho, "cadastro_a.rsd")
+    } senao {
+        copie(caminho, "cadastro_b.rsd")
+    }
+    retorne caminho
+}
+
+funcao marcador() -> bytes[8] {
+    seja dados: bytes[8]
+    adicione_byte(dados, 67)
+    adicione_byte(dados, 79)
+    adicione_byte(dados, 78)
+    adicione_byte(dados, 70)
+    adicione_byte(dados, 73)
+    adicione_byte(dados, 82)
+    adicione_byte(dados, 77)
+    adicione_byte(dados, 65)
+    retorne dados
+}
+
+funcao ler_copia(indice: inteiro) -> Copia {
+    seja resposta: Copia
+    seja estado = 0
+    se indice == 0 {
+        consulte_arquivo("cadastro_a.rsd", estado)
+    } senao {
+        consulte_arquivo("cadastro_b.rsd", estado)
+    }
+    se estado == 1 {
+        resposta.estado = 1
+        retorne mova(resposta)
+    }
+    se estado != 0 {
+        resposta.codigo_erro = 41
+        retorne mova(resposta)
+    }
+    seja caminho = caminho_copia(indice)
+    seja recurso: arquivo
+    abra_arquivo(caminho, recurso, "leitura", estado)
+    se estado != 0 {
+        resposta.codigo_erro = 41
+        retorne mova(resposta)
+    }
+    // Presente mas incompleta/corrompida ate validar toda a copia.
+    resposta.estado = 2
+    seja bloco: bytes[4096]
+    carregue_de(recurso, bloco, 0, 40, estado)
+    se estado < 0 {
+        resposta.codigo_erro = 42
+        retorne mova(resposta)
+    }
+    se estado != 40 {
+        retorne mova(resposta)
+    }
+    seja confirmacao = marcador()
+    para indice_marcador de 0 ate 7 {
+        se bloco[32 + indice_marcador] != confirmacao[indice_marcador] {
+            retorne mova(resposta)
+        }
+    }
+    se bloco[0] != 82 {
+        retorne mova(resposta)
+    }
+    se bloco[1] != 83 {
+        retorne mova(resposta)
+    }
+    se bloco[2] != 67 {
+        retorne mova(resposta)
+    }
+    se bloco[3] != 78 {
+        retorne mova(resposta)
+    }
+    seja cabecalho: bytes
+    junte(cabecalho, bloco)
+    seja versao = binario.ler_u32(empreste(cabecalho), 4)
+    se versao.valor != 1 {
+        resposta.codigo_erro = 49
+        retorne mova(resposta)
+    }
+    seja geracao = binario.ler_u64_positivo(empreste(cabecalho), 8)
+    se geracao.valido == falso {
+        retorne mova(resposta)
+    }
+    se geracao.valor < 1 {
+        retorne mova(resposta)
+    }
+    seja quantidade = binario.ler_u32(empreste(cabecalho), 16)
+    se quantidade.valor < 24 {
+        retorne mova(resposta)
+    }
+    se quantidade.valor > 8388608 {
+        retorne mova(resposta)
+    }
+    seja esperado = binario.ler_u32(empreste(cabecalho), 20)
+    seja integridade = binario.ler_u32(empreste(cabecalho), 24)
+    seja reservado = binario.ler_u32(empreste(cabecalho), 28)
+    se reservado.valor != 0 {
+        retorne mova(resposta)
+    }
+    seja prefixo: bytes
+    para indice_prefixo de 0 ate 23 {
+        adicione_byte(prefixo, cabecalho[indice_prefixo])
+    }
+    se integridade.valor != cad.verificar_integridade(empreste(prefixo), 0) {
+        retorne mova(resposta)
+    }
+    // Sobras antigas sao permitidas, mas nao arquivo fisico acima do limite.
+    carregue_de(recurso, bloco, 8388648, 1, estado)
+    se estado < 0 {
+        resposta.codigo_erro = 42
+        retorne mova(resposta)
+    }
+    se estado != 0 {
+        retorne mova(resposta)
+    }
+    seja dados: bytes
+    seja posicao = 0
+    enquanto posicao < quantidade.valor {
+        seja pedido = quantidade.valor - posicao
+        se pedido > 4096 {
+            pedido = 4096
+        }
+        carregue_de(recurso, bloco, posicao + 40, pedido, estado)
+        se estado < 0 {
+            resposta.codigo_erro = 42
+            retorne mova(resposta)
+        }
+        se estado == 0 {
+            retorne mova(resposta)
+        }
+        junte(dados, bloco)
+        posicao = posicao + estado
+    }
+    feche_arquivo(recurso, estado)
+    se estado != 0 {
+        resposta.codigo_erro = 42
+        retorne mova(resposta)
+    }
+    se esperado.valor != cad.verificar_integridade(empreste(dados), 0) {
+        retorne mova(resposta)
+    }
+    seja leitura = cad.desserializar(empreste(dados))
+    se leitura.valido == falso {
+        retorne mova(resposta)
+    }
+    resposta.estado = 0
+    resposta.geracao = geracao.valor
+    mova(resposta.valor, leitura.valor)
+    retorne mova(resposta)
+}
+
+funcao ler_atual() -> Leitura {
+    seja resposta: Leitura
+    seja esquerda = ler_copia(0)
+    seja direita = ler_copia(1)
+    se esquerda.codigo_erro != 0 {
+        resposta.codigo_erro = esquerda.codigo_erro
+        retorne mova(resposta)
+    }
+    se direita.codigo_erro != 0 {
+        resposta.codigo_erro = direita.codigo_erro
+        retorne mova(resposta)
+    }
+    se esquerda.estado == 1 {
+        se direita.estado == 1 {
+            resposta.codigo_erro = 44
+            retorne mova(resposta)
+        }
+    }
+    se esquerda.estado != 0 {
+        se direita.estado != 0 {
+            resposta.codigo_erro = 45
+            retorne mova(resposta)
+        }
+    }
+    se esquerda.estado == 0 {
+        se direita.estado == 0 {
+            se esquerda.geracao == direita.geracao {
+                resposta.codigo_erro = 48
+                retorne mova(resposta)
+            }
+        }
+    }
+    resposta.valido = verdadeiro
+    resposta.recuperado = esquerda.estado == 2
+    se direita.estado == 2 {
+        resposta.recuperado = verdadeiro
+    }
+    se esquerda.estado == 0 {
+        se esquerda.geracao > direita.geracao {
+            resposta.geracao = esquerda.geracao
+            resposta.copia = 0
+            mova(resposta.valor, esquerda.valor)
+            retorne mova(resposta)
+        }
+    }
+    resposta.geracao = direita.geracao
+    resposta.copia = 1
+    mova(resposta.valor, direita.valor)
+    retorne mova(resposta)
+}
+
+funcao gravar_copia(dados: emprestimo[bytes], indice: inteiro, geracao: inteiro) -> inteiro {
+    seja cabecalho: bytes
+    adicione_byte(cabecalho, 82)
+    adicione_byte(cabecalho, 83)
+    adicione_byte(cabecalho, 67)
+    adicione_byte(cabecalho, 78)
+    seja versao = binario.codificar_u32(1)
+    seja numero = binario.codificar_u64_positivo(geracao)
+    seja quantidade = binario.codificar_u32(tamanho(dados))
+    seja integridade = binario.codificar_u32(cad.verificar_integridade(dados, 0))
+    junte(cabecalho, versao.dados)
+    junte(cabecalho, numero.dados)
+    junte(cabecalho, quantidade.dados)
+    junte(cabecalho, integridade.dados)
+    seja assinatura = binario.codificar_u32(cad.verificar_integridade(empreste(cabecalho), 0))
+    junte(cabecalho, assinatura.dados)
+    seja reservado = binario.codificar_u32(0)
+    junte(cabecalho, reservado.dados)
+    seja caminho = caminho_copia(indice)
+    seja recurso: arquivo
+    seja estado = 0
+    abra_arquivo(caminho, recurso, "alteracao", estado)
+    se estado != 0 {
+        retorne 43
+    }
+    // Invalidar e sincronizar antes de reutilizar qualquer byte da copia.
+    seja bloco: bytes[4096]
+    para indice_limpeza de 0 ate 7 {
+        adicione_byte(bloco, 0)
+    }
+    grave_em(recurso, bloco, 32, estado)
+    se estado != 8 {
+        retorne 43
+    }
+    sincronize_arquivo(recurso, estado)
+    se estado != 0 {
+        retorne 43
+    }
+    limpe(bloco)
+    junte(bloco, cabecalho)
+    grave_em(recurso, bloco, 0, estado)
+    se estado != 32 {
+        retorne 43
+    }
+    seja posicao = 0
+    enquanto posicao < tamanho(dados) {
+        limpe(bloco)
+        enquanto tamanho(bloco) < 4096 {
+            se posicao + tamanho(bloco) >= tamanho(dados) {
+                pare
+            }
+            adicione_byte(bloco, dados[posicao + tamanho(bloco)])
+        }
+        grave_em(recurso, bloco, posicao + 40, estado)
+        se estado != tamanho(bloco) {
+            retorne 43
+        }
+        posicao = posicao + estado
+    }
+    sincronize_arquivo(recurso, estado)
+    se estado != 0 {
+        retorne 43
+    }
+    seja confirmacao = marcador()
+    grave_em(recurso, confirmacao, 32, estado)
+    se estado != 8 {
+        retorne 51
+    }
+    sincronize_arquivo(recurso, estado)
+    se estado != 0 {
+        retorne 51
+    }
+    feche_arquivo(recurso, estado)
+    se estado != 0 {
+        retorne 51
+    }
+    retorne 0
+}
+
+publico funcao carregar() -> Leitura {
+    seja trava: arquivo
+    seja estado = 0
+    abra_arquivo("cadastro_trava.rsl", trava, "alteracao", estado)
+    se estado == 0 {
+        bloqueie_arquivo(trava, estado)
+    }
+    se estado != 0 {
+        seja resposta: Leitura
+        resposta.codigo_erro = 40
+        retorne mova(resposta)
+    }
+    retorne ler_atual()
+}
+
+publico funcao inicializar() -> Gravacao {
+    seja trava: arquivo
+    seja estado = 0
+    abra_arquivo("cadastro_trava.rsl", trava, "alteracao", estado)
+    se estado == 0 {
+        bloqueie_arquivo(trava, estado)
+    }
+    se estado != 0 {
+        retorne responder(40, 0)
+    }
+    seja leitura = ler_atual()
+    se leitura.codigo_erro != 44 {
+        retorne responder(50, leitura.geracao)
+    }
+    seja vazio = cad.criar()
+    seja dados = cad.serializar(empreste(vazio))
+    estado = gravar_copia(empreste(dados.valor), 0, 1)
+    retorne responder(estado, 1)
+}
+
+publico funcao salvar(cadastro: emprestimo[cad.Cadastro], geracao_esperada: inteiro) -> Gravacao {
+    seja trava: arquivo
+    seja estado = 0
+    abra_arquivo("cadastro_trava.rsl", trava, "alteracao", estado)
+    se estado == 0 {
+        bloqueie_arquivo(trava, estado)
+    }
+    se estado != 0 {
+        retorne responder(40, 0)
+    }
+    seja leitura = ler_atual()
+    se leitura.valido == falso {
+        retorne responder(leitura.codigo_erro, 0)
+    }
+    se geracao_esperada != leitura.geracao {
+        retorne responder(46, leitura.geracao)
+    }
+    se leitura.geracao == 9223372036854775807 {
+        retorne responder(47, leitura.geracao)
+    }
+    seja dados = cad.serializar(cadastro)
+    se dados.valido == falso {
+        retorne responder(dados.codigo_erro, leitura.geracao)
+    }
+    seja geracao = leitura.geracao + 1
+    estado = gravar_copia(empreste(dados.valor), 1 - leitura.copia, geracao)
+    retorne responder(estado, geracao)
+}

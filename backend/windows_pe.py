@@ -74,6 +74,10 @@ def montar_pe(g, mensagens):
         nomes.append('SetEndOfFile')
     if 'rs_publicar_arquivo' in g.rotulos and 'MoveFileExA' not in nomes:
         nomes.append('MoveFileExA')
+    if 'rs_consultar_arquivo' in g.rotulos:
+        for nome in ('GetFileAttributesA', 'GetLastError'):
+            if nome not in nomes:
+                nomes.append(nome)
     importacoes, enderecos, inicio_iat, tamanho_iat = construir_importacoes(base_importacoes, nomes)
     base_dados = alinhar(base_importacoes + len(importacoes), 0x1000)
     dados = bytearray()
