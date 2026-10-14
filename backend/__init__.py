@@ -12,7 +12,11 @@ def compilar(programa, alvo, otimizar=True, nivel=1, medidor=None):
         raise ValueError('Alvo desconhecido: use windows ou linux.')
     with etapa(medidor, 'estrategia'):
         decisao = decidir_estrategia(programa, nivel, otimizar)
-    if decisao.gerador == 'conservador':
+    if decisao.gerador == 'misto':
+        from .funcoes_mistas import montar_funcoes_mistas
+        with etapa(medidor, 'ir_e_emissao_mista'):
+            gerador, mensagens = montar_funcoes_mistas(programa, decisao, alvo == 'windows', medidor)
+    elif decisao.gerador == 'conservador':
         with etapa(medidor, 'emissao_nativa'):
             gerador, mensagens = montar_codigo(programa, alvo == 'windows')
     else:
@@ -35,7 +39,7 @@ def compilar(programa, alvo, otimizar=True, nivel=1, medidor=None):
         else:
             with etapa(medidor, 'emissao_nativa'):
                 gerador, mensagens = montar_codigo(legado, alvo == 'windows')
-    if decisao.gerador == 'ssa' and nivel >= 6:
+    if decisao.gerador in ('ssa', 'misto') and nivel >= 6:
         with etapa(medidor, 'compactacao_saltos'):
             gerador.compactar_saltos_ssa()
         if medidor is not None:

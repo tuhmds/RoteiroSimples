@@ -2,7 +2,7 @@
 
 **Linguagem de programação experimental em português brasileiro, com compilação nativa.**
 
-**Versão documentada:** 0.42R · **Estado:** em desenvolvimento, não indicada para produção.
+**Versão documentada:** 0.42S · **Estado:** em desenvolvimento, não indicada para produção.
 
 A **RS** nasceu para tornar a programação compreensível desde o primeiro contato, usando palavras e mensagens em português brasileiro, sem abandonar fundamentos de compiladores, tipagem, gerenciamento de memória e desempenho. Queremos que aprender a programar e construir programas nativos possam fazer parte da mesma jornada.
 
@@ -35,7 +35,17 @@ Leia o [guia de contribuição](CONTRIBUTING.md), o [modelo de pull request](.gi
 
 ## Histórico detalhado das versões
 
-## RS 0.42R — Análises de fluxo conforme o uso
+## RS 0.42S — Otimização por função em programas mistos
+
+Funções escalares elegíveis agora podem usar IR/SSA no mesmo executável que
+registros, coleções proprietárias e arquivos. O início e os corpos com recursos
+continuam conservadores. A seleção verifica os tipos, operações e chamadas de
+cada função; os diagnósticos mostram o caminho aplicado e os motivos de recusa.
+Os ensaios nativos conferem as fronteiras de chamadas, pilha, desenrolamento,
+erros e equivalência O0–O8. A CI mede o léxico em RS e consultas a coleções.
+[Contrato e reprodução](docs/FUNCOES_MISTAS_RS_0_42S.md).
+
+## Histórico: RS 0.42R — Análises de fluxo conforme o uso
 
 A SSA escalar calcula definições locais, vivacidade e dominância; o exame
 de gravações mortas calcula vivacidade; a SSA de memória pede dominância.
@@ -1145,13 +1155,16 @@ python3 compilar.py exemplos/listas_dinamicas.rts --alvo linux -O 8 -o roteiro_l
 python3 -m unittest discover -s testes -v
 ```
 
-O compilador aceita os níveis históricos **`-O 0` até `-O 8`**. Na 0.42N,
+O compilador aceita os níveis históricos **`-O 0` até `-O 8`**. Na 0.42S,
 programas escalares com funções elegíveis usam IR com transformações até O3
 e emissão SSA com alocação em O4–O8;
 registros, donos, empréstimos e arquivos continuam no gerador conservador.
-`--mostrar-estrategia` informa o caminho e o nível efetivos.
+Programas mistos podem otimizar grupos fechados de funções escalares,
+mantendo o início e os demais corpos conservadores.
+`--mostrar-estrategia` informa o caminho e o nível efetivos de cada função
+nesses programas. [Limites e diagnósticos parciais](docs/FUNCOES_MISTAS_RS_0_42S.md).
 
-## Recursos presentes na RS 0.42N
+## Recursos presentes na RS 0.42S
 
 | Recurso | Situação |
 |---|---|
@@ -1162,6 +1175,7 @@ registros, donos, empréstimos e arquivos continuam no gerador conservador.
 | Funções escalares na IR, dobramento e propagação de constantes | Implementado na 0.42J; propagação SSA entre blocos na 0.42L |
 | CFG/fluxo por função escalar, parâmetros de entrada, retornos e efeitos transitivos | Implementado na 0.42K |
 | SSA e alocação nativa por função escalar, com chamadas e recursão | Implementado na 0.42L em O4–O8 |
+| Funções escalares otimizadas junto a corpos com registros, donos e arquivos | Implementado na 0.42S; início conservador, grupo escalar fechado |
 | Campanha gerada com oráculo independente, reprodução e redução de falhas | Implementado na 0.42J; corpus estruturado limitado |
 | Cobertura Python de linhas/ramos e matriz CI Python 3.10/3.11/3.14 | Implementado na 0.42J |
 | Medição O0–O8 com gerador, hashes e tempos individuais | Implementado na 0.42J; execuções intercaladas na 0.42K |
@@ -1239,6 +1253,7 @@ a prova anterior de 100 registros continua disponível. Transações, WAL e
 índices seguem pendentes. O Dados RS será um projeto próprio, separado do
 compilador.
 
+Funções escalares elegíveis já convivem com corpos conservadores na 0.42S.
 Recursos proprietários precisam de contratos de memória na IR antes de
 receber as transformações SSA já aplicadas às funções escalares. Oráculos,
 campanhas e medições permanecem como referência. O léxico em RS permite

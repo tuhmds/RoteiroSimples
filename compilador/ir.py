@@ -71,6 +71,19 @@ def converter_instrucao(instr, tipos, otimizar, assinaturas=None):
     raise ErroCompilacao(f'Instrução IR desconhecida: {tag}.')
 
 
+def converter_corpo_ir(corpo, assinaturas, otimizar, nivel, tem_funcoes, medidor=None):
+    """Conversão comum aos corpos completos e às funções escalares selecionadas."""
+    ir = ProgramaIR(tuple(converter_instrucao(i, corpo.tipos, otimizar, assinaturas)
+                          for i in corpo.instrucoes),
+                    dict(corpo.tipos), dict(corpo.variaveis),
+                    corpo.importa_matematica, escopos_locais=corpo.escopos_locais)
+    if tem_funcoes and otimizar and nivel >= 2:
+        from .propagacao import propagar_constantes_locais
+        with etapa(medidor, 'ir_propagacao_local'):
+            ir = propagar_constantes_locais(ir)
+    return ir
+
+
 def construir_ir(programa, otimizar=True, nivel=1, medidor=None):
     """Constrói IR somente quando a tradução é representável sem perdas."""
     with etapa(medidor, 'ir_cobertura'):
@@ -94,15 +107,7 @@ def construir_ir(programa, otimizar=True, nivel=1, medidor=None):
         assinaturas = {nome: (funcao.parametros, funcao.retorno)
                        for nome, funcao in getattr(programa, 'funcoes', {}).items()}
     def converter_corpo(corpo):
-        ir = ProgramaIR(tuple(converter_instrucao(i, corpo.tipos, otimizar, assinaturas)
-                              for i in corpo.instrucoes),
-                        dict(corpo.tipos), dict(corpo.variaveis),
-                        corpo.importa_matematica, escopos_locais=corpo.escopos_locais)
-        if tem_funcoes and otimizar and nivel >= 2:
-            from .propagacao import propagar_constantes_locais
-            with etapa(medidor, 'ir_propagacao_local'):
-                ir = propagar_constantes_locais(ir)
-        return ir
+        return converter_corpo_ir(corpo, assinaturas, otimizar, nivel, tem_funcoes, medidor)
     with etapa(medidor, 'ir_conversao'):
         ir = converter_corpo(programa)
     if tem_funcoes:

@@ -38,3 +38,9 @@ class FuncaoIR:
     retorno: str
     programa: ProgramaIR
     recursiva: bool = False
+
+
+@dataclass(frozen=True)
+class GrupoFuncoesIR:
+    """Parte representável de um programa misto; não representa o início."""
+    funcoes: dict

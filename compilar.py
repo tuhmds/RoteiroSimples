@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compilador RS 0.42R experimental: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
+"""Compilador RS 0.42S experimental: .rts -> código de máquina AMD64 ELF64/PE32+ sem ferramentas externas."""
 import argparse
 import os
 import re
@@ -19,7 +19,7 @@ def main(argv=None):
     for canal in (sys.stdout, sys.stderr):
         if canal is not None and hasattr(canal, 'reconfigure'):
             canal.reconfigure(encoding='utf-8')
-    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.42R (experimental)')
+    parser = argparse.ArgumentParser(description='Compilador RoteiroSimples (RS) 0.42S (experimental)')
     parser.add_argument('fonte', type=Path, help='arquivo .rts em UTF-8')
     parser.add_argument('--mostrar-modulos', action='store_true', help='lista os módulos e a ordem de importação')
     parser.add_argument('--mostrar-estrategia', action='store_true', help='explica quais otimizações serão aplicadas de fato')
@@ -84,7 +84,11 @@ def main(argv=None):
             or op.mostrar_memory_ssa or op.salvar_memory_ssa
             or op.mostrar_efeitos or op.salvar_efeitos
         )
-        if analises_ir and decisao.gerador == 'conservador':
+        analises_parciais = analises_ir and any(f.elegivel for f in decisao.funcoes)
+        if analises_parciais:
+            from compilador.diagnosticos_funcoes_mistas import mostrar_analises_parciais
+            mostrar_analises_parciais(programa, decisao, op)
+        if analises_ir and not analises_parciais and decisao.gerador == 'conservador':
             raise ErroCompilacao(
                 'A análise solicitada requer a representação intermediária, '
                 'mas este programa usa o gerador conservador: '
@@ -97,7 +101,7 @@ def main(argv=None):
             from compilador.ast import formatar_ast
             print(formatar_ast(programa))
         tem_listas = any(isinstance(t, tuple) and t[0] in ('lista', 'texto') for t in programa.tipos.values())
-        if tem_listas and (op.mostrar_cfg or op.salvar_cfg or op.mostrar_fluxo
+        if tem_listas and not analises_parciais and (op.mostrar_cfg or op.salvar_cfg or op.mostrar_fluxo
                 or op.salvar_fluxo or op.mostrar_ssa or op.salvar_ssa
                 or op.mostrar_copias_phi or op.mostrar_alocacao):
             raise ErroCompilacao('A análise CFG/SSA com listas ou textos ainda não está disponível nesta versão.')
@@ -119,10 +123,10 @@ def main(argv=None):
             if op.salvar_efeitos:
                 op.salvar_efeitos.write_text(efeitos_para_json(ir_efeitos), encoding='utf-8')
                 print(f'Efeitos salvos em: {op.salvar_efeitos}')
-        if op.mostrar_ir:
+        if op.mostrar_ir and not analises_parciais:
             from compilador.ir import construir_ir, formatar_ir
             print(formatar_ir(construir_ir(programa, otimizar=nivel > 0, nivel=nivel)))
-        if (op.mostrar_cfg or op.salvar_cfg or op.mostrar_fluxo or op.salvar_fluxo
+        if not analises_parciais and (op.mostrar_cfg or op.salvar_cfg or op.mostrar_fluxo or op.salvar_fluxo
                 or op.mostrar_ssa or op.salvar_ssa or op.mostrar_copias_phi
                 or op.mostrar_alocacao):
             from compilador.ir import construir_ir
@@ -164,7 +168,7 @@ def main(argv=None):
             if op.salvar_cfg:
                 op.salvar_cfg.write_text(grafo.para_dot(), encoding='utf-8')
                 print(f'Grafo de fluxo de controle salvo em: {op.salvar_cfg}')
-        if op.mostrar_alocacao:
+        if op.mostrar_alocacao and not analises_parciais:
             if nivel not in (4, 5, 6, 7, 8):
                 raise ErroCompilacao('Use -O 4 até -O 8 com --mostrar-alocacao.')
             from compilador.ir import construir_ir

@@ -56,12 +56,12 @@ class TestesValoresDinamicosRS042A(unittest.TestCase):
                 r, _ = rodar(compilar(p, alvo_nativo(), nivel=nivel, otimizar=nivel > 0))
                 self.assertEqual((r.returncode, r.stdout), (0, '1\n'), r.stderr)
 
-    def verificar(self, fonte, esperado, entrada=None, niveis=NIVEIS):
+    def verificar(self, fonte, esperado, entrada=None, niveis=NIVEIS, gerador='conservador'):
         programa = analisar_programa(fonte)
         for nivel in niveis:
             with self.subTest(nivel=nivel):
                 decisao = decidir_estrategia(programa, nivel, nivel > 0)
-                self.assertEqual(decisao.gerador, 'conservador')
+                self.assertEqual(decisao.gerador, gerador(nivel) if callable(gerador) else gerador)
                 imagem = compilar(programa, alvo_nativo(), otimizar=nivel > 0, nivel=nivel)
                 resultado, _ = rodar(imagem, entrada)
                 self.assertEqual((resultado.returncode, resultado.stdout), (0, esperado), resultado.stderr)
@@ -257,7 +257,7 @@ class TestesValoresDinamicosRS042A(unittest.TestCase):
             escreva(combinar(1, dados[indice(criar())]))
             escreva(ler(empreste(dados)))
         }'''
-        self.verificar(fonte, '42\n43\n43\n44\n')
+        self.verificar(fonte, '42\n43\n43\n44\n', gerador=lambda n: 'misto' if n else 'conservador')
 
     def test_recursao_com_donos_respeita_limite_de_pilha(self):
         fonte = '''funcao repetir(numero: inteiro) -> lista[] {

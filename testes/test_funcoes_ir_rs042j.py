@@ -202,10 +202,10 @@ inicio {{
         self.assertTrue(any(item['caminho'].startswith('funcao:calcular') for item in listar_efeitos(ir)))
 
     def test_tipos_compostos_e_operacoes_desconhecidas_continuam_conservadores(self):
-        for fonte in ('funcao medir(dados: bytes) -> inteiro {\n retorne tamanho(dados)\n}\ninicio {\n escreva(1)\n}',
-                       'tipo Registro {\n numero: inteiro\n}\nfuncao medir(numero: inteiro) -> inteiro {\n retorne numero\n}\ninicio {\n escreva(medir(1))\n}'):
+        for fonte, gerador in (('funcao medir(dados: bytes) -> inteiro {\n retorne tamanho(dados)\n}\ninicio {\n escreva(1)\n}', 'conservador'),
+                       ('tipo Registro {\n numero: inteiro\n}\nfuncao medir(numero: inteiro) -> inteiro {\n retorne numero\n}\ninicio {\n escreva(medir(1))\n}', 'misto')):
             programa = analisar_programa(fonte)
-            self.assertEqual(decidir_estrategia(programa, 8).gerador, 'conservador')
+            self.assertEqual(decidir_estrategia(programa, 8).gerador, gerador)
             with self.assertRaisesRegex(ErroCompilacao, 'representação intermediária'):
                 construir_ir(programa, nivel=8)
 

@@ -6,6 +6,16 @@ O gerador conservador protege construções ainda não representadas pela IR.
 from dataclasses import dataclass
 from .cobertura_intermediaria import analisar_cobertura, motivos_de_cobertura, funcoes_escalares_representaveis
 from .propriedade import eh_proprietario
+from .funcoes_mistas import classificar_funcoes
+
+
+@dataclass(frozen=True)
+class EstrategiaFuncao:
+    nome: str
+    elegivel: bool
+    gerador: str
+    nivel_ir: int
+    motivos: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -15,6 +25,16 @@ class Estrategia:
     nivel_ir: int
     motivos: tuple[str, ...]
     otimiza: bool
+    funcoes: tuple[EstrategiaFuncao, ...] = ()
+
+
+def estrategias_funcoes(programa, nivel, otimizar):
+    return tuple(EstrategiaFuncao(nome, not motivos,
+        'conservador' if motivos or not otimizar or nivel == 0 else
+        'ssa' if nivel >= 4 else 'intermediario',
+        min(nivel, 3) if not motivos and otimizar else 0,
+        motivos if motivos else ('otimização desativada',) if not otimizar or nivel == 0 else ())
+        for nome, motivos in classificar_funcoes(programa).items())
 
 
 def percorrer(bloco):
@@ -66,8 +86,10 @@ def decidir_estrategia(programa, nivel=1, otimizar=True):
     # O relatório percorre expressões e blocos aninhados e cobre funções.
     motivos.extend(motivos_de_cobertura(analisar_cobertura(programa)))
     if motivos:
-        return Estrategia('conservador', nivel, 0,
-                          tuple(dict.fromkeys(motivos)), False)
+        funcoes = estrategias_funcoes(programa, nivel, otimizar)
+        misto = otimizar and nivel > 0 and any(f.elegivel for f in funcoes)
+        return Estrategia('misto' if misto else 'conservador', nivel, 0,
+                          tuple(dict.fromkeys(motivos)), bool(misto), funcoes)
 
     if tem_funcoes:
         # O3 propaga constantes por SSA; O4–O8 emitem os corpos alocados.
@@ -87,6 +109,15 @@ def decidir_estrategia(programa, nivel=1, otimizar=True):
 
 def descrever_estrategia(decisao):
     """Explica a diferença entre a solicitação e a execução efetiva."""
+    if decisao.funcoes:
+        linhas = [f'Gerador: nativo {decisao.gerador}; início conservador.',
+                  f'Otimização solicitada: -O {decisao.nivel_solicitado}.',
+                  'Funções (decisão por corpo):']
+        for funcao in decisao.funcoes:
+            motivo = '; '.join(funcao.motivos) or 'contrato escalar fechado'
+            linhas.append(f'  {funcao.nome}: {funcao.gerador} (IR {funcao.nivel_ir}); {motivo}.')
+        linhas.append('Registros, donos, empréstimos e arquivos permanecem sem transformações IR/SSA.')
+        return '\n'.join(linhas)
     if decisao.gerador == 'conservador':
         return (f'Gerador: nativo conservador ({", ".join(decisao.motivos)}).\n'
                 f'Otimização solicitada: -O {decisao.nivel_solicitado}; '
