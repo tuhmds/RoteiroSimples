@@ -1,4 +1,39 @@
-# RoteiroSimples (RS) — versão experimental 0.42P
+# RoteiroSimples (RS)
+
+**Linguagem de programação experimental em português brasileiro, com compilação nativa.**
+
+**Versão documentada:** 0.42P · **Estado:** em desenvolvimento, não indicada para produção.
+
+A **RS** nasceu para tornar a programação compreensível desde o primeiro contato, usando palavras e mensagens em português brasileiro, sem abandonar fundamentos de compiladores, tipagem, gerenciamento de memória e desempenho. Queremos que aprender a programar e construir programas nativos possam fazer parte da mesma jornada.
+
+> **Transparência:** desenvolvemos a RS com apoio intenso de **inteligência artificial** na concepção, implementação, documentação e testes. A IA não é garantia de correção; buscamos revisão humana, testes adversariais e contribuições de pessoas experientes em compiladores. Não afirmamos que o compilador já seja autocompilado ou que a linguagem esteja pronta para uso profissional.
+
+## Navegação
+
+| Precisa de… | Acesse |
+| --- | --- |
+| Acompanhar os recursos e versões | **[Atualizações e histórico técnico](docs/ATUALIZACOES.md)** |
+| Ler os contratos e a arquitetura | [Documentação técnica](docs/) · [Princípios de projeto](docs/PRINCIPIOS_RS.md) |
+| Ajudar com correções e funcionalidades | **[Como contribuir (fork, PR e revisão)](CONTRIBUTING.md)** |
+| Fazer uma avaliação crítica do compilador | [Convite à revisão técnica](docs/CONVITE_REVISAO_TECNICA_COMPILADOR.md) |
+| Acompanhar propostas e trabalhos em andamento | [Pull requests](https://github.com/tuhmds/RoteiroSimples/pulls) · [Questões e propostas](https://github.com/tuhmds/RoteiroSimples/issues) |
+| Experimentar a linguagem | [Começar no Windows](#começar-no-windows) · [Compilar no Linux](#compilar-no-linux) · [Exemplos](exemplos/) |
+
+## O que já funciona e o que ainda falta
+
+O **compilador de desenvolvimento**, atualmente escrito em **Python**, lê arquivos `.rts` e gera diretamente executáveis nativos **x86-64** para Windows (PE32+) e Linux (ELF64), sem etapa obrigatória em C, LLVM ou montador externo. O programa compilado **não precisa de Python para executar**, mas utiliza os serviços normais de seu sistema operacional.
+
+Entre as capacidades implementadas em diferentes subconjuntos da linguagem estão tipos e funções, módulos, textos e bytes, listas e registros, propriedade e empréstimos de leitura, efeitos, representação intermediária tipada, CFG, SSA, alocação de registradores e otimizações nativas. **Nem todos os recursos percorrem o caminho otimizado**; a cobertura e as limitações são apresentadas nas [notas técnicas](docs/ATUALIZACOES.md).
+
+**Ainda faltam:** ampliar a linguagem e suas bibliotecas para aplicações reais, consolidar caminhos conservador e otimizado, desenvolver o RS Studio e atingir o objetivo de **autocompilação**, isto é, ter o compilador escrito na própria RS e verificável de forma independente.
+
+## Como colaborar
+
+O caminho preferencial é **criar um fork**, abrir uma ramificação de trabalho e enviar um **pull request** para a `main` deste repositório. Alterações propostas passam por **análise do responsável pelo projeto (`@tuhmds`) antes da incorporação**. Críticas arquiteturais, documentação e testes de falhas são igualmente bem-vindos.
+
+Leia o [guia de contribuição](CONTRIBUTING.md), o [modelo de pull request](.github/PULL_REQUEST_TEMPLATE.md) e as [regras de projeto](docs/PRINCIPIOS_RS.md). A proteção técnica da ramificação é configurada separadamente nas opções do GitHub; estas instruções, isoladamente, não a substituem.
+
+## Histórico detalhado das versões
 
 ## RS 0.42P — Consolidação e crescimento da compilação
 
