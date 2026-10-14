@@ -240,7 +240,7 @@ inicio {
             self.assertIn('r13', r.stdout)
             self.assertIn('funcao somar:', r.stdout)
             j = json.loads(dados.read_text(encoding='utf-8'))
-            self.assertEqual(j['versao'], 'RS 0.42M')
+            self.assertEqual(j['versao'], 'RS 0.42N')
             self.assertEqual(set(j['funcoes']), {'somar', 'parcela'})
             self.assertEqual(j['funcoes']['parcela']['parametros'], [['numero', 'inteiro']])
             self.assertTrue(executavel.exists())

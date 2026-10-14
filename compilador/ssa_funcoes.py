@@ -37,14 +37,14 @@ class SSAPrograma:
         return True
 
     def formatar(self):
-        linhas = ['RS 0.42M - SSA por função escalar', 'inicio:', self.principal.formatar()]
+        linhas = ['RS 0.42N - SSA por função escalar', 'inicio:', self.principal.formatar()]
         for nome, ssa in self.funcoes.items():
             f = self.assinaturas[nome]
             linhas.extend((f'funcao {nome}: {f.parametros} -> {f.retorno}; recursiva={f.recursiva}', ssa.formatar()))
         return '\n'.join(linhas)
 
     def para_json(self):
-        return json.dumps({'versao': 'RS 0.42M',
+        return json.dumps({'versao': 'RS 0.42N',
                            'modo': 'SSA por função; emissão nativa com alocação em O4–O8',
                            'principal': json.loads(self.principal.para_json()),
                            'funcoes': {nome: {**json.loads(ssa.para_json()),
