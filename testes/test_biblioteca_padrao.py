@@ -75,7 +75,7 @@ inicio {
 }''','1024\n0\n1\n120\n-1\n55\n-1\n6\n36\n1\n0\n15\n1\n3\n')
 
     def test_estatistica(self):
-        self.executar('''importe "padrao/estatistica.rts" como e
+        self.executar('''importe "padrao/estatistica.rts" como estat
 inicio {
  seja dados: lista[5]
  dados[0] = 8
@@ -83,12 +83,12 @@ inicio {
  dados[2] = 8
  dados[3] = -2
  dados[4] = 5
- escreva(e.soma_cinco(dados))
- escreva(e.media_cinco(dados))
- escreva(e.minimo_cinco(dados))
- escreva(e.maximo_cinco(dados))
- escreva(e.amplitude_cinco(dados))
- escreva(e.contar_acima_cinco(dados, 5))
+ escreva(estat.soma_cinco(dados))
+ escreva(estat.media_cinco(dados))
+ escreva(estat.minimo_cinco(dados))
+ escreva(estat.maximo_cinco(dados))
+ escreva(estat.amplitude_cinco(dados))
+ escreva(estat.contar_acima_cinco(dados, 5))
 }''','22\n4\n-2\n8\n10\n2\n')
 
     def test_listas_copia_independente(self):

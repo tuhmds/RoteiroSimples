@@ -50,6 +50,9 @@ Parênteses alteram o agrupamento e tornam a intenção explícita.
 
 Os operadores binários `e` e `ou` associam da esquerda para a direita.
 A expressão `nao a` primeiro obtém o valor de `a` e então o inverte.
+Para comparar com um valor negado, agrupe esse operando: `verdadeiro ==
+(nao falso)`. A forma `verdadeiro == nao falso` é recusada pela precedência
+definida; a negação nesse contexto precisa de parênteses.
 Não são acrescentados os símbolos `&&`, `||` ou `!` como alternativas.
 O operador histórico `!=` continua sendo comparação de desigualdade.
 
