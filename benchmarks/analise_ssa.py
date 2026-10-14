@@ -1,4 +1,4 @@
-"""Comparação intercalada da construção SSA e otimização com a RS 0.42P."""
+"""Comparação intercalada de SSA e otimização com referências anteriores."""
 import argparse
 import hashlib
 import json
@@ -16,24 +16,32 @@ from compilador.modulos import carregar_fontes
 from compilador.parser import analisar_programa
 from compilador.ssa import construir_ssa
 from compilador.ssa_otimizador import otimizar_com_ssa
-from testes.fixtures.ssa_rs042p import construir_ssa_antes, otimizar_com_ssa_antes
 
 
-def identidade_ferramenta():
+
+def identidade_ferramenta(referencia="rs042p"):
     resumo = hashlib.sha256()
-    for caminho in (Path(__file__), Path(__file__).parents[1] / 'testes/fixtures/ssa_rs042p.py'):
+    for caminho in (Path(__file__), Path(__file__).parents[1] / ('testes/fixtures/ssa_rs042p.py' if referencia == 'rs042p' else 'testes/fixtures/fluxo_rs042q.py')):
         resumo.update(caminho.read_bytes())
     return resumo.hexdigest()
 
 
-def medir_analise(tamanhos=(32, 128, 512), repeticoes=5, semente=424210):
+def medir_analise(tamanhos=(32, 128, 512), repeticoes=5, semente=424210, referencia="rs042p"):
     if (not tamanhos or len(set(tamanhos)) != len(tamanhos)
             or any(not 1 <= n <= 2048 for n in tamanhos) or not 2 <= repeticoes <= 31):
         raise ValueError('Use tamanhos distintos de 1 a 2048 e 2 a 31 repetições.')
+    if referencia not in ('rs042p', 'rs042q'):
+        raise ValueError('Referência desconhecida.')
+    if referencia == 'rs042p':
+        from testes.fixtures.ssa_rs042p import construir_ssa_antes, otimizar_com_ssa_antes
+        revisao = '3c6acf54b47e56076bdaa94db5ff01074f601161'
+    else:
+        from testes.fixtures.fluxo_rs042q import construir_ssa_antes, otimizar_com_ssa_antes
+        revisao = '47eb322107b41fd9c675fdb3d243df66794f4e2b'
     codigo = identidade_codigo()
-    ferramenta = identidade_ferramenta()
-    metodos = {'construcao_atual': construir_ssa, 'construcao_rs042p': construir_ssa_antes,
-               'otimizacao_atual': otimizar_com_ssa, 'otimizacao_rs042p': otimizar_com_ssa_antes}
+    ferramenta = identidade_ferramenta(referencia)
+    metodos = {'construcao_atual': construir_ssa, 'construcao_' + referencia: construir_ssa_antes,
+               'otimizacao_atual': otimizar_com_ssa, 'otimizacao_' + referencia: otimizar_com_ssa_antes}
     registros = {(n, nome): {'tamanho': n, 'metodo': nome, 'amostras_ms': []}
                  for n in tamanhos for nome in metodos}
     aleatorio = random.Random(semente)
@@ -74,17 +82,17 @@ def medir_analise(tamanhos=(32, 128, 512), repeticoes=5, semente=424210):
                 del resultado
     for tamanho in tamanhos:
         for fase in ('construcao', 'otimizacao'):
-            if registros[tamanho, fase + '_atual']['sha256'] != registros[tamanho, fase + '_rs042p']['sha256']:
-                raise AssertionError('Análise divergiu da referência RS 0.42P.')
+            if registros[tamanho, fase + '_atual']['sha256'] != registros[tamanho, fase + '_' + referencia]['sha256']:
+                raise AssertionError('Análise divergiu da referência selecionada.')
     for registro in registros.values():
         amostras = registro['amostras_ms']
         registro.update({'mediana_ms': statistics.median(amostras),
                          'minimo_ms': min(amostras), 'maximo_ms': max(amostras)})
-    if identidade_codigo() != codigo or identidade_ferramenta() != ferramenta:
+    if identidade_codigo() != codigo or identidade_ferramenta(referencia) != ferramenta:
         raise AssertionError('Código alterado durante a medição.')
-    return {'versao': 'RS 0.42Q', 'sistema': platform.platform(), 'python': platform.python_version(),
+    return {'versao': 'RS 0.42R', 'sistema': platform.platform(), 'python': platform.python_version(),
             'semente': semente, 'repeticoes': repeticoes, 'ordens': ordens,
-            'referencia_commit': '3c6acf54b47e56076bdaa94db5ff01074f601161',
+            'referencia_commit': revisao, 'referencia': referencia,
             'codigo_sha256': codigo,
             'ferramenta_sha256': ferramenta,
             'medida': 'construção SSA ou otimização sobre IR preparada; sem observador; preparação e conferência fora',
@@ -93,13 +101,14 @@ def medir_analise(tamanhos=(32, 128, 512), repeticoes=5, semente=424210):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Comparação de análise SSA RS 0.42Q com RS 0.42P')
+    parser = argparse.ArgumentParser(description='Comparação de análise SSA RS 0.42R com referência selecionada')
     parser.add_argument('--tamanhos', default='32,128,512')
+    parser.add_argument('--referencia', choices=('rs042p', 'rs042q'), default='rs042p')
     parser.add_argument('--repeticoes', type=int, default=5)
     parser.add_argument('--json', type=Path)
     op = parser.parse_args()
     try:
-        resultado = medir_analise(tuple(map(int, op.tamanhos.split(','))), op.repeticoes)
+        resultado = medir_analise(tuple(map(int, op.tamanhos.split(','))), op.repeticoes, referencia=op.referencia)
     except (ValueError, AssertionError) as erro:
         parser.error(str(erro))
     for registro in resultado['resultados']:

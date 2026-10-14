@@ -105,7 +105,7 @@ def main(argv=None):
                     salvar_falha(op.saida, caso, nivel, observado)
                     raise ValueError(f'Falha na semente {caso.semente}, O{nivel}: {observado["classe"]}. Caso salvo para reprodução.')
         op.saida.mkdir(parents=True, exist_ok=True)
-        resumo = {'versao': 'RS 0.42Q', 'alvo': alvo, 'semente_inicial': op.semente,
+        resumo = {'versao': 'RS 0.42R', 'alvo': alvo, 'semente_inicial': op.semente,
             'casos': len(casos), 'execucoes': len(resultados), 'passos': op.passos, 'resultados': resultados}
         (op.saida / 'resumo.json').write_text(json.dumps(resumo, ensure_ascii=False, indent=2), encoding='utf-8')
         print(f'{len(casos)} programas, {len(resultados)} execuções nativas aprovadas ({alvo}).')

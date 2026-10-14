@@ -9,7 +9,7 @@ import heapq
 import json
 
 from .cfg import GrafoCFG
-from .fluxo_dados import analisar_fluxo
+from .fluxo_dados import analisar_fluxo_ssa
 from .nos_ir import ExpressaoIR
 from .medicao_compilacao import etapa
 
@@ -123,7 +123,7 @@ class ProgramaSSA:
             return str(x)
         linhas = ['RS 0.12 - SSA tipada (analise, ainda sem baixar para codigo nativo)']
         if self.cfg.nome_funcao is not None or self.cfg.chamadas:
-            linhas = ['RS 0.42Q - SSA tipada (análise e emissão nativa em O4–O8)']
+            linhas = ['RS 0.42R - SSA tipada (análise e emissão nativa em O4–O8)']
         if self.cfg.tem_curto_circuito():
             linhas.append('Expressões e/ou: filhos com avaliação por curto-circuito; '
                           'o CFG conserva dependências potenciais dos dois lados.')
@@ -201,7 +201,7 @@ def construir_ssa(cfg: GrafoCFG, medidor=None) -> ProgramaSSA:
     """Phi pruned via dominance frontiers; renomeação via árvore de dominadores."""
     cfg.validar_para_ssa()
     with etapa(medidor, 'ssa_fluxo'):
-        fluxo = analisar_fluxo(cfg, medidor=medidor)
+        fluxo = analisar_fluxo_ssa(cfg, medidor=medidor)
     with etapa(medidor, 'ssa_dominancia'):
         alcancaveis = cfg.alcancaveis()
         preds = {b: set() for b in alcancaveis}
