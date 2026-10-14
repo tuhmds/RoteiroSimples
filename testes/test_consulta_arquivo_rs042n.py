@@ -35,14 +35,16 @@ class TestesConsultaArquivoRS042N(unittest.TestCase):
             self.assertTrue(compilar(programa, alvo, nivel=8, otimizar=True))
 
     def test_rejeita_links_finais_inclusive_pendurados(self):
-        def preparar(pasta):
-            (pasta/'alvo').write_bytes(b'preservado')
-            try:
-                os.symlink('alvo', pasta/'arquivo.rsd')
-            except OSError as erro:
-                self.skipTest(f'Criacao de link simbolico indisponivel: {erro}')
-        r, _ = rodar(compilar(analisar_programa(FONTE), alvo_nativo()), antes=preparar)
-        self.assertEqual((r.returncode, r.stdout), (0, '-1\n'), r.stderr)
+        for destino in ('alvo','ausente'):
+            def preparar(pasta):
+                (pasta/'alvo').write_bytes(b'preservado')
+                try:
+                    os.symlink(destino, pasta/'arquivo.rsd')
+                except OSError as erro:
+                    self.skipTest(f'Criacao de link simbolico indisponivel: {erro}')
+            r, _ = rodar(compilar(analisar_programa(FONTE), alvo_nativo()), antes=preparar)
+            with self.subTest(destino=destino):
+                self.assertEqual((r.returncode, r.stdout), (0, '-1\n'), r.stderr)
 
     def test_rejeita_sintaxe_caminhos_e_estado_incorretos(self):
         for comando in ('consulte_arquivo("arquivo.rsd")', 'consulte_arquivo("arquivo.rsd", estado, estado)',

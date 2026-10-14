@@ -269,6 +269,38 @@ class TestesCadastroRetomadaRS042N(unittest.TestCase):
             self.assertEqual((r.returncode,r.stdout),(3,'9223372036854775807\n47\n9223372036854775807\n'),r.stderr)
             self.assertFalse((Path(pasta)/'cadastro_b.rsd').exists())
 
+    def test_alvo_fisicamente_excessivo_nao_pode_confirmar_copia_ilegivel(self):
+        for nivel in (0, 8):
+            with self.subTest(nivel=nivel), tempfile.TemporaryDirectory() as pasta:
+                self.preparar(pasta)
+                alvo = Path(pasta)/'cadastro_b.rsd'
+                with alvo.open('r+b') as arquivo:
+                    arquivo.truncate(8388649)
+                anteriores = {p.name:p.read_bytes() for p in Path(pasta).iterdir()}
+                r = self.executar('salvar', pasta, nivel, '99\n')
+                self.assertEqual((r.returncode,r.stdout),(3,'3\n43\n3\n'),r.stderr)
+                # Somente a trava nova pode aparecer; as duas copias ficam intactas.
+                for nome, dados in anteriores.items():
+                    self.assertEqual((Path(pasta)/nome).read_bytes(),dados)
+                self.conferir_leitura(pasta,3,True,29,nivel)
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Limite de escrita exige Linux.')
+    def test_falha_real_apos_escrita_parcial_recupera_geracao_anterior_linux(self):
+        import resource
+        import signal
+        def limitar():
+            signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+            resource.setrlimit(resource.RLIMIT_FSIZE,(1024,1024))
+        with tempfile.TemporaryDirectory() as pasta:
+            self.preparar(pasta)
+            anterior=(Path(pasta)/'cadastro_a.rsd').read_bytes()
+            r=subprocess.run([str(self.executaveis['salvar',8])],cwd=pasta,
+                input='99\n',capture_output=True,text=True,encoding='utf-8',
+                preexec_fn=limitar,timeout=20)
+            self.assertEqual((r.returncode,r.stdout),(3,'3\n43\n3\n'),r.stderr)
+            self.assertEqual((Path(pasta)/'cadastro_a.rsd').read_bytes(),anterior)
+            self.conferir_leitura(pasta,3,True)
+
     def test_sobras_de_copia_anterior_nao_entram_no_cadastro_reduzido(self):
         fonte = '''importe "padrao/cadastro_retomada.rts" como disco
 importe "padrao/cadastro_variavel.rts" como cad

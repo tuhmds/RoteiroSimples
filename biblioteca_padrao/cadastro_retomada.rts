@@ -262,8 +262,14 @@ funcao gravar_copia(dados: emprestimo[bytes], indice: inteiro, geracao: inteiro)
     se estado != 0 {
         retorne 43
     }
-    // Invalidar e sincronizar antes de reutilizar qualquer byte da copia.
+    // Nao confirmar uma copia que a retomada recusaria pelo tamanho fisico.
+    // Sem truncamento, sobras acima do limite exigem intervencao explicita.
     seja bloco: bytes[4096]
+    carregue_de(recurso, bloco, 8388648, 1, estado)
+    se estado != 0 {
+        retorne 43
+    }
+    // Invalidar e sincronizar antes de reutilizar qualquer byte da copia.
     para indice_limpeza de 0 ate 7 {
         adicione_byte(bloco, 0)
     }
@@ -348,6 +354,9 @@ publico funcao inicializar() -> Gravacao {
     seja vazio = cad.criar()
     seja dados = cad.serializar(empreste(vazio))
     estado = gravar_copia(empreste(dados.valor), 0, 1)
+    se estado == 43 {
+        retorne responder(estado, 0)
+    }
     retorne responder(estado, 1)
 }
 
@@ -377,5 +386,8 @@ publico funcao salvar(cadastro: emprestimo[cad.Cadastro], geracao_esperada: inte
     }
     seja geracao = leitura.geracao + 1
     estado = gravar_copia(empreste(dados.valor), 1 - leitura.copia, geracao)
+    se estado == 43 {
+        retorne responder(estado, leitura.geracao)
+    }
     retorne responder(estado, geracao)
 }
