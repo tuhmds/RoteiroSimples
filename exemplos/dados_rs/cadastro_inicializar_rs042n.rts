@@ -1,0 +1,9 @@
+importe "padrao/cadastro_retomada.rts" como disco
+inicio {
+    seja resposta = disco.inicializar()
+    escreva(resposta.codigo_erro)
+    escreva(resposta.geracao)
+    se resposta.valido == falso {
+        encerre(3)
+    }
+}

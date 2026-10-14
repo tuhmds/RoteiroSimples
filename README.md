@@ -1,6 +1,20 @@
-# RoteiroSimples (RS) — versão experimental 0.42M
+# RoteiroSimples (RS) — versão experimental 0.42N
 
-## RS 0.42M — UTF-8 explícito e cadastro persistente em RS
+## RS 0.42N — Retomada coordenada de cadastro em RS
+
+O cadastro experimental agora usa duas cópias alternadas, geração e marcador
+de confirmação. Leitores e gravadores cooperantes usam uma trava estável;
+uma gravação com geração obsoleta é recusada. A leitura retoma a cópia válida
+mais recente quando a outra está incompleta ou corrompida. Formato, seleção,
+validação e protocolo de escrita continuam implementados em RS.
+
+`consulte_arquivo` distingue arquivo aceito, ausência e falha sem abrir nem
+alterar o arquivo. Três executáveis demonstram inicialização, atualização e
+reabertura; os testes encerram processos em etapas da rotina real de escrita.
+O marco não oferece ACID nem durabilidade absoluta após perda de energia.
+[Contrato, formato, exemplos e limites](docs/RETOMADA_COORDENADA_RS_0_42N.md).
+
+## Histórico: RS 0.42M — UTF-8 explícito e cadastro persistente em RS
 
 A linguagem agora converte texto e bytes explicitamente, com UTF-8 inválido
 reportado por estado recuperável e preservação do destino. A biblioteca
@@ -1049,13 +1063,13 @@ python3 compilar.py exemplos/listas_dinamicas.rts --alvo linux -O 8 -o roteiro_l
 python3 -m unittest discover -s testes -v
 ```
 
-O compilador aceita os níveis históricos **`-O 0` até `-O 8`**. Na 0.42M,
+O compilador aceita os níveis históricos **`-O 0` até `-O 8`**. Na 0.42N,
 programas escalares com funções elegíveis usam IR com transformações até O3
 e emissão SSA com alocação em O4–O8;
 registros, donos, empréstimos e arquivos continuam no gerador conservador.
 `--mostrar-estrategia` informa o caminho e o nível efetivos.
 
-## Recursos presentes na RS 0.42M
+## Recursos presentes na RS 0.42N
 
 | Recurso | Situação |
 |---|---|
@@ -1087,6 +1101,8 @@ registros, donos, empréstimos e arquivos continuam no gerador conservador.
 | Contagem Unicode, igualdade de conteúdo e consulta explícita de bytes | Implementado na 0.42A.2 |
 | Conversão explícita UTF-8 entre texto e bytes, com erro recuperável | Implementado na 0.42M |
 | Cadastro variável em RS, serialização versionada e persistência por snapshot | Prova experimental na 0.42M; sem transações ou recuperação automática |
+| Retomada de cadastro com duas cópias, confirmação, geração e trava estável | Prova experimental na 0.42N; processos cooperantes, sem ACID ou garantia absoluta após perda de energia |
+| `consulte_arquivo` com ausência distinta de falha e recusa de links finais | Implementado na 0.42N; nome literal ASCII simples no diretório corrente |
 | Bytes dinâmicos, funções proprietárias e empréstimos de leitura | Implementado na 0.42A.3 |
 | Biblioteca de análise léxica escrita em RS | Implementado na 0.42C |
 | Codificação binária em RS e prova `.rsd` com 100 registros | Implementado; ainda não é um motor de banco |
@@ -1130,12 +1146,15 @@ registros, donos, empréstimos e arquivos continuam no gerador conservador.
 
 ## Próximas prioridades
 
-**Consolidar persistência e memória:** a 0.42M entrega um cadastro variável
-em RS com UTF-8 explícito, serialização limitada e reabertura validada.
-A próxima etapa deve especificar e testar recuperação após interrupção,
-coordenação de acesso e orçamento de memória antes de anunciar garantias
-maiores. O formato RSCV é experimental; a prova anterior de 100 registros
-continua disponível. O Dados RS será um projeto próprio, separado do compilador.
+**Consolidar persistência e memória:** a 0.42N acrescenta retomada com duas
+cópias e atualização condicional por geração sob trava, sobre o cadastro
+variável da 0.42M. As próximas etapas devem definir orçamento de memória,
+sincronização do diretório na criação, migração e ensaios de falhas do sistema
+e perda de energia antes de ampliar as garantias. RSCV e RSCN são formatos
+experimentais, disponíveis em arquivos separados sem migração automática;
+a prova anterior de 100 registros continua disponível. Transações, WAL e
+índices seguem pendentes. O Dados RS será um projeto próprio, separado do
+compilador.
 
 Recursos proprietários precisam de contratos de memória na IR antes de
 receber as transformações SSA já aplicadas às funções escalares. Oráculos,

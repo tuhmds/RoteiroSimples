@@ -234,6 +234,8 @@ def efeito_instrucao_arvore(no):
             e = e.combinar(efeito_expressao_arvore(no[4]))
         return (e.combinar(_gravar(no[-1]))
                 .combinar(Efeitos(arquivos=True, pode_falhar=True)))
+    if operacao == 'consulte_arquivo':
+        return Efeitos(escritas=frozenset((no[2],)), arquivos=True, pode_falhar=True)
     if operacao == 'publique_arquivo':
         return Efeitos(escritas=frozenset((no[3],)),
                        arquivos=True, pode_falhar=True)

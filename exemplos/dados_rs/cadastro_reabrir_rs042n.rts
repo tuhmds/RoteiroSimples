@@ -1,0 +1,26 @@
+importe "padrao/cadastro_retomada.rts" como disco
+importe "padrao/cadastro_variavel.rts" como cad
+funcao mostrar(registro: emprestimo[cad.Registro]) -> inteiro {
+    escreva(registro.codigo)
+    escreva(registro.titulo)
+    escreva(tamanho(registro.conteudo))
+    se tamanho(registro.conteudo) > 0 {
+        escreva(registro.conteudo[0])
+    }
+    retorne 0
+}
+inicio {
+    seja leitura = disco.carregar()
+    se leitura.valido == falso {
+        escreva(leitura.codigo_erro)
+        encerre(3)
+    }
+    escreva(leitura.geracao)
+    escreva(leitura.recuperado)
+    escreva(tamanho(leitura.valor.registros))
+    seja indice = 0
+    enquanto indice < tamanho(leitura.valor.registros) {
+        seja mostrado = mostrar(empreste(leitura.valor.registros[indice]))
+        indice = indice + 1
+    }
+}

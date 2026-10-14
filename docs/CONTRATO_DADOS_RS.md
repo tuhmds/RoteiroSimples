@@ -2,15 +2,19 @@
 
 **Situação:** especificação de arquitetura, não implementação de banco de dados.
 
-**Avanço até a RS 0.42M:** texto e bytes dinâmicos, registros e coleções
+**Avanço até a RS 0.42N:** texto e bytes dinâmicos, registros e coleções
 proprietárias, resultados com donos e leitura por empréstimo estão implementados.
 A conversão UTF-8 explícita e o cadastro variável com serialização e persistência
 por snapshot estão em [CADASTRO_PERSISTENTE_RS_0_42M.md](CADASTRO_PERSISTENTE_RS_0_42M.md).
+A retomada experimental da 0.42N usa duas cópias alternadas, geração,
+confirmação e trava estável entre processos cooperantes; o contrato está em
+[RETOMADA_COORDENADA_RS_0_42N.md](RETOMADA_COORDENADA_RS_0_42N.md).
 A prova anterior entre dois processos com 100 registros permanece em
 [DADOS_RS_PROVA_BINARIA_V1.md](DADOS_RS_PROVA_BINARIA_V1.md).
 Estes formatos experimentais não congelam o futuro formato do motor.
-Páginas, transações, índices, concorrência e recuperação continuam propostas
-deste contrato.
+Páginas, transações, índices, isolamento geral e recuperação transacional
+continuam propostas deste contrato. A prova de retomada não oferece ACID
+nem durabilidade absoluta após perda de energia.
 
 ## 1. Decisão de produto
 
@@ -66,6 +70,26 @@ Nenhum formato binário está congelado antes de testes de retomada e migração
 
 ## 4. Transações e integridade
 
+**Base experimental da RS 0.42N:** a biblioteca `cadastro_retomada.rts` guarda
+snapshots completos em `cadastro_a.rsd` e `cadastro_b.rsd`, coordenados por
+`cadastro_trava.rsl`, no diretório corrente. O envelope RSCN de 40 bytes contém
+geração e confirmação; seu corpo conserva o RSCV da 0.42M. Sob a mesma trava
+exclusiva não bloqueante, a leitura escolhe a maior geração válida e a escrita
+compara a geração esperada antes de reutilizar a outra cópia. Uma cópia
+presente inválida pode ser ignorada se a outra for válida; duas inválidas,
+gerações iguais ou versão de envelope desconhecida são recusadas. A ausência
+das duas cópias exige inicialização explícita. Uma inicialização parcial
+antes da primeira confirmação exige intervenção, sem recriação automática.
+
+A escrita invalida e sincroniza o marcador, escreve envelope/corpo e
+sincroniza, depois confirma com `CONFIRMA` e sincroniza novamente. Não trunca
+arquivos; sobras de um corpo anterior são ignoradas dentro do limite físico.
+Todos os processos devem conservar a trava estável e usar um diretório
+confiável. A lógica foi escrita em RS, sobre os recursos nativos de arquivo;
+esses passos não implementam WAL, rollback ou transações gerais. O módulo
+anterior de snapshot e seus arquivos seguem disponíveis separadamente,
+sem migração automática.
+
 Primeiro objetivo: um gravador por banco e leitores coordenados, com
 `inicie_transacao`, `confirme`, `desfaca`. Um diário de gravação
 anterior (WAL ou mecanismo equivalente) deve registrar alterações e o
@@ -75,6 +99,10 @@ operações confirmadas, descarta as incompletas e verifica integridade.
 **Não declarar ACID/durabilidade real** sem sincronização de dados e
 metadados no disco, trava de concorrência, testes de desligamento abrupto e
 documentação das garantias por plataforma.
+A 0.42N sincroniza arquivos, mas não implementa sincronização do diretório
+após criar as cópias ou a trava. Seus testes com `TerminateProcess`/`SIGKILL`
+cobrem interrupção do processo com o sistema ainda ativo; não representam
+desligamento físico nem asseguram sobrevivência absoluta a perda de energia.
 
 ## 5. Consultas
 
@@ -133,10 +161,20 @@ no Windows). Essas funções têm limites documentados e são exercitadas
 em binários Windows/Linux, incluindo falhas injetadas por encerramento
 em pontos definidos do fluxo.
 
-**Ainda não basta para um banco confiável:** não existem WAL, recuperação
+A RS 0.42N acrescentou `consulte_arquivo`, consulta recuperável de nome
+literal ASCII simples no diretório corrente, sem abrir ou alterar o arquivo:
+`0` indica arquivo aceito, `1` ausência e `-1` falha ou tipo recusado. A emissão
+usa `GetFileAttributesA` no Windows e `newfstatat` com
+`AT_SYMLINK_NOFOLLOW` no Linux x86-64, recusando links finais. A consulta não
+elimina a corrida até a abertura; o protocolo continua exigindo diretório
+confiável e processos cooperantes.
+
+**Ainda não basta para um banco confiável:** a retomada da 0.42N é limitada
+a dois snapshots completos e geração esperada. Não existem WAL, recuperação
 transacional, isolamento geral de escritores/leitores, proteção integral
-contra links no diretório, nem testes de desligamento físico e falhas
-injetadas das chamadas do sistema.
+contra links no diretório ou testes de desligamento físico. Há injeção de
+falhas em APIs Windows e escrita parcial real no Linux; isso não cobre
+todas as combinações de falha do dispositivo ou do sistema de arquivos.
 
 Prioridades que deverão ser implementadas e validadas na linguagem/núcleo:
 
@@ -148,8 +186,12 @@ Prioridades que deverão ser implementadas e validadas na linguagem/núcleo:
    `resultado[inteiro]` por biblioteca RS (0.38/0.39); ampliar
    a integração de tipos de erro ao núcleo da linguagem.
 4. Publicação por renomeação e bloqueio não bloqueante (0.39),
-   ainda sem controle transacional de concorrência entre arquivos
-   ou garantia absoluta após perda de energia.
+   usados como base para persistência; a 0.42N acrescenta trava estável,
+   confirmação e geração para duas cópias de cadastro. Ainda faltam
+   sincronização do diretório na criação, controle transacional geral,
+   orçamento de memória e validação de perda de energia. OOM e falha de
+   fechamento implícito permanecem fatais; cópias e limite de arquivo não
+   definem o consumo máximo de memória.
 5. Texto dinâmico (0.42A.2), campos proprietários (0.42D) e transporte de
    registros em funções (0.42F) e resultados com conteúdo proprietário
    (0.42G); coleções de registros proprietários chegaram na 0.42H.
@@ -169,6 +211,8 @@ do banco e dos conectores permanece escrita em RS.
 - **Fase B — Dados RS embarcado mínimo:** criar, inserir, listar, reiniciar,
   ler registros corretamente e rejeitar arquivos inválidos; comparações e
   buscas lineares inicialmente.
+  As provas da 0.42M/0.42N demonstram cadastro variável e retomada limitada
+  entre processos, sem concluir o motor embarcado nem suas garantias.
 - **Fase C — esquema e índices:** tipos, restrições, busca por chave e
   comparação de plano sequencial vs. índice.
 - **Fase D — transações:** diário, confirmação, rollback e recuperação de
