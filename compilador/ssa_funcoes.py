@@ -6,6 +6,7 @@ from .cfg import construir_cfg_programa
 from .nos_ir import ExpressaoIR
 from .ssa import construir_ssa
 from .ssa_baixamento import formatar_copias_phi
+from .medicao_compilacao import etapa
 
 
 @dataclass
@@ -37,14 +38,14 @@ class SSAPrograma:
         return True
 
     def formatar(self):
-        linhas = ['RS 0.42P - SSA por função escalar', 'inicio:', self.principal.formatar()]
+        linhas = ['RS 0.42Q - SSA por função escalar', 'inicio:', self.principal.formatar()]
         for nome, ssa in self.funcoes.items():
             f = self.assinaturas[nome]
             linhas.extend((f'funcao {nome}: {f.parametros} -> {f.retorno}; recursiva={f.recursiva}', ssa.formatar()))
         return '\n'.join(linhas)
 
     def para_json(self):
-        return json.dumps({'versao': 'RS 0.42P',
+        return json.dumps({'versao': 'RS 0.42Q',
                            'modo': 'SSA por função; emissão nativa com alocação em O4–O8',
                            'principal': json.loads(self.principal.para_json()),
                            'funcoes': {nome: {**json.loads(ssa.para_json()),
@@ -60,9 +61,10 @@ class SSAPrograma:
         return '\n'.join(linhas)
 
 
-def construir_ssa_programa(ir, grafos=None):
+def construir_ssa_programa(ir, grafos=None, medidor=None):
     grafos = grafos or construir_cfg_programa(ir)
-    programa = SSAPrograma(construir_ssa(grafos.principal),
-                           {nome: construir_ssa(cfg) for nome, cfg in grafos.funcoes.items()}, ir.funcoes)
-    programa.validar()
+    programa = SSAPrograma(construir_ssa(grafos.principal, medidor=medidor),
+                           {nome: construir_ssa(cfg, medidor=medidor) for nome, cfg in grafos.funcoes.items()}, ir.funcoes)
+    with etapa(medidor, 'ssa_validacao_programa'):
+        programa.validar()
     return programa

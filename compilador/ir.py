@@ -5,6 +5,7 @@ from .erros import ErroCompilacao
 from .nos_ir import MINIMO, MAXIMO, ExpressaoIR, InstrucaoIR, ProgramaIR, FuncaoIR
 from .otimizador import dobrar_constantes
 from .cobertura_intermediaria import analisar_cobertura, motivos_de_cobertura, funcoes_escalares_representaveis
+from .medicao_compilacao import etapa
 
 def converter_expressao(expr, tipos, otimizar=True, literal_minimo=False, assinaturas=None):
     tag = expr[0]
@@ -70,26 +71,28 @@ def converter_instrucao(instr, tipos, otimizar, assinaturas=None):
     raise ErroCompilacao(f'Instrução IR desconhecida: {tag}.')
 
 
-def construir_ir(programa, otimizar=True, nivel=1):
+def construir_ir(programa, otimizar=True, nivel=1, medidor=None):
     """Constrói IR somente quando a tradução é representável sem perdas."""
-    cobertura = analisar_cobertura(programa)
-    impedimentos = list(motivos_de_cobertura(cobertura))
-    tem_funcoes = bool(getattr(programa, 'funcoes', None))
-    if tem_funcoes and not funcoes_escalares_representaveis(programa):
-        impedimentos.append('funções fora do contrato escalar da IR')
-    if getattr(programa, 'registros', None):
-        impedimentos.append('registros não são representados na IR atual')
-    # Escopos com variáveis já renomeadas internamente podem ter
-    # uma IR útil para análise quando todas as operações são conhecidas.
-    # Funções escalares usam esses nomes; escopos com recursos continuam
-    # selecionando o gerador conservador pelo contrato de estratégia.
-    if impedimentos:
-        raise ErroCompilacao(
-            'A representação intermediária não está disponível para este programa: '
-            + '; '.join(impedimentos) + '. '
-            'A compilação nativa permanece disponível pelo gerador conservador.')
-    assinaturas = {nome: (funcao.parametros, funcao.retorno)
-                   for nome, funcao in getattr(programa, 'funcoes', {}).items()}
+    with etapa(medidor, 'ir_cobertura'):
+        cobertura = analisar_cobertura(programa)
+        impedimentos = list(motivos_de_cobertura(cobertura))
+        tem_funcoes = bool(getattr(programa, 'funcoes', None))
+        if tem_funcoes and not funcoes_escalares_representaveis(programa):
+            impedimentos.append('funções fora do contrato escalar da IR')
+        if getattr(programa, 'registros', None):
+            impedimentos.append('registros não são representados na IR atual')
+        # Escopos com variáveis já renomeadas internamente podem ter
+        # uma IR útil para análise quando todas as operações são conhecidas.
+        # Funções escalares usam esses nomes; escopos com recursos continuam
+        # selecionando o gerador conservador pelo contrato de estratégia.
+        if impedimentos:
+            raise ErroCompilacao(
+                'A representação intermediária não está disponível para este programa: '
+                + '; '.join(impedimentos) + '. '
+                'A compilação nativa permanece disponível pelo gerador conservador.')
+    with etapa(medidor, 'ir_assinaturas'):
+        assinaturas = {nome: (funcao.parametros, funcao.retorno)
+                       for nome, funcao in getattr(programa, 'funcoes', {}).items()}
     def converter_corpo(corpo):
         ir = ProgramaIR(tuple(converter_instrucao(i, corpo.tipos, otimizar, assinaturas)
                               for i in corpo.instrucoes),
@@ -97,31 +100,39 @@ def construir_ir(programa, otimizar=True, nivel=1):
                         corpo.importa_matematica, escopos_locais=corpo.escopos_locais)
         if tem_funcoes and otimizar and nivel >= 2:
             from .propagacao import propagar_constantes_locais
-            ir = propagar_constantes_locais(ir)
+            with etapa(medidor, 'ir_propagacao_local'):
+                ir = propagar_constantes_locais(ir)
         return ir
-    ir = converter_corpo(programa)
+    with etapa(medidor, 'ir_conversao'):
+        ir = converter_corpo(programa)
     if tem_funcoes:
-        ir = replace(ir, funcoes={nome: FuncaoIR(nome, funcao.parametros, funcao.retorno,
-            converter_corpo(funcao.programa), funcao.recursiva)
-            for nome, funcao in programa.funcoes.items()})
+        with etapa(medidor, 'ir_conversao_funcoes'):
+            ir = replace(ir, funcoes={nome: FuncaoIR(nome, funcao.parametros, funcao.retorno,
+                converter_corpo(funcao.programa), funcao.recursiva)
+                for nome, funcao in programa.funcoes.items()})
         if otimizar and nivel >= 3:
             from .otimizacao_funcoes_ssa import otimizar_funcoes_com_ssa
-            ir = otimizar_funcoes_com_ssa(ir)
+            with etapa(medidor, 'ir_otimizacao_ssa_funcoes'):
+                ir = otimizar_funcoes_com_ssa(ir, medidor=medidor)
         return ir
     if otimizar and nivel >= 2 and not any(isinstance(t, tuple) and t[0] in ('lista', 'texto') for t in programa.tipos.values()):
         from .propagacao import propagar_constantes_locais
-        ir = propagar_constantes_locais(ir)
+        with etapa(medidor, 'ir_propagacao_local'):
+            ir = propagar_constantes_locais(ir)
         if nivel >= 3:
             from .ssa_otimizador import otimizar_com_ssa
-            ir = otimizar_com_ssa(ir)
+            with etapa(medidor, 'ir_otimizacao_ssa'):
+                ir = otimizar_com_ssa(ir, medidor=medidor)
     if otimizar and nivel >= 7 and any(isinstance(t, tuple) and t[0] == 'lista'
                                        for t in programa.tipos.values()):
         from .otimizador_memoria import otimizar_acessos_memoria
-        ir = otimizar_acessos_memoria(ir)
+        with etapa(medidor, 'ir_otimizacao_memoria'):
+            ir = otimizar_acessos_memoria(ir)
     if otimizar and nivel >= 8 and any(isinstance(t, tuple) and t[0] == 'lista'
                                         for t in programa.tipos.values()):
         from .otimizacao_entre_blocos import otimizar_entre_blocos
-        ir = otimizar_entre_blocos(ir)
+        with etapa(medidor, 'ir_otimizacao_entre_blocos'):
+            ir = otimizar_entre_blocos(ir)
     return ir
 
 

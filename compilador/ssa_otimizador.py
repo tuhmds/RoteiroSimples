@@ -14,6 +14,7 @@ from .fluxo_dados import analisar_fluxo
 from .nos_ir import ExpressaoIR, ProgramaIR
 from .otimizador import dobrar_constantes
 from .ssa import construir_ssa
+from .medicao_compilacao import etapa
 
 
 # Objetos distintos evitam confundir o inteiro 0 com um estado desconhecido.
@@ -113,33 +114,37 @@ def _reescrever_expressao(expr, constantes):
     return dobrar_constantes(replace(expr, filhos=filhos))
 
 
-def otimizar_com_ssa(ir: ProgramaIR):
+def otimizar_com_ssa(ir: ProgramaIR, medidor=None):
     """Usa definicoes SSA para reescrever atribuicoes e impressao de inteiros.
 
     Cada instrucao fonte ocorre em um unico bloco CFG. Fazemos correspondencia
     por identidade do proprio no InstrucaoIR, nunca pela linha (que pode repetir
     em codigo gerado) nem pelo nome nao-versionado da variavel.
     """
-    cfg = construir_cfg(ir)
-    ssa = construir_ssa(cfg)
-    constantes = analisar_constantes_ssa(ssa)
-    alteracoes = {}
-    for bid, bloco in cfg.blocos.items():
-        if bid not in ssa.blocos or not ssa.blocos[bid].alcancavel or not bloco.instrucoes:
-            continue
-        instr = bloco.instrucoes[0]
-        if instr.operacao not in ('atribua', 'imprima_num'):
-            continue
-        versao = ssa.blocos[bid].instrucoes[0].argumentos[0]
-        if not isinstance(versao, ExpressaoIR):
-            continue
-        novo = _reescrever_expressao(versao, constantes)
-        # Nomes restantes devem voltar a forma da IR original; somente aceitar
-        # reescrita total para literal, que garante ausencia de renomeacoes SSA.
-        if novo.operacao in ('numero', 'logico'):
-            original = instr.argumentos[1] if instr.operacao == 'atribua' else instr.argumentos[0]
-            if novo != original:
-                alteracoes[id(instr)] = novo
+    with etapa(medidor, 'otimizacao_cfg_inicial'):
+        cfg = construir_cfg(ir)
+    with etapa(medidor, 'otimizacao_ssa_inicial'):
+        ssa = construir_ssa(cfg, medidor=medidor)
+    with etapa(medidor, 'otimizacao_constantes'):
+        constantes = analisar_constantes_ssa(ssa)
+    with etapa(medidor, 'otimizacao_identificar_constantes'):
+        alteracoes = {}
+        for bid, bloco in cfg.blocos.items():
+            if bid not in ssa.blocos or not ssa.blocos[bid].alcancavel or not bloco.instrucoes:
+                continue
+            instr = bloco.instrucoes[0]
+            if instr.operacao not in ('atribua', 'imprima_num'):
+                continue
+            versao = ssa.blocos[bid].instrucoes[0].argumentos[0]
+            if not isinstance(versao, ExpressaoIR):
+                continue
+            novo = _reescrever_expressao(versao, constantes)
+            # Nomes restantes devem voltar a forma da IR original; somente aceitar
+            # reescrita total para literal, que garante ausencia de renomeacoes SSA.
+            if novo.operacao in ('numero', 'logico'):
+                original = instr.argumentos[1] if instr.operacao == 'atribua' else instr.argumentos[0]
+                if novo != original:
+                    alteracoes[id(instr)] = novo
 
     def percorrer(instrucoes):
         saida = []
@@ -160,23 +165,30 @@ def otimizar_com_ssa(ir: ProgramaIR):
             saida.append(instr)
         return tuple(saida)
 
-    propagado = ProgramaIR(percorrer(ir.instrucoes), dict(ir.tipos),
-                           dict(ir.variaveis), ir.importa_matematica)
+    with etapa(medidor, 'otimizacao_reescrita_ir'):
+        propagado = ProgramaIR(percorrer(ir.instrucoes), dict(ir.tipos),
+                               dict(ir.variaveis), ir.importa_matematica)
 
     # Elimina somente gravacoes CONSTANTES cujos valores nao sao observados.
     # Divisao, overflow, leia e qualquer outra operacao com efeito sao mantidos.
-    grafo = construir_cfg(propagado)
-    fluxo = analisar_fluxo(grafo)
-    mortos = set()
-    for bid, bloco in grafo.blocos.items():
-        if bid not in grafo.alcancaveis() or not bloco.instrucoes:
-            continue
-        instr = bloco.instrucoes[0]
-        if instr.operacao != 'atribua':
-            continue
-        nome, rhs = instr.argumentos
-        if rhs.operacao in ('numero', 'logico') and nome not in fluxo.vivos_saida[bid]:
-            mortos.add(id(instr))
+    with etapa(medidor, 'otimizacao_cfg_vivacidade'):
+        grafo = construir_cfg(propagado)
+    with etapa(medidor, 'otimizacao_fluxo_vivacidade'):
+        fluxo = analisar_fluxo(grafo, medidor=medidor)
+    with etapa(medidor, 'otimizacao_identificar_mortos'):
+        alcancaveis = grafo.alcancaveis()
+        if medidor is not None:
+            medidor.contar('otimizacao_buscas_alcancaveis', 1)
+        mortos = set()
+        for bid, bloco in grafo.blocos.items():
+            if bid not in alcancaveis or not bloco.instrucoes:
+                continue
+            instr = bloco.instrucoes[0]
+            if instr.operacao != 'atribua':
+                continue
+            nome, rhs = instr.argumentos
+            if rhs.operacao in ('numero', 'logico') and nome not in fluxo.vivos_saida[bid]:
+                mortos.add(id(instr))
 
     def eliminar(instrucoes):
         saida = []
@@ -192,5 +204,6 @@ def otimizar_com_ssa(ir: ProgramaIR):
                 ins = replace(ins, argumentos=(*a[:4], eliminar(a[4])))
             saida.append(ins)
         return tuple(saida)
-    return ProgramaIR(eliminar(propagado.instrucoes), dict(ir.tipos),
-                      dict(ir.variaveis), ir.importa_matematica)
+    with etapa(medidor, 'otimizacao_eliminacao_ir'):
+        return ProgramaIR(eliminar(propagado.instrucoes), dict(ir.tipos),
+                          dict(ir.variaveis), ir.importa_matematica)

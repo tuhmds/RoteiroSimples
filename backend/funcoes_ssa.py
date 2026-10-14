@@ -26,7 +26,7 @@ def construir_backend_funcoes_ssa(ir, coalescer=False, medidor=None):
     with etapa(medidor, 'cfg_funcoes'):
         grafos = construir_cfg_programa(ir)
     with etapa(medidor, 'ssa_funcoes'):
-        programa = construir_ssa_programa(ir, grafos)
+        programa = construir_ssa_programa(ir, grafos, medidor=medidor)
     # O montador destes quadros aplica sondagem e o limite global de 768 KiB.
     # O limite antigo de 256 vagas continua no caminho SSA sem funções.
     with etapa(medidor, 'alocacao_registradores'):

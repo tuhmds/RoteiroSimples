@@ -5,11 +5,13 @@ phi com fronteiras de dominância e verificação das arestas. NÃO altera o bac
 """
 from collections import defaultdict
 from dataclasses import dataclass, field
+import heapq
 import json
 
 from .cfg import GrafoCFG
 from .fluxo_dados import analisar_fluxo
 from .nos_ir import ExpressaoIR
+from .medicao_compilacao import etapa
 
 
 def _ordenar_bloco(nome):
@@ -121,7 +123,7 @@ class ProgramaSSA:
             return str(x)
         linhas = ['RS 0.12 - SSA tipada (analise, ainda sem baixar para codigo nativo)']
         if self.cfg.nome_funcao is not None or self.cfg.chamadas:
-            linhas = ['RS 0.42P - SSA tipada (análise e emissão nativa em O4–O8)']
+            linhas = ['RS 0.42Q - SSA tipada (análise e emissão nativa em O4–O8)']
         if self.cfg.tem_curto_circuito():
             linhas.append('Expressões e/ou: filhos com avaliação por curto-circuito; '
                           'o CFG conserva dependências potenciais dos dois lados.')
@@ -166,72 +168,93 @@ class ProgramaSSA:
         }, ensure_ascii=False, indent=2) + '\n'
 
 
-def construir_ssa(cfg: GrafoCFG) -> ProgramaSSA:
-    """Phi pruned via dominance frontiers; renomeação via árvore de dominadores."""
-    cfg.validar_para_ssa()
-    fluxo = analisar_fluxo(cfg)
-    alcancaveis = cfg.alcancaveis()
-    preds = {b: set() for b in alcancaveis}
-    for bid in alcancaveis:
-        for a in cfg.blocos[bid].saidas:
-            if a.destino in alcancaveis:
-                preds[a.destino].add(bid)
-    idom = {cfg.entrada: None}
-    for b in sorted(alcancaveis, key=_ordenar_bloco):
-        if b == cfg.entrada:
-            continue
-        candidatos = fluxo.dominadores[b] - {b}
-        if not candidatos:
-            raise ValueError(f'Sem dominador imediato para {b}')
-        idom[b] = max(candidatos, key=lambda x: len(fluxo.dominadores[x]))
-    filhos = {b: [] for b in alcancaveis}
-    for b, pai in idom.items():
-        if pai is not None:
-            filhos[pai].append(b)
-    for lista in filhos.values():
-        lista.sort(key=_ordenar_bloco)
-
-    fronteiras = {b: set() for b in alcancaveis}
-    for bloco in alcancaveis:
-        if len(preds[bloco]) < 2:
-            continue
-        for p in preds[bloco]:
-            atual = p
-            while atual != idom[bloco]:
-                fronteiras[atual].add(bloco)
-                atual = idom[atual]
-                if atual is None:
-                    raise ValueError('CFG inconsistente ao calcular fronteiras de dominância.')
-
-    blocos = {bid: BlocoSSA(bid, cfg.blocos[bid].papel, alcancavel=bid in alcancaveis)
-              for bid in cfg.blocos}
-    tipos = {nome: cfg_tipo(fluxo, nome)
-             for nome in sorted(set().union(*(fluxo.definicoes[b] for b in alcancaveis)))}
-    incrementos = {bid: f'__rs_incremento_{bid}' for bid in alcancaveis
-                   if cfg.blocos[bid].papel == 'para:incremento'
-                   and any(a.motivo == 'estouro_incremento' for a in cfg.blocos[bid].saidas)}
-    tipos.update({nome: 'inteiro' for nome in incrementos.values()})
-    gravacoes = {next(a.destino for a in cfg.blocos[bid].saidas if a.motivo == 'proximo'): nome
-                for bid, nome in incrementos.items()}
-    definicoes_por_nome = defaultdict(set)
-    for bid in alcancaveis:
-        for nome in fluxo.definicoes[bid]:
-            definicoes_por_nome[nome].add(bid)
-
-    # Posicionamento de phi iterado nas fronteiras de dominância, filtrado por vivacidade.
+def _posicionar_phis(definicoes_por_nome, fronteiras, vivos_entrada, blocos, tipos, medidor=None):
+    """Fila mínima conserva a ordem histórica sem varrer os pendentes."""
+    insercoes = remocoes = maximo = 0
     for nome in sorted(definicoes_por_nome):
-        pendentes = set(definicoes_por_nome[nome])
+        pendentes = [(_ordenar_bloco(b), b) for b in definicoes_por_nome[nome]]
+        heapq.heapify(pendentes)
+        insercoes += len(pendentes)
+        maximo = max(maximo, len(pendentes))
         usados = set()
         while pendentes:
-            x = min(pendentes, key=_ordenar_bloco)
-            pendentes.remove(x)
+            _, x = heapq.heappop(pendentes)
+            remocoes += 1
             for y in sorted(fronteiras[x], key=_ordenar_bloco):
-                if y in usados or nome not in fluxo.vivos_entrada[y]:
+                if y in usados or nome not in vivos_entrada[y]:
                     continue
                 usados.add(y)
                 blocos[y].phis[nome] = PhiSSA(nome, '', tipos[nome])
+                # Cada junção entra uma vez: usados impede duplicação;
+                # os blocos de definição já estavam na fila inicial.
                 if y not in definicoes_por_nome[nome]:
-                    pendentes.add(y)
+                    heapq.heappush(pendentes, (_ordenar_bloco(y), y))
+                    insercoes += 1
+                    maximo = max(maximo, len(pendentes))
+    if medidor is not None:
+        medidor.contar('ssa_fila_phi_insercoes', insercoes)
+        medidor.contar('ssa_fila_phi_remocoes', remocoes)
+        medidor.contar('ssa_fila_phi_picos_somados', maximo)
+
+
+def construir_ssa(cfg: GrafoCFG, medidor=None) -> ProgramaSSA:
+    """Phi pruned via dominance frontiers; renomeação via árvore de dominadores."""
+    cfg.validar_para_ssa()
+    with etapa(medidor, 'ssa_fluxo'):
+        fluxo = analisar_fluxo(cfg, medidor=medidor)
+    with etapa(medidor, 'ssa_dominancia'):
+        alcancaveis = cfg.alcancaveis()
+        preds = {b: set() for b in alcancaveis}
+        for bid in alcancaveis:
+            for a in cfg.blocos[bid].saidas:
+                if a.destino in alcancaveis:
+                    preds[a.destino].add(bid)
+        idom = {cfg.entrada: None}
+        for b in sorted(alcancaveis, key=_ordenar_bloco):
+            if b == cfg.entrada:
+                continue
+            candidatos = fluxo.dominadores[b] - {b}
+            if not candidatos:
+                raise ValueError(f'Sem dominador imediato para {b}')
+            idom[b] = max(candidatos, key=lambda x: len(fluxo.dominadores[x]))
+        filhos = {b: [] for b in alcancaveis}
+        for b, pai in idom.items():
+            if pai is not None:
+                filhos[pai].append(b)
+        for lista in filhos.values():
+            lista.sort(key=_ordenar_bloco)
+
+        fronteiras = {b: set() for b in alcancaveis}
+        for bloco in alcancaveis:
+            if len(preds[bloco]) < 2:
+                continue
+            for p in preds[bloco]:
+                atual = p
+                while atual != idom[bloco]:
+                    fronteiras[atual].add(bloco)
+                    atual = idom[atual]
+                    if atual is None:
+                        raise ValueError('CFG inconsistente ao calcular fronteiras de dominância.')
+
+    with etapa(medidor, 'ssa_preparacao_phi'):
+        blocos = {bid: BlocoSSA(bid, cfg.blocos[bid].papel, alcancavel=bid in alcancaveis)
+                  for bid in cfg.blocos}
+        tipos = {nome: cfg_tipo(fluxo, nome)
+                 for nome in sorted(set().union(*(fluxo.definicoes[b] for b in alcancaveis)))}
+        incrementos = {bid: f'__rs_incremento_{bid}' for bid in alcancaveis
+                       if cfg.blocos[bid].papel == 'para:incremento'
+                       and any(a.motivo == 'estouro_incremento' for a in cfg.blocos[bid].saidas)}
+        tipos.update({nome: 'inteiro' for nome in incrementos.values()})
+        gravacoes = {next(a.destino for a in cfg.blocos[bid].saidas if a.motivo == 'proximo'): nome
+                    for bid, nome in incrementos.items()}
+        definicoes_por_nome = defaultdict(set)
+        for bid in alcancaveis:
+            for nome in fluxo.definicoes[bid]:
+                definicoes_por_nome[nome].add(bid)
+
+    with etapa(medidor, 'ssa_posicionamento_phi'):
+        _posicionar_phis(definicoes_por_nome, fronteiras, fluxo.vivos_entrada,
+                        blocos, tipos, medidor)
 
     pilhas = defaultdict(list)
     contador = defaultdict(int)
@@ -316,23 +339,25 @@ def construir_ssa(cfg: GrafoCFG) -> ProgramaSSA:
                 phi.entradas[bid] = ler(nome)
         return criadas
 
-    # A árvore de dominância pode ser profunda mesmo sem laços aninhados.
-    # Percurso iterativo evita esgotar a pilha do compilador Python.
-    pendentes = [(cfg.entrada, False, ())]
-    while pendentes:
-        bid, saindo, criadas = pendentes.pop()
-        if saindo:
-            for nome in reversed(criadas):
-                pilhas[nome].pop()
-            continue
-        criadas = visitar(bid)
-        pendentes.append((bid, True, criadas))
-        for filho in reversed(filhos[bid]):
-            pendentes.append((filho, False, ()))
+    with etapa(medidor, 'ssa_renomeacao'):
+        # A árvore de dominância pode ser profunda mesmo sem laços aninhados.
+        # Percurso iterativo evita esgotar a pilha do compilador Python.
+        pendentes = [(cfg.entrada, False, ())]
+        while pendentes:
+            bid, saindo, criadas = pendentes.pop()
+            if saindo:
+                for nome in reversed(criadas):
+                    pilhas[nome].pop()
+                continue
+            criadas = visitar(bid)
+            pendentes.append((bid, True, criadas))
+            for filho in reversed(filhos[bid]):
+                pendentes.append((filho, False, ()))
     ssa = ProgramaSSA(cfg, blocos, tipos,
                       fluxo.dominadores, idom, fronteiras, preds)
     # Tipo de cada phi é mantido no próprio nó; os tipos vêm da IR.
-    ssa.validar()
+    with etapa(medidor, 'ssa_validacao'):
+        ssa.validar()
     return ssa
 
 

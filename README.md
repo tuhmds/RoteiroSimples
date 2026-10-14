@@ -2,7 +2,7 @@
 
 **Linguagem de programação experimental em português brasileiro, com compilação nativa.**
 
-**Versão documentada:** 0.42P · **Estado:** em desenvolvimento, não indicada para produção.
+**Versão documentada:** 0.42Q · **Estado:** em desenvolvimento, não indicada para produção.
 
 A **RS** nasceu para tornar a programação compreensível desde o primeiro contato, usando palavras e mensagens em português brasileiro, sem abandonar fundamentos de compiladores, tipagem, gerenciamento de memória e desempenho. Queremos que aprender a programar e construir programas nativos possam fazer parte da mesma jornada.
 
@@ -35,7 +35,17 @@ Leia o [guia de contribuição](CONTRIBUTING.md), o [modelo de pull request](.gi
 
 ## Histórico detalhado das versões
 
-## RS 0.42P — Consolidação e crescimento da compilação
+## RS 0.42Q — Custos internos de IR e SSA
+
+As medições distinguem conversão, propagação local, otimização escalar,
+fluxo de dados, dominância, colocação de phi, renomeação e validação.
+A eliminação de gravações mortas calcula os blocos alcançáveis uma vez por
+grafo; a fila de colocação de phi mantém a ordem mínima usando um heap.
+Testes com referência congelada conferem a IR, os nós SSA e as imagens
+PE/ELF. A CI guarda uma comparação intercalada de análise com a 0.42P.
+[Contrato, medições e limites](docs/ANALISE_SSA_RS_0_42Q.md).
+
+## Histórico: RS 0.42P — Consolidação e crescimento da compilação
 
 As medições agora incluem leitura de módulos, análise sintática e semântica,
 IR/otimizações, CFG/SSA, alocação, emissão e gravação do executável. Processos

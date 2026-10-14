@@ -17,7 +17,7 @@ def compilar(programa, alvo, otimizar=True, nivel=1, medidor=None):
             gerador, mensagens = montar_codigo(programa, alvo == 'windows')
     else:
         with etapa(medidor, 'ir_e_otimizacoes'):
-            ir = construir_ir(programa, otimizar=otimizar, nivel=decisao.nivel_ir)
+            ir = construir_ir(programa, otimizar=otimizar, nivel=decisao.nivel_ir, medidor=medidor)
         with etapa(medidor, 'ponte_emissor'):
             legado = programa_para_backend(ir)
         if decisao.gerador == 'ssa' and ir.funcoes:
