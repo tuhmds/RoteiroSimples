@@ -166,17 +166,20 @@ inicio {
         self.assertTrue(efeito.pode_falhar)
 
     def test_indices_invalidos_e_dono_movido_falham_controladamente(self):
+        casos = []
         for consulta in ('empreste(nomes[-1])', 'empreste(nomes[1])'):
             fonte = CRIAR + MOSTRAR + 'inicio {\n seja nomes: lista[texto]\n adicione(nomes, criar())\n escreva(mostrar(' + consulta + '))\n}'
+            casos.append((fonte, 'Erro: índice fora dos limites da lista.\n'))
+        casos.append((CRIAR + 'inicio {\n seja nomes: lista[texto]\n seja nome = criar()\n adicione(nomes, mova(nome))\n escreva(nome)\n}',
+                      'Erro: valor dinamico usado depois da movimentacao ou liberacao.\n'))
+        for fonte, diagnostico in casos:
             p = analisar_programa(fonte)
             for nivel in (0, 8):
-                r, _ = rodar(compilar(p, alvo_nativo(), nivel=nivel, otimizar=nivel > 0))
-                self.assertEqual(r.returncode, 1)
-                self.assertIn('ndice', r.stdout)
-        p = analisar_programa(CRIAR + 'inicio {\n seja nomes: lista[texto]\n seja nome = criar()\n adicione(nomes, mova(nome))\n escreva(nome)\n}')
-        r, _ = rodar(compilar(p, alvo_nativo(), nivel=8))
-        self.assertEqual(r.returncode, 1)
-        self.assertIn('movimentacao', r.stdout)
+                with self.subTest(nivel=nivel, diagnostico=diagnostico):
+                    r, _ = rodar(compilar(p, alvo_nativo(), nivel=nivel, otimizar=nivel > 0))
+                    esperado = ((1, diagnostico, '') if alvo_nativo() == 'windows'
+                                else (1, '', diagnostico))
+                    self.assertEqual((r.returncode, r.stdout, r.stderr), esperado)
 
     def test_busca_e_recorte_usam_caracteres_unicode(self):
         fonte = '''importe "padrao/textos.rts" como textos
