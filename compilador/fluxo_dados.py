@@ -3,11 +3,11 @@
 Determina definições que alcançam cada bloco, vivacidade, dominadores e
 pontos de junção candidatos a phi. Não transforma o backend em SSA.
 """
-from collections import defaultdict
 from dataclasses import dataclass
 from .cfg import GrafoCFG
 from .nos_ir import ExpressaoIR
 from .medicao_compilacao import etapa
+from . import calculos_fluxo
 
 
 def nomes_lidos(expressao):
@@ -117,103 +117,81 @@ class AnaliseFluxo:
         }, ensure_ascii=False, indent=2) + '\n'
 
 
-def analisar_fluxo(cfg: GrafoCFG, medidor=None):
-    """Ponto fixo sobre arestas reais, incluindo retroarestas e continue/pare."""
+@dataclass
+class AnaliseVivacidade:
+    cfg: GrafoCFG
+    usos: dict
+    definicoes: dict
+    vivos_entrada: dict
+    vivos_saida: dict
+
+
+@dataclass
+class AnaliseFluxoSSA(AnaliseVivacidade):
+    dominadores: dict
+
+
+def _preparar_fluxo(cfg, medidor):
     with etapa(medidor, 'fluxo_preparacao'):
-        cfg.validar()
-        vivos = cfg.alcancaveis()
-        blocos = cfg.blocos
-        ordem = [nome for nome in blocos if nome in vivos]
-        predecessores = defaultdict(set)
-        for nome in ordem:
-            for aresta in blocos[nome].saidas:
-                if aresta.destino in vivos:
-                    predecessores[aresta.destino].add(nome)
+        grafo = calculos_fluxo.preparar_grafo(cfg)
+        usos, definicoes = {}, {}
+        for nome, bloco in cfg.blocos.items():
+            usos[nome], definicoes[nome] = efeitos_bloco(bloco)
+    return grafo, usos, definicoes
 
-        usos, defs = {}, {}
-        for nome, bloco in blocos.items():
-            usos[nome], defs[nome] = efeitos_bloco(bloco)
-    with etapa(medidor, 'fluxo_definicoes_alcancam'):
-        # Identificadores de definição estáveis: bX:variavel.
-        definicoes_por_variavel = defaultdict(set)
-        for nome in ordem:
-            for variavel in defs[nome]:
-                definicoes_por_variavel[variavel].add(f'{nome}:{variavel}')
-        geradas = {b: {f'{b}:{var}' for var in defs[b]} for b in ordem}
-        eliminadas = {b: set().union(*(definicoes_por_variavel[var] for var in defs[b])) - geradas[b]
-                      for b in ordem}
-        entradas_def = {b: set() for b in blocos}
-        saidas_def = {b: set() for b in blocos}
-        mudou = True
-        while mudou:
-            mudou = False
-            for nome in ordem:
-                entrada = set().union(*(saidas_def[p] for p in predecessores[nome])) if predecessores[nome] else set()
-                saida = geradas[nome] | (entrada - eliminadas[nome])
-                if entrada != entradas_def[nome] or saida != saidas_def[nome]:
-                    entradas_def[nome], saidas_def[nome] = entrada, saida
-                    mudou = True
 
+def _vivacidade(grafo, usos, definicoes, medidor):
     with etapa(medidor, 'fluxo_vivacidade'):
-        vivos_entrada = {b: set() for b in blocos}
-        vivos_saida = {b: set() for b in blocos}
-        mudou = True
-        while mudou:
-            mudou = False
-            for nome in reversed(ordem):
-                saida = set().union(*(vivos_entrada[e.destino] for e in blocos[nome].saidas
-                                      if e.destino in vivos)) if blocos[nome].saidas else set()
-                entrada = usos[nome] | (saida - defs[nome])
-                if entrada != vivos_entrada[nome] or saida != vivos_saida[nome]:
-                    vivos_entrada[nome], vivos_saida[nome] = entrada, saida
-                    mudou = True
+        return calculos_fluxo.calcular_vivacidade(grafo, usos, definicoes)
 
+
+def _dominadores(grafo, medidor):
     with etapa(medidor, 'fluxo_dominadores'):
-        dominadores = {b: set(vivos) if b in vivos else set() for b in blocos}
-        dominadores[cfg.entrada] = {cfg.entrada}
-        mudou = True
-        while mudou:
-            mudou = False
-            for nome in ordem:
-                if nome == cfg.entrada:
-                    continue
-                ps = predecessores[nome]
-                novos = ({nome} | set.intersection(*(dominadores[p] for p in ps))) if ps else {nome}
-                if novos != dominadores[nome]:
-                    dominadores[nome] = novos
-                    mudou = True
+        return calculos_fluxo.calcular_dominadores(grafo)
 
+
+def analisar_vivacidade(cfg: GrafoCFG, medidor=None):
+    """Calcula somente usos/definições locais e variáveis vivas."""
+    grafo, usos, definicoes = _preparar_fluxo(cfg, medidor)
+    entrada, saida = _vivacidade(grafo, usos, definicoes, medidor)
+    if medidor is not None:
+        medidor.contar('fluxo_analises_vivacidade', 1)
+    return AnaliseVivacidade(cfg, usos, definicoes, entrada, saida)
+
+
+def analisar_fluxo_ssa(cfg: GrafoCFG, medidor=None):
+    """Dados usados pela SSA escalar; não cria diagnósticos completos."""
+    grafo, usos, definicoes = _preparar_fluxo(cfg, medidor)
+    entrada, saida = _vivacidade(grafo, usos, definicoes, medidor)
+    dominadores = _dominadores(grafo, medidor)
+    if medidor is not None:
+        medidor.contar('fluxo_analises_ssa', 1)
+    return AnaliseFluxoSSA(cfg, usos, definicoes, entrada, saida, dominadores)
+
+
+def analisar_dominadores(cfg: GrafoCFG, medidor=None):
+    """Somente dominância, sem examinar efeitos ou calcular vivacidade."""
+    with etapa(medidor, 'fluxo_preparacao'):
+        grafo = calculos_fluxo.preparar_grafo(cfg)
+    resultado = _dominadores(grafo, medidor)
+    if medidor is not None:
+        medidor.contar('fluxo_analises_dominadores', 1)
+    return resultado
+
+
+def analisar_fluxo(cfg: GrafoCFG, medidor=None):
+    """Análise completa para diagnóstico, incluindo definições e garantias."""
+    grafo, usos, definicoes = _preparar_fluxo(cfg, medidor)
+    with etapa(medidor, 'fluxo_definicoes_alcancam'):
+        por_variavel, entradas_def, saidas_def = calculos_fluxo.calcular_definicoes_alcancam(grafo, definicoes)
+    vivos_entrada, vivos_saida = _vivacidade(grafo, usos, definicoes, medidor)
+    dominadores = _dominadores(grafo, medidor)
     with etapa(medidor, 'fluxo_definicoes_garantidas'):
-        # Definições possíveis não comprovam definição em TODOS os caminhos.
-        # Interseção com ponto fixo descendente, entrada vazia e parâmetros gerados.
-        universo = set(definicoes_por_variavel)
-        garantidas_entrada = {b: set(universo) if b in vivos else set() for b in blocos}
-        garantidas_saida = {b: set(universo) if b in vivos else set() for b in blocos}
-        mudou = True
-        while mudou:
-            mudou = False
-            for nome in ordem:
-                ps = predecessores[nome]
-                entrada = (set.intersection(*(garantidas_saida[p] for p in ps))
-                           if ps and nome != cfg.entrada else set())
-                saida = entrada | defs[nome]
-                if entrada != garantidas_entrada[nome] or saida != garantidas_saida[nome]:
-                    garantidas_entrada[nome], garantidas_saida[nome] = entrada, saida
-                    mudou = True
-
+        garantidas_entrada, garantidas_saida = calculos_fluxo.calcular_garantidas(grafo, definicoes, por_variavel)
     with etapa(medidor, 'fluxo_diagnosticos'):
-        candidatos = {}
-        sem_definicao = {b: set() for b in blocos}
-        for nome in ordem:
-            if len(predecessores[nome]) >= 2:
-                for var, definicoes in definicoes_por_variavel.items():
-                    chegando = {def_id for def_id in entradas_def[nome] if def_id in definicoes}
-                    if len(chegando) >= 2:
-                        candidatos.setdefault(nome, {})[var] = chegando
-            for var in usos[nome]:
-                if var not in garantidas_entrada[nome]:
-                    sem_definicao[nome].add(var)
-
-    return AnaliseFluxo(cfg, usos, defs, entradas_def, saidas_def,
+        candidatos, sem_definicao = calculos_fluxo.calcular_diagnosticos(grafo, usos, por_variavel, entradas_def, garantidas_entrada)
+    if medidor is not None:
+        medidor.contar('fluxo_analises_completas', 1)
+    return AnaliseFluxo(cfg, usos, definicoes, entradas_def, saidas_def,
                         vivos_entrada, vivos_saida, dominadores, candidatos, sem_definicao,
                         garantidas_entrada, garantidas_saida)

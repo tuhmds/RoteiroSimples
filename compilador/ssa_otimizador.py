@@ -10,7 +10,7 @@ INT64_MIN por -1 NUNCA sao dobrados. Nao removemos atribuicoes nem I/O.
 from dataclasses import replace
 
 from .cfg import construir_cfg
-from .fluxo_dados import analisar_fluxo
+from .fluxo_dados import analisar_vivacidade
 from .nos_ir import ExpressaoIR, ProgramaIR
 from .otimizador import dobrar_constantes
 from .ssa import construir_ssa
@@ -174,7 +174,7 @@ def otimizar_com_ssa(ir: ProgramaIR, medidor=None):
     with etapa(medidor, 'otimizacao_cfg_vivacidade'):
         grafo = construir_cfg(propagado)
     with etapa(medidor, 'otimizacao_fluxo_vivacidade'):
-        fluxo = analisar_fluxo(grafo, medidor=medidor)
+        fluxo = analisar_vivacidade(grafo, medidor=medidor)
     with etapa(medidor, 'otimizacao_identificar_mortos'):
         alcancaveis = grafo.alcancaveis()
         if medidor is not None:

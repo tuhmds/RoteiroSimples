@@ -11,7 +11,7 @@ import json
 
 from .cfg import GrafoCFG, construir_cfg
 from .efeitos import Efeitos, efeito_expressao, efeito_instrucao
-from .fluxo_dados import analisar_fluxo
+from .fluxo_dados import analisar_dominadores
 from .nos_ir import ProgramaIR
 
 
@@ -213,7 +213,7 @@ def construir_memory_ssa(ir: ProgramaIR, cfg: GrafoCFG | None = None) -> Program
         leitura[bid], escrita[bid] = lr, wr
     regioes = tuple(sorted(set().union(*(leitura[b] | escrita[b] for b in vivos))))
 
-    dominadores = analisar_fluxo(cfg).dominadores
+    dominadores = analisar_dominadores(cfg)
     idom = {cfg.entrada: None}
     for bid in ordem:
         if bid == cfg.entrada:
