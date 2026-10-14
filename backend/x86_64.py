@@ -53,28 +53,56 @@ class Gerador(Emissor):
         """
         import bisect
         candidatos = sorted(self._candidatos_curto)
+        estatisticas = {'candidatos': len(candidatos), 'passagens': 0,
+                        'avaliacoes': 0, 'consultas_prefixo': 0,
+                        'passos_indice': 0}
+        self.estatisticas_compactacao = estatisticas
         if not candidatos:
             return 0
         antigos = bytes(self.codigo)
         selecionados = set()
+        finais_originais = [pos + tam for pos, tam, _, _ in candidatos]
+        reducoes = [0] * (len(candidatos) + 1)
+
+        def reducao_ate(posicao):
+            # Soma dinamica de prefixos. As posicoes continuam sendo as
+            # originais; selecionar um salto atualiza somente seu fim.
+            estatisticas['consultas_prefixo'] += 1
+            indice = bisect.bisect_right(finais_originais, posicao)
+            total = 0
+            while indice:
+                estatisticas['passos_indice'] += 1
+                total += reducoes[indice]
+                indice -= indice & -indice
+            return total
+
+        def selecionar(indice, reducao):
+            indice += 1
+            while indice < len(reducoes):
+                estatisticas['passos_indice'] += 1
+                reducoes[indice] += reducao
+                indice += indice & -indice
+
         # Cada troca reduz em 3 ou 4 bytes. Reducoes tornam outros saltos
         # pelo menos tao proximos; portanto a relaxacao e monotona.
         while True:
+            estatisticas['passagens'] += 1
             alterou = False
-            for inicio, tamanho, alvo, opcode in candidatos:
+            for indice, (inicio, tamanho, alvo, opcode) in enumerate(candidatos):
                 if inicio in selecionados:
                     continue
                 if alvo not in self.rotulos:
                     raise ValueError(f'Rotulo local de salto curto desconhecido: {alvo}')
-                hipotese = selecionados | {inicio}
-                # Recalcular explicitamente com a hipotese; usa posições
-                # ORIGINAIS e desconta apenas saltos que terminam antes.
+                estatisticas['avaliacoes'] += 1
+                # A hipotese inclui o candidato atual sem modificar o indice.
+                # O seu fim so contribui quando precede a posicao consultada.
                 def ajustado(posicao):
-                    return posicao - sum(tam - 2 for pos, tam, _, _ in candidatos
-                                         if pos in hipotese and pos + tam <= posicao)
+                    hipotetica = tamanho - 2 if inicio + tamanho <= posicao else 0
+                    return posicao - reducao_ate(posicao) - hipotetica
                 deslocamento = ajustado(self.rotulos[alvo]) - (ajustado(inicio) + 2)
                 if -128 <= deslocamento <= 127:
                     selecionados.add(inicio)
+                    selecionar(indice, tamanho - 2)
                     alterou = True
             if not alterou:
                 break

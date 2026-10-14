@@ -47,6 +47,12 @@ jobs:
       - name: Medir coleções de O0 a O8
         if: matrix.python == '3.11'
         run: python -m benchmarks.medir --fonte benchmarks/colecoes_rs042j.rts --repeticoes 3 --json relatorios/medicao-colecoes.json
+      - name: Medir crescimento da compilação em processos isolados
+        if: matrix.python == '3.11'
+        run: python -m benchmarks.crescimento --tamanhos 4,12 --repeticoes 2 --json relatorios/crescimento-compilacao.json
+      - name: Conferir crescimento da compactação contra referência anterior
+        if: matrix.python == '3.11'
+        run: python -m benchmarks.saltos --tamanhos 128,512 --repeticoes 3 --comparar-legado --json relatorios/compactacao-saltos.json
       - name: Guardar relatórios e casos de falha
         if: always() && matrix.python == '3.11'
         uses: actions/upload-artifact@v4

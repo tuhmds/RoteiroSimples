@@ -5,6 +5,7 @@ paralela pode formar ciclos apos alocacao, portanto usamos um slot
 separado de temporario. O caminho anterior permanece intacto em -O 0..3.
 """
 import struct
+from compilador.medicao_compilacao import etapa
 
 from compilador.alocacao import Local, alocar_registradores
 from compilador.cfg import ArestaCFG, construir_cfg
@@ -79,8 +80,9 @@ def copias_paralelas(g, copias, locais, temporario, windows, diretas=False):
     return qtd
 
 
-def construir_backend_ssa(ir, coalescer=False):
-    cfg = construir_cfg(ir)
+def construir_backend_ssa(ir, coalescer=False, medidor=None):
+    with etapa(medidor, 'cfg'):
+        cfg = construir_cfg(ir)
     # O para sai também quando o incremento aritmetico ultrapassa 64 bits.
     # Essa aresta e necessaria para calcular phis corretos na saida do laco.
     for b in cfg.blocos.values():
@@ -90,8 +92,13 @@ def construir_backend_ssa(ir, coalescer=False):
                               if a.motivo == 'falso')
             b.saidas = (*b.saidas, ArestaCFG(saida_laco, 'overflow'))
     cfg.validar()
-    ssa = construir_ssa(cfg)
-    aloc = alocar_registradores(ssa, coalescer=coalescer)
+    with etapa(medidor, 'ssa'):
+        ssa = construir_ssa(cfg)
+    with etapa(medidor, 'alocacao_registradores'):
+        aloc = alocar_registradores(ssa, coalescer=coalescer)
+    if medidor is not None:
+        medidor.contar('blocos_cfg', len(cfg.blocos))
+        medidor.contar('vagas_pilha', aloc.vagas_pilha)
     return ssa, aloc
 
 

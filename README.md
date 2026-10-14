@@ -1,6 +1,20 @@
-# RoteiroSimples (RS) — versão experimental 0.42O
+# RoteiroSimples (RS) — versão experimental 0.42P
 
-## RS 0.42O — Operadores lógicos em português
+## RS 0.42P — Consolidação e crescimento da compilação
+
+As medições agora incluem leitura de módulos, análise sintática e semântica,
+IR/otimizações, CFG/SSA, alocação, emissão e gravação do executável. Processos
+isolados coletam tempos e uma amostra separada de memória. Geradores de
+instruções, desvios, funções, programas mistos e módulos conferem a execução
+com um modelo independente; erros e limites continuam visíveis no relatório.
+
+A compactação de saltos usa somas de prefixos em índice dinâmico, preservando
+a ordem de seleção e os bytes da versão anterior. A CI guarda medições de
+crescimento e comparação com a referência congelada. As curvas não prometem
+escalabilidade ilimitada nem ampliam o contrato da IR.
+[Contrato, métodos e limites](docs/CONSOLIDACAO_CRESCIMENTO_RS_0_42P.md).
+
+## Histórico: RS 0.42O — Operadores lógicos em português
 
 Expressões agora combinam valores `logico` com `e`, `ou` e `nao`.
 `e` avalia o lado direito somente quando o esquerdo é verdadeiro; `ou`
