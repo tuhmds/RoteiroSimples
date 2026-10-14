@@ -5,7 +5,7 @@ Obrigado pelo interesse na RS. Este é um projeto **experimental** de linguagem 
 ## Antes de propor mudanças
 
 - Leia [Princípios permanentes da RS](docs/PRINCIPIOS_RS.md), o [README](README.md) e a [orientação para revisão técnica](docs/CONVITE_REVISAO_TECNICA_COMPILADOR.md).
-- **Não envie alterações diretamente à `main`.** Trabalhe em uma ramificação própria (`revisao/...`, `correcao/...`, `melhoria/...`) ou fork, conforme o acesso disponível.
+- **Não envie alterações diretamente à `main`.** Para repositório público, **crie um fork** e uma ramificação própria (`revisao/...`, `correcao/...`, `melhoria/...`), então abra uma PR do seu fork para `tuhmds/RoteiroSimples:main`. Não é necessário receber permissão de escrita no repositório original.
 - Abra uma **solicitação de incorporação (pull request, PR)** com descrição, riscos, testes e justificativa. O mantenedor `@tuhmds` deverá analisar e aceitar a mudança antes de incorporá-la.
 - Não faça incorporação automática, reescrita forçada do histórico, exclusão de ramificações ou alterações de segurança/configuração sem concordância do mantenedor.
 - **Importante:** este documento define o processo de trabalho, mas **não é uma barreira técnica**: a obrigatoriedade depende da proteção da ramificação `main` nas configurações do GitHub. Enquanto ela estiver desprotegida, uma pessoa com acesso de escrita ainda poderá enviar mudanças diretamente.
@@ -38,8 +38,15 @@ A RS vem sendo desenvolvida com apoio de inteligência artificial para concepç�
 
 Uma auditoria independente da arquitetura do compilador, com defeitos ou lacunas priorizados por **gravidade, evidência, risco e custo de correção**. Pode começar por um *issue* ou discussão, sem escrever código. Correções pequenas e demonstráveis são preferíveis a reestruturações grandes sem provas.
 
-## Acesso e segurança
+## Acesso, forks e segurança
 
-O repositório é privado neste estágio. Não publique nem redistribua seu conteúdo sem autorização do mantenedor. Credenciais, dados de acesso e arquivos locais não devem entrar em commits. Propostas não devem incluir código com licença incompatível nem trechos de terceiros sem permissão.
+Ao tornar o repositório público, qualquer pessoa poderá consultar o código e criar seu **fork** e uma proposta de alteração, sem acesso de escrita à `main` original. Para enviar a proposta:
 
-Em repositórios privados pertencentes a contas pessoais, o GitHub concede acesso de escrita a colaboradores convidados. Portanto, **somente a regra de proteção da `main` com PR, revisão obrigatória do responsável e verificação da integração contínua torna o fluxo obrigatório**; o arquivo `.github/CODEOWNERS` ajuda a solicitar revisão, mas não bloqueia nada isoladamente.
+1. No GitHub, selecione **Fork** para criar sua cópia.
+2. Trabalhe numa ramificação do fork e envie seus commits para essa ramificação.
+3. Abra uma **pull request** com destino a `tuhmds/RoteiroSimples:main`.
+4. Descreva riscos, alternativas e testes; aguarde revisão do responsável antes da incorporação.
+
+A visibilidade pública **não concede, por si só, licença para reutilização, redistribuição ou incorporação do código**: observe a licença que o mantenedor definir. Não inclua credenciais, arquivos locais ou código de terceiros incompatível.
+
+Pessoas que contribuem via fork **não ganham acesso de escrita ao projeto original**. Para pessoas com permissão de escrita, uma regra de proteção da `main` deve exigir PR, revisão e verificações. O `.github/CODEOWNERS` registra o responsável, mas não torna a aprovação obrigatória sem a configuração correspondente nas regras do GitHub.
