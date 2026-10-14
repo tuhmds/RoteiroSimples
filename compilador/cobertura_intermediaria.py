@@ -17,7 +17,7 @@ INSTRUCOES_IR = frozenset((
 
 EXPRESSOES_IR = frozenset((
     'numero', 'logico', 'var', 'tamanho_texto', 'indice',
-    'neg', 'bin', 'comparacao', 'chamada',
+    'neg', 'bin', 'comparacao', 'chamada', 'nao', 'logica',
 ))
 
 # Posicionamento dos filhos que são expressões nos nós suportados.
@@ -60,9 +60,9 @@ def analisar_cobertura(programa):
     def expressao(no):
         nome = str(no[0])
         expressoes[nome] += 1
-        if nome == 'neg':
+        if nome in ('neg', 'nao'):
             expressao(no[1])
-        elif nome in ('bin', 'comparacao', 'comparacao_texto'):
+        elif nome in ('bin', 'comparacao', 'comparacao_texto', 'logica'):
             expressao(no[2])
             expressao(no[3])
         elif nome in ('indice', 'indice_bytes', 'byte_texto'):
@@ -145,4 +145,8 @@ def formatar_cobertura(cobertura, decisao=None):
         if decisao.motivos:
             linhas.append('Restrições adicionais de otimização:')
             linhas.extend(f'  {motivo}' for motivo in decisao.motivos)
+    if dict(cobertura.expressoes).get('logica'):
+        linhas.append('Operadores e/ou: expressões com curto-circuito na emissão nativa; '
+                      'o CFG de análise conserva os dois filhos como efeitos potenciais, '
+                      'sem expandir seus desvios internos.')
     return '\n'.join(linhas)

@@ -67,6 +67,18 @@ def tipo_expressao(expr, tipos, linha, funcoes=None, registros=None, campos=None
         return 'inteiro'
     if categoria == 'logico':
         return 'logico'
+    if categoria == 'nao':
+        filho = tipo_expressao(expr[1], tipos, linha, funcoes, registros, campos)
+        if filho != 'logico':
+            raise ErroCompilacao(f'Linha {linha}: operador nao exige logico; recebeu {filho}.')
+        return 'logico'
+    if categoria == 'logica':
+        _, operador, esquerdo, direito = expr
+        a = tipo_expressao(esquerdo, tipos, linha, funcoes, registros, campos)
+        b = tipo_expressao(direito, tipos, linha, funcoes, registros, campos)
+        if a != 'logico' or b != 'logico':
+            raise ErroCompilacao(f'Linha {linha}: operador {operador} exige dois logicos; recebeu {a} e {b}.')
+        return 'logico'
     if categoria == 'chamada':
         nome, argumentos = expr[1], expr[2]
         assinatura = (funcoes or {}).get(nome)

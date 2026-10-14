@@ -145,8 +145,8 @@ funcao calcular(numero: inteiro) -> inteiro {
     seja b = numero + 20
     seja c = numero + 30
     seja d = numero + 40
-    seja e = alterar(numero)
-    retorne a + b + c + d + e + alterar(e)
+    seja resultado_e = alterar(numero)
+    retorne a + b + c + d + resultado_e + alterar(resultado_e)
 }
 inicio {
     seja a = 99
@@ -240,7 +240,7 @@ inicio {
             self.assertIn('r13', r.stdout)
             self.assertIn('funcao somar:', r.stdout)
             j = json.loads(dados.read_text(encoding='utf-8'))
-            self.assertEqual(j['versao'], 'RS 0.42N')
+            self.assertEqual(j['versao'], 'RS 0.42O')
             self.assertEqual(set(j['funcoes']), {'somar', 'parcela'})
             self.assertEqual(j['funcoes']['parcela']['parametros'], [['numero', 'inteiro']])
             self.assertTrue(executavel.exists())

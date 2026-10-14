@@ -191,7 +191,7 @@ class TestesBackendSSA(unittest.TestCase):
             seja b = 2
             seja c = 3
             seja d = 4
-            seja e = 5
+            seja resultado_e = 5
             seja f = 6
             seja g = 7
             seja h = 8
@@ -199,11 +199,11 @@ class TestesBackendSSA(unittest.TestCase):
             leia(b)
             leia(c)
             leia(d)
-            leia(e)
+            leia(resultado_e)
             leia(f)
             leia(g)
             leia(h)
-            escreva(a+b+c+d+e+f+g+h)
+            escreva(a+b+c+d+resultado_e+f+g+h)
         }'''
         self.assertEqual(self.executar(fonte,'10\n2\n3\n4\n5\n6\n7\n8\n',3), self.executar(fonte,'10\n2\n3\n4\n5\n6\n7\n8\n',4))
         ssa, aloc = construir_backend_ssa(construir_ir(analisar_programa(fonte), nivel=3))

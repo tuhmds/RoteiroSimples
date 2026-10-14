@@ -29,11 +29,13 @@ def converter_expressao(expr, tipos, otimizar=True, literal_minimo=False, assina
     if tag == 'indice':
         return ExpressaoIR('inteiro', 'indice', (expr[1], expr[3]),
                            filhos=(converter(expr[2]),), origem=origem)
-    if tag == 'neg':
+    if tag == 'nao':
+        node = ExpressaoIR('logico', 'nao', filhos=(converter(expr[1]),), origem=origem)
+    elif tag == 'neg':
         filho = converter_expressao(expr[1], tipos, otimizar,
                                    literal_minimo=expr[1] == ('numero', 1 << 63), assinaturas=assinaturas)
         node = ExpressaoIR('inteiro', 'neg', filhos=(filho,), origem=origem)
-    elif tag in ('bin', 'comparacao'):
+    elif tag in ('bin', 'comparacao', 'logica'):
         esquerdo = converter(expr[2])
         direito = converter(expr[3])
         node = ExpressaoIR('inteiro' if tag == 'bin' else 'logico', tag,
@@ -136,7 +138,8 @@ def _expressao_para_ast(node):
         return ('tamanho_texto', node.valor)
     if node.operacao == 'indice':
         return ('indice', node.valor[0], expressao_para_ast(node.filhos[0]), node.valor[1])
-    if node.operacao == 'neg': return ('neg', expressao_para_ast(node.filhos[0]))
+    if node.operacao in ('neg', 'nao'):
+        return (node.operacao, expressao_para_ast(node.filhos[0]))
     return (node.operacao, node.valor, *(expressao_para_ast(x) for x in node.filhos))
 
 

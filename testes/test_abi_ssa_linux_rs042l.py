@@ -39,8 +39,8 @@ funcao calcular(numero: inteiro) -> inteiro {
     seja b = numero + 20
     seja c = numero + 30
     seja d = numero + 40
-    seja e = alterar(numero)
-    retorne a + b + c + d + e + alterar(e)
+    seja resultado_e = alterar(numero)
+    retorne a + b + c + d + resultado_e + alterar(resultado_e)
 }
 inicio {
     escreva(calcular(2))

@@ -1,0 +1,23 @@
+// A consulta imprime apenas quando o curto-circuito permite sua execucao.
+funcao confirmar() -> logico {
+    escreva("Consulta executada.")
+    retorne verdadeiro
+}
+
+inicio {
+    seja idade = 20
+    escreva(idade >= 18 e confirmar())
+    escreva(falso e confirmar())
+    escreva(verdadeiro ou confirmar())
+    escreva(nao idade >= 18)
+    escreva(verdadeiro ou falso e falso)
+    escreva((verdadeiro ou falso) e falso)
+
+    // A divisao so acontece quando o divisor e diferente de zero.
+    seja divisor = 0
+    se divisor != 0 e 10 / divisor > 1 {
+        escreva("Divisao permitida.")
+    } senao {
+        escreva("Divisao dispensada.")
+    }
+}

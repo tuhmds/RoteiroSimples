@@ -6,6 +6,8 @@ from .propriedade import eh_proprietario, eh_texto, TIPO_TEXTO_DINAMICO, TIPO_TE
 from .propriedade import eh_bytes, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
 from .propriedade import eh_registro_proprietario, eh_colecao_proprietaria
 
+PALAVRAS_LOGICAS = frozenset(('e', 'ou', 'nao'))
+
 class Expressao:
     def __init__(self, tokens, linha, variaveis, importa):
         self.tokens, self.linha = tokens, linha
@@ -23,10 +25,33 @@ class Expressao:
         return atual
 
     def analisar(self):
-        expr = self.comparacao()
+        expr = self.disjuncao()
         if self.olhar() is not None:
             raise ErroCompilacao(f"Linha {self.linha}: trecho inesperado: {self.olhar()!r}.")
         return expr
+
+    def disjuncao(self):
+        expr = self.conjuncao()
+        while self.olhar() == 'ou':
+            operador = self.consumir()
+            expr = NoExpressao(('logica', operador, expr, self.conjuncao()),
+                               getattr(operador, 'origem', None))
+        return expr
+
+    def conjuncao(self):
+        expr = self.negacao_logica()
+        while self.olhar() == 'e':
+            operador = self.consumir()
+            expr = NoExpressao(('logica', operador, expr, self.negacao_logica()),
+                               getattr(operador, 'origem', None))
+        return expr
+
+    def negacao_logica(self):
+        if self.olhar() == 'nao':
+            operador = self.consumir()
+            return NoExpressao(('nao', self.negacao_logica()),
+                               getattr(operador, 'origem', None))
+        return self.comparacao()
 
     def comparacao(self):
         expr = self.soma()
@@ -61,9 +86,11 @@ class Expressao:
     def primario(self):
         token = self.consumir()
         if token == '(':
-            expr = self.comparacao()
+            expr = self.disjuncao()
             self.consumir(')')
             return expr
+        if token in PALAVRAS_LOGICAS:
+            raise ErroCompilacao(f'Linha {self.linha}: operador lógico {token!r} não pode aparecer nesta posição.')
         if token in ('verdadeiro', 'falso'):
             return NoExpressao(('logico', 1 if token == 'verdadeiro' else 0), getattr(token, 'origem', None))
         if token.isascii() and token.isdecimal():
@@ -87,7 +114,7 @@ class Expressao:
                 tipo = getattr(self, 'tipos', {}).get(nome)
                 if self.olhar() == '[':
                     self.consumir('[')
-                    indice = self.comparacao()
+                    indice = self.disjuncao()
                     self.consumir(']')
                     self.consumir(')')
                     if (not isinstance(tipo, tuple) or tipo[0] not in ('lista_dinamica', 'lista_emprestada')
@@ -109,7 +136,7 @@ class Expressao:
                 self.consumir('(')
                 nome = self.consumir()
                 self.consumir(',')
-                indice = self.comparacao()
+                indice = self.disjuncao()
                 self.consumir(')')
                 if not eh_colecao_proprietaria(getattr(self, 'tipos', {}).get(nome), getattr(self, 'registros', {})):
                     raise ErroCompilacao(f'Linha {self.linha}: retire exige lista proprietaria de registros com donos.')
@@ -157,7 +184,7 @@ class Expressao:
                     raise ErroCompilacao(f'Linha {self.linha}: {token} exige variavel de texto UTF-8.')
                 if token == 'byte_em':
                     self.consumir(',')
-                    indice = self.comparacao()
+                    indice = self.disjuncao()
                     self.consumir(')')
                     return NoExpressao(('byte_texto', nome, indice), getattr(token, 'origem', None))
                 self.consumir(')')
@@ -167,7 +194,7 @@ class Expressao:
                 argumentos = []
                 if self.olhar() != ')':
                     while True:
-                        argumentos.append(self.comparacao())
+                        argumentos.append(self.disjuncao())
                         if self.olhar() != ',':
                             break
                         self.consumir(',')
@@ -180,16 +207,16 @@ class Expressao:
                 if token not in OPERACOES:
                     raise ErroCompilacao(f"Linha {self.linha}: função matemática desconhecida: {token}.")
                 self.consumir('(')
-                a = self.comparacao()
+                a = self.disjuncao()
                 self.consumir(',')
-                b = self.comparacao()
+                b = self.disjuncao()
                 self.consumir(')')
                 return NoExpressao(('bin', OPERACOES[token], a, b), getattr(token, 'origem', None))
             if token not in self.variaveis:
                 raise ErroCompilacao(f"Linha {self.linha}: variável '{token}' não foi declarada.")
             if self.olhar() == '[':
                 self.consumir('[')
-                indice = self.comparacao()
+                indice = self.disjuncao()
                 self.consumir(']')
                 tipo = getattr(self, 'tipos', {}).get(token)
                 if isinstance(tipo, tuple) and tipo[0] == 'lista_dinamica':
