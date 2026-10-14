@@ -93,7 +93,7 @@ def construir_backend_ssa(ir, coalescer=False, medidor=None):
             b.saidas = (*b.saidas, ArestaCFG(saida_laco, 'overflow'))
     cfg.validar()
     with etapa(medidor, 'ssa'):
-        ssa = construir_ssa(cfg)
+        ssa = construir_ssa(cfg, medidor=medidor)
     with etapa(medidor, 'alocacao_registradores'):
         aloc = alocar_registradores(ssa, coalescer=coalescer)
     if medidor is not None:

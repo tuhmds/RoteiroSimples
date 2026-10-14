@@ -3,13 +3,16 @@ from dataclasses import replace
 
 from .ssa_funcoes import construir_ssa_programa
 from .ssa_otimizador import analisar_constantes_ssa, _reescrever_expressao
+from .medicao_compilacao import etapa
 
 
-def otimizar_funcoes_com_ssa(ir):
-    programa = construir_ssa_programa(ir)
+def otimizar_funcoes_com_ssa(ir, medidor=None):
+    with etapa(medidor, 'otimizacao_ssa_funcoes'):
+        programa = construir_ssa_programa(ir, medidor=medidor)
 
     def reescrever(corpo, ssa):
-        constantes = analisar_constantes_ssa(ssa)
+        with etapa(medidor, 'otimizacao_constantes_funcoes'):
+            constantes = analisar_constantes_ssa(ssa)
         alteracoes = {}
         for bid, bloco in ssa.cfg.blocos.items():
             if not ssa.blocos[bid].alcancavel or not bloco.instrucoes:
