@@ -15,7 +15,7 @@ A **RS** nasceu para tornar a programação compreensível desde o primeiro cont
 | Ler os contratos e a arquitetura | [Documentação técnica](docs/) · [Princípios de projeto](docs/PRINCIPIOS_RS.md) |
 | Ajudar com correções e funcionalidades | **[Como contribuir (fork, PR e revisão)](CONTRIBUTING.md)** |
 | Fazer uma avaliação crítica do compilador | [Convite à revisão técnica](docs/CONVITE_REVISAO_TECNICA_COMPILADOR.md) |
-| Acompanhar propostas e trabalhos em andamento | [Pull requests](../../pulls) · [Questões e propostas](../../issues) |
+| Acompanhar propostas e trabalhos em andamento | [Pull requests](https://github.com/tuhmds/RoteiroSimples/pulls) · [Questões e propostas](https://github.com/tuhmds/RoteiroSimples/issues) |
 | Experimentar a linguagem | [Começar no Windows](#começar-no-windows) · [Compilar no Linux](#compilar-no-linux) · [Exemplos](exemplos/) |
 
 ## O que já funciona e o que ainda falta
