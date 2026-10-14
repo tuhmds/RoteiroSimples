@@ -10,7 +10,7 @@ from .validacao_caminhos import validar_literal_arquivo
 from .propriedade import (eh_proprietario, eh_emprestimo, eh_texto, contrato_valor,
                          TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO)
 from .propriedade import eh_registro_proprietario, eh_valor_proprietario, donos_do_agregado
-from .propriedade import ORIGENS_PROPRIETARIAS, eh_colecao_proprietaria
+from .propriedade import ORIGENS_PROPRIETARIAS, eh_colecao_proprietaria, elemento_lista
 from .propriedade import eh_bytes, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
 from .efeitos_programa import efeito_instrucao_arvore
 
@@ -71,8 +71,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     elif tipo_campo not in ('inteiro', 'logico') and tipo_campo not in registros:
                         raise ErroCompilacao(f'Linha {n_campo}: tipo de campo desconhecido: {tipo_campo}.')
                 elif (len(parte_tipo) == 4 and parte_tipo[:2] == ['lista', '[']
-                      and parte_tipo[-1] == ']' and (parte_tipo[2] in ('inteiro', 'logico') or parte_tipo[2] in registros)):
-                    tipo_campo = ('lista_dinamica', str(parte_tipo[2]))
+                      and parte_tipo[-1] == ']' and (parte_tipo[2] in ('inteiro', 'logico', 'texto') or parte_tipo[2] in registros)):
+                    tipo_campo = ('lista_dinamica', elemento_lista(parte_tipo[2]))
                 elif (len(parte_tipo) == 4 and parte_tipo[0] in ('lista', 'texto', 'bytes')
                       and parte_tipo[1] == '[' and parte_tipo[-1] == ']'
                       and parte_tipo[2].isascii() and parte_tipo[2].isdecimal()):
@@ -115,13 +115,13 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
         if len(partes) == 4 and partes == ['emprestimo', '[', 'lista', ']']:
             return ('lista_emprestada', 'inteiro')
         if (len(partes) == 7 and partes[:4] == ['emprestimo', '[', 'lista', '[']
-                and partes[-2:] == [']', ']'] and (partes[4] in ('inteiro', 'logico') or partes[4] in registros)):
-            return ('lista_emprestada', str(partes[4]))
+                and partes[-2:] == [']', ']'] and (partes[4] in ('inteiro', 'logico', 'texto') or partes[4] in registros)):
+            return ('lista_emprestada', elemento_lista(partes[4]))
         if len(partes) == 4 and partes[1] == '[' and partes[3] == ']':
             categoria = str(partes[0])
             valor = str(partes[2])
-            if categoria == 'lista' and (valor in ('inteiro', 'logico') or valor in registros):
-                return ('lista_dinamica', valor)
+            if categoria == 'lista' and (valor in ('inteiro', 'logico', 'texto') or valor in registros):
+                return ('lista_dinamica', elemento_lista(valor))
             if categoria in ('lista', 'texto', 'bytes') and valor.isascii() and valor.isdecimal():
                 tamanho = int(valor)
                 if not 1 <= tamanho < 0x0FFF0000:
@@ -696,7 +696,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                             origem_texto = texto_origem(t[5:], n)
                         else:
                             valor, _ = expressao_tipada(t[5:], n, TIPO_TEXTO_DINAMICO)
-                            if valor[0] not in ('mova_valor_dinamico', 'chamada'):
+                            if valor[0] not in ORIGENS_PROPRIETARIAS:
                                 raise ErroCompilacao(f'Linha {n}: texto tem dono unico; use mova ou copie explicitamente.')
                     interno = registrar(str(nome), TIPO_TEXTO_DINAMICO, n)
                     donos_locais.append(interno)
@@ -712,8 +712,8 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     if t[5] == ']':
                         elemento, fim_tipo = 'inteiro', 6
                     elif (len(t) >= 7 and t[6] == ']' and
-                          (t[5] in ('inteiro', 'logico') or t[5] in registros)):
-                        elemento, fim_tipo = str(t[5]), 7
+                          (t[5] in ('inteiro', 'logico', 'texto') or t[5] in registros)):
+                        elemento, fim_tipo = elemento_lista(t[5]), 7
                     if fim_tipo is not None:
                         tipo_dono = ('lista_dinamica', elemento)
                         valor = None
@@ -839,7 +839,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     i += 1
                     continue
                 if eh_proprietario(inferido):
-                    if arvore[0] not in ('mova_valor_dinamico', 'chamada'):
+                    if arvore[0] not in ORIGENS_PROPRIETARIAS:
                         raise ErroCompilacao(f'Linha {n}: lista[] tem dono unico; copiar ou inferir propriedade nao e permitido.')
                     interno = registrar(str(nome), inferido, n)
                     donos_locais.append(interno)

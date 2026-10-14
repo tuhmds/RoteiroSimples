@@ -1,4 +1,5 @@
 // Texto UTF-8 dinamico: copias de conteudo sao explicitas e recebem dono novo.
+importe "utf8.rts" como utf8
 publico funcao duplicar(origem: emprestimo[texto]) -> texto {
     seja resultado: texto
     copie(resultado, origem)
@@ -14,4 +15,144 @@ publico funcao concatenar(esquerdo: emprestimo[texto], direito: emprestimo[texto
 
 publico funcao vazio(origem: emprestimo[texto]) -> logico {
     retorne tamanho(origem) == 0
+}
+
+// Funcoes privadas recebem somente bytes UTF-8 previamente validados.
+privado funcao largura_caractere(primeiro: inteiro) -> inteiro {
+    se primeiro < 128 {
+        retorne 1
+    }
+    se primeiro < 224 {
+        retorne 2
+    }
+    se primeiro < 240 {
+        retorne 3
+    }
+    retorne 4
+}
+
+privado funcao coincide(dados: emprestimo[bytes], procurado: emprestimo[bytes], posicao_inicial: inteiro) -> logico {
+    se tamanho(procurado) > tamanho(dados) - posicao_inicial {
+        retorne falso
+    }
+    seja indice = 0
+    enquanto indice < tamanho(procurado) {
+        se dados[posicao_inicial + indice] != procurado[indice] {
+            retorne falso
+        }
+        indice = indice + 1
+    }
+    retorne verdadeiro
+}
+
+privado funcao copiar_trecho(dados: emprestimo[bytes], posicao_inicial: inteiro, quantidade: inteiro) -> resultado[texto] {
+    seja trecho: bytes
+    para indice de 0 ate quantidade - 1 {
+        adicione_byte(trecho, dados[posicao_inicial + indice])
+    }
+    retorne utf8.decodificar(empreste(trecho))
+}
+
+// Retorna a posicao em caracteres Unicode; -1 indica ausencia e 0 padrao vazio.
+publico funcao encontrar(origem: emprestimo[texto], procurado: emprestimo[texto]) -> resultado[inteiro] {
+    seja dados = utf8.codificar(origem)
+    propague dados
+    seja padrao = utf8.codificar(procurado)
+    propague padrao
+    seja posicao = 0
+    seja caractere = 0
+    enquanto posicao <= tamanho(dados.valor) {
+        se coincide(empreste(dados.valor), empreste(padrao.valor), posicao) {
+            retorne sucesso[inteiro](caractere)
+        }
+        se posicao == tamanho(dados.valor) {
+            pare
+        }
+        posicao = posicao + largura_caractere(dados.valor[posicao])
+        caractere = caractere + 1
+    }
+    retorne sucesso[inteiro](-1)
+}
+
+// Inicio e quantidade contam valores escalares Unicode, nao bytes ou grafemas.
+// Falhas: 1 UTF-8 invalido; 2 posicao_inicial fora do texto; 3 quantidade invalida.
+publico funcao recortar(origem: emprestimo[texto], posicao_inicial: inteiro, quantidade: inteiro) -> resultado[texto] {
+    seja dados = utf8.codificar(origem)
+    propague dados
+    se posicao_inicial < 0 {
+        retorne falha[texto](2)
+    }
+    se quantidade < 0 {
+        retorne falha[texto](3)
+    }
+    seja posicao = 0
+    seja caractere = 0
+    enquanto caractere < posicao_inicial {
+        se posicao == tamanho(dados.valor) {
+            retorne falha[texto](2)
+        }
+        posicao = posicao + largura_caractere(dados.valor[posicao])
+        caractere = caractere + 1
+    }
+    seja primeiro_byte = posicao
+    seja copiados = 0
+    enquanto copiados < quantidade {
+        se posicao == tamanho(dados.valor) {
+            retorne falha[texto](3)
+        }
+        posicao = posicao + largura_caractere(dados.valor[posicao])
+        copiados = copiados + 1
+    }
+    retorne copiar_trecho(empreste(dados.valor), primeiro_byte, posicao - primeiro_byte)
+}
+
+// Preserva campos vazios, inclusive nas duas extremidades. Falha 4: separador vazio.
+publico funcao separar(origem: emprestimo[texto], separador: emprestimo[texto]) -> resultado[lista[texto]] {
+    seja dados = utf8.codificar(origem)
+    propague dados
+    seja padrao = utf8.codificar(separador)
+    propague padrao
+    se tamanho(padrao.valor) == 0 {
+        retorne falha[lista[texto]](4)
+    }
+    seja partes: lista[texto]
+    seja primeiro_byte = 0
+    seja posicao = 0
+    enquanto posicao < tamanho(dados.valor) {
+        se coincide(empreste(dados.valor), empreste(padrao.valor), posicao) {
+            seja parte = copiar_trecho(empreste(dados.valor), primeiro_byte, posicao - primeiro_byte)
+            propague parte
+            adicione(partes, mova(parte.valor))
+            posicao = posicao + tamanho(padrao.valor)
+            primeiro_byte = posicao
+        } senao {
+            posicao = posicao + largura_caractere(dados.valor[posicao])
+        }
+    }
+    seja ultima = copiar_trecho(empreste(dados.valor), primeiro_byte, tamanho(dados.valor) - primeiro_byte)
+    propague ultima
+    adicione(partes, mova(ultima.valor))
+    retorne sucesso[lista[texto]](mova(partes))
+}
+
+privado funcao acrescentar_validado(origem: emprestimo[texto], destino: texto) -> resultado[texto] {
+    seja validacao = utf8.codificar(origem)
+    propague validacao
+    junte(destino, origem)
+    retorne sucesso[texto](mova(destino))
+}
+
+publico funcao juntar(partes: emprestimo[lista[texto]], separador: emprestimo[texto]) -> resultado[texto] {
+    seja validacao = utf8.codificar(separador)
+    propague validacao
+    seja destino: texto
+    para indice de 0 ate tamanho(partes) - 1 {
+        se indice > 0 {
+            junte(destino, separador)
+        }
+        seja proximo = acrescentar_validado(empreste(partes[indice]), mova(destino))
+        propague proximo
+        mova(destino, proximo.valor)
+    }
+    retorne sucesso[texto](mova(destino))
 }

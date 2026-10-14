@@ -59,7 +59,7 @@ def medir_saltos(tamanhos=(128, 256, 512, 1024, 2048), repeticoes=5,
         amostras = registro['amostras_ms']
         registro.update({'mediana_ms': statistics.median(amostras), 'minimo_ms': min(amostras),
                          'maximo_ms': max(amostras)})
-    return {'versao': 'RS 0.42S', 'sistema': platform.platform(), 'python': platform.python_version(),
+    return {'versao': 'RS 0.42T', 'sistema': platform.platform(), 'python': platform.python_version(),
             'semente': semente, 'repeticoes': repeticoes, 'ordens': ordens,
             'cenario': 'saltos locais consecutivos para frente, todos encurtaveis; microbenchmark sintetico',
             'medida': 'somente compactacao; montagem, validacao e hash fora do cronometro',
@@ -68,7 +68,7 @@ def medir_saltos(tamanhos=(128, 256, 512, 1024, 2048), repeticoes=5,
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Crescimento da compactacao de saltos RS 0.42S')
+    parser = argparse.ArgumentParser(description='Crescimento da compactacao de saltos RS 0.42T')
     parser.add_argument('--tamanhos', default='128,256,512,1024,2048')
     parser.add_argument('--repeticoes', type=int, default=5)
     parser.add_argument('--comparar-legado', action='store_true')

@@ -58,7 +58,7 @@ def efeito_expressao_arvore(no):
         return _ler(no[1])
     if operacao == 'empreste_registro':
         return _ler(no[1]).combinar(_risco())
-    if operacao == 'empreste_registro_lista':
+    if operacao in ('empreste_registro_lista', 'empreste_texto_lista'):
         e = _ler(no[1]).combinar(efeito_expressao_arvore(no[2])).combinar(_risco())
         return e.combinar(_gravar(no[3])) if len(no) == 4 else e
     if operacao in _CONTAGENS:

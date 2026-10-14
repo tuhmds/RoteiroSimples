@@ -399,6 +399,16 @@ def expressao(g, expr, variaveis, windows, registradores=None, pilha_extra=0, de
             g.bytes(b'\x48\x83\xC4\x08')
     elif tipo in ('mova_valor_dinamico', 'mova_registro_proprietario'):
         raise ErroCompilacao('Transferencia dinamica exige parametro, retorno ou declaracao proprietaria.')
+    elif tipo == 'empreste_texto_lista':
+        nome, indice, reserva = expr[1:]
+        listas_dinamicas.copiar_composto(g, variaveis, reserva, nome, indice, windows,
+            lambda gerador, no, locais, alvo: expressao(
+                gerador, no, locais, alvo, registradores, pilha_extra),
+            3, emprestada=g.tipos_atual[nome][0] == 'lista_emprestada')
+        base = deslocamento_variavel(variaveis, reserva, windows)
+        g.bytes(b'\x48\x83\xBD' + struct.pack('<i', base - 8) + b'\x00')
+        g.salto('erro_valor_inativo', 'jl')
+        g.bytes(b'\x48\x8D\x85' + struct.pack('<i', base))
     elif tipo in ('empreste_texto_dinamico', 'empreste_bytes_dinamicos'):
         valores_dinamicos.verificar_vivo(g, variaveis, expr[1], windows)
         g.bytes(b'\x48\x8D\x85' + struct.pack('<i', deslocamento_variavel(variaveis, expr[1], windows)))
@@ -1207,6 +1217,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes
                     if g.funcoes[origem[1]].retorno != tipos[destino]:
                         raise ErroCompilacao('Retorno dinamico possui tipo incompatível com o destino.')
                     expressao(g, origem, variaveis, windows, destino_composto=destino)
+                elif origem[0] == 'retire_registro_lista':
+                    expressao(g, origem, variaveis, windows, destino_composto=destino)
                 else:
                     raise ErroCompilacao('Recebimento dinamico exige transferencia ou chamada proprietaria.')
             elif op[0] == 'receba_registro_proprietario':
@@ -1247,11 +1259,14 @@ def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes
                 if valor[0] == 'temporario_composto':
                     origem = valor[1]
                     expressao(g, valor[2], variaveis, windows, pilha_extra=int(substituicao), destino_composto=origem)
-                elif valor[0] == 'mova_registro_proprietario':
+                elif valor[0] in ('mova_registro_proprietario', 'mova_valor_dinamico'):
                     origem = valor[1]
                 else:
                     raise ErroCompilacao('Colecao proprietaria exige registro transferido ou novo.')
-                _validar_registro_vivo(g, variaveis, origem, windows)
+                if eh_proprietario(tipos[origem]):
+                    valores_dinamicos.verificar_vivo(g, variaveis, origem, windows)
+                else:
+                    _validar_registro_vivo(g, variaveis, origem, windows)
                 if substituicao:
                     g.bytes(b'\x5E')  # recupera índice, sem guardar ponteiro do heap entre chamadas
                     valores_dinamicos.endereco_descritor(g, variaveis, nome, windows)
@@ -1260,7 +1275,10 @@ def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes
                 else:
                     listas_dinamicas.acrescentar(g, variaveis, nome, ('var', origem), windows, expressao,
                                                 listas_dinamicas.largura_elemento(g, tipos[nome]))
-                _inativar_registro(g, variaveis, origem, windows)
+                if eh_proprietario(tipos[origem]):
+                    valores_dinamicos.inativar(g, variaveis, origem, windows)
+                else:
+                    _inativar_registro(g, variaveis, origem, windows)
             elif op[0] == 'limpe_lista_dinamica':
                 listas_dinamicas.limpar(g, variaveis, op[1], windows)
             elif op[0] == 'remova_ultimo_lista_dinamica':
@@ -1437,6 +1455,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes
                             raise ErroCompilacao('Retorno proprietario exige transferencia do mesmo tipo.')
                         valores_dinamicos.transferir_para_retorno(
                             g, variaveis, op[1][1], windows)
+                    elif op[1][0] == 'retire_registro_lista':
+                        expressao(g, op[1], variaveis, windows, destino_composto='__rs_retorno_externo')
                     elif op[1][0] == 'chamada':
                         if g.funcoes[op[1][1]].retorno != tipo_retorno:
                             raise ErroCompilacao('Retorno proprietario exige chamada do mesmo tipo.')

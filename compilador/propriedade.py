@@ -51,7 +51,12 @@ def eh_valor_proprietario(tipo, registros):
 
 def eh_colecao_proprietaria(tipo, registros):
     return (isinstance(tipo, tuple) and len(tipo) == 2 and
-            tipo[0] == 'lista_dinamica' and eh_registro_proprietario(tipo[1], registros))
+            tipo[0] == 'lista_dinamica' and eh_valor_proprietario(tipo[1], registros))
+
+
+def elemento_lista(nome):
+    """Normaliza o nome público do elemento sem duplicar o descritor de texto."""
+    return TIPO_TEXTO_DINAMICO if nome == 'texto' else str(nome)
 
 
 def folhas_proprietarias_tipo(tipo, registros):

@@ -10,7 +10,9 @@ from .desenrolamento_windows import (
 
 
 def rotulo(tipo, operacao):
-    return f'rs_colecao_{operacao}_{tipo[1]}'
+    from compilador.propriedade import TIPO_TEXTO_DINAMICO
+    elemento = '__rs_texto_utf8' if tipo[1] == TIPO_TEXTO_DINAMICO else tipo[1]
+    return f'rs_colecao_{operacao}_{elemento}'
 
 
 def liberador(tipo, registros):

@@ -2,7 +2,7 @@
 
 **Linguagem de programação experimental em português brasileiro, com compilação nativa.**
 
-**Versão documentada:** 0.42S · **Estado:** em desenvolvimento, não indicada para produção.
+**Versão documentada:** 0.42T · **Estado:** em desenvolvimento, não indicada para produção.
 
 A **RS** nasceu para tornar a programação compreensível desde o primeiro contato, usando palavras e mensagens em português brasileiro, sem abandonar fundamentos de compiladores, tipagem, gerenciamento de memória e desempenho. Queremos que aprender a programar e construir programas nativos possam fazer parte da mesma jornada.
 
@@ -12,6 +12,7 @@ A **RS** nasceu para tornar a programação compreensível desde o primeiro cont
 
 | Precisa de… | Acesse |
 | --- | --- |
+| Entender a linguagem atual, sintaxe, tipos e propriedade | **[Referência consolidada da RS](docs/LINGUAGEM_RS.md)** |
 | Acompanhar os recursos e versões | **[Atualizações e histórico técnico](docs/ATUALIZACOES.md)** |
 | Ler os contratos e a arquitetura | [Documentação técnica](docs/) · [Princípios de projeto](docs/PRINCIPIOS_RS.md) |
 | Ajudar com correções e funcionalidades | **[Como contribuir (fork, PR e revisão)](CONTRIBUTING.md)** |
@@ -35,7 +36,18 @@ Leia o [guia de contribuição](CONTRIBUTING.md), o [modelo de pull request](.gi
 
 ## Histórico detalhado das versões
 
-## RS 0.42S — Otimização por função em programas mistos
+## RS 0.42T — Textos e coleções para aplicações
+
+A linguagem aceita `lista[texto]` diretamente, com transferência, retirada,
+descarte e leitura por empréstimo de chamada. Resultados podem transportar
+listas dinâmicas dos tipos aceitos, incluindo `resultado[lista[texto]]`.
+A biblioteca de textos, escrita em RS, acrescenta busca, recorte Unicode,
+separação e junção com erros explícitos. Um leitor de configurações usa
+esses recursos e informa a linha de entradas inválidas.
+[Contrato e ensaios](docs/TEXTOS_E_COLECOES_RS_0_42T.md) ·
+[Referência consolidada da linguagem](docs/LINGUAGEM_RS.md).
+
+## Histórico: RS 0.42S — Otimização por função em programas mistos
 
 Funções escalares elegíveis agora podem usar IR/SSA no mesmo executável que
 registros, coleções proprietárias e arquivos. O início e os corpos com recursos
@@ -1164,7 +1176,7 @@ mantendo o início e os demais corpos conservadores.
 `--mostrar-estrategia` informa o caminho e o nível efetivos de cada função
 nesses programas. [Limites e diagnósticos parciais](docs/FUNCOES_MISTAS_RS_0_42S.md).
 
-## Recursos presentes na RS 0.42S
+## Recursos presentes na RS 0.42T
 
 | Recurso | Situação |
 |---|---|
@@ -1208,6 +1220,8 @@ nesses programas. [Limites e diagnósticos parciais](docs/FUNCOES_MISTAS_RS_0_42
 | Resultados com texto, bytes e registros proprietários | Implementado na 0.42G |
 | Biblioteca de validação e composição de documentos em RS | Implementado na 0.42G |
 | Coleções de registros proprietários, retirada e descarte por elemento | Implementado na 0.42H |
+| Listas diretas de texto e resultados de listas dinâmicas | Implementado na 0.42T; empréstimos de elementos durante chamadas |
+| Busca, recorte Unicode, separação e junção de textos em RS | Implementado na 0.42T; erros explícitos e posições em valores escalares Unicode |
 | Listas de registros em campos e coleções proprietárias aninhadas | Implementado na 0.42H; até 32 níveis |
 | Empréstimos de registros e elementos de coleções para leitura dos campos | Implementado na 0.42I; duração da chamada |
 | Busca por título e totalização de conteúdo na biblioteca de documentos em RS | Implementado na 0.42I |
@@ -1222,7 +1236,7 @@ nesses programas. [Limites e diagnósticos parciais](docs/FUNCOES_MISTAS_RS_0_42
 | Publicação por renomeação, bloqueio não bloqueante e basename variável verificado | Implementado na 0.39 |
 | Passagem direta de resultados compostos a outras funções | Implementado na 0.26 |
 | IR/CFG/SSA de registros, donos, empréstimos e arquivos | Ainda não |
-| Resultados aninhados/de listas dinâmicas, empréstimos mutáveis, reais/decimais e FFI | Ainda não |
+| Resultados aninhados, empréstimos mutáveis, reais/decimais e FFI | Ainda não |
 
 ## Organização atual
 

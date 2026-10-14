@@ -3,7 +3,7 @@ from .erros import ErroCompilacao
 from .expressoes import Expressao, PALAVRAS_LOGICAS
 from .lexico import Token
 from .ast import NoExpressao
-from .tipos import MAX_VARIAVEIS, tipo_expressao
+from .tipos import tipo_expressao
 from .disposicao_tipos import palavras_tipo
 from .emprestimos_registros import eh_registro_emprestado, campos_emprestados
 from .propriedade import (contrato_valor, eh_valor_proprietario,
@@ -114,7 +114,7 @@ class ContextoSemantico:
     def _preparar_argumentos_compostos(self, arvore):
         """Reserva destino interno para chamada composta passada diretamente como argumento."""
         tag = arvore[0]
-        if tag == 'empreste_registro_lista':
+        if tag in ('empreste_registro_lista', 'empreste_texto_lista'):
             indice = self._preparar_argumentos_compostos(arvore[2])
             self.contador += 1
             nome = f'__rs_vista_registro_{self.contador}'
