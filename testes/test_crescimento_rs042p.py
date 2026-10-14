@@ -93,11 +93,12 @@ class TestesMedicaoCompilacaoRS042P(unittest.TestCase):
                 self.assertEqual(len(registro['amostras']), 2)
                 self.assertGreater(registro['memoria']['python_pico_bytes'], 0)
                 gerador = registro['aquecimento']['gerador']
-                self.assertEqual(gerador, 'conservador' if registro['familia'] == 'misto'
+                self.assertEqual(gerador, ('misto' if registro['nivel'] else 'conservador') if registro['familia'] == 'misto'
                                  else ('ssa' if registro['nivel'] == 8 else 'intermediario'))
             for tamanho in (2, 4):
                 mistos = [r for r in resultado['resultados'] if r['familia'] == 'misto' and r['tamanho'] == tamanho]
-                self.assertEqual(mistos[0]['identidade'][0], mistos[1]['identidade'][0])
+                self.assertNotEqual(mistos[0]['identidade'][0], mistos[1]['identidade'][0])
+                self.assertTrue(any(f['gerador'] == 'ssa' for f in mistos[1]['aquecimento']['estrategias_funcoes']))
 
     def test_trabalhador_registra_timeout_processo_e_protocolo_invalidos(self):
         import subprocess

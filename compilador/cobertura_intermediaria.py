@@ -108,8 +108,9 @@ def motivos_de_cobertura(cobertura):
 def funcoes_escalares_representaveis(programa):
     """Primeiro contrato de funções IR: todos os valores são escalares.
 
-    Chamadas não recebem referências nem donos; ainda não entram no
-    alocador SSA. Operações desconhecidas são rejeitadas pela cobertura.
+    Chamadas não recebem referências nem donos. O4–O8 usam alocação SSA.
+    Operações desconhecidas são rejeitadas pela cobertura. O contrato
+    parcial de programas mistos é classificado separadamente por função.
     """
     escalares = ('inteiro', 'logico')
     if getattr(programa, 'registros', None):
@@ -145,6 +146,10 @@ def formatar_cobertura(cobertura, decisao=None):
         if decisao.motivos:
             linhas.append('Restrições adicionais de otimização:')
             linhas.extend(f'  {motivo}' for motivo in decisao.motivos)
+        if decisao.funcoes:
+            linhas.append('Cobertura parcial: início conservador; decisão por função:')
+            linhas.extend(f'  {f.nome}: {f.gerador}; ' + ('; '.join(f.motivos) or 'contrato escalar fechado')
+                          for f in decisao.funcoes)
     if dict(cobertura.expressoes).get('logica'):
         linhas.append('Operadores e/ou: expressões com curto-circuito na emissão nativa; '
                       'o CFG de análise conserva os dois filhos como efeitos potenciais, '

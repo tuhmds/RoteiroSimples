@@ -1,0 +1,22 @@
+// Léxico em RS: funções escalares convivem com bytes, registros e coleções.
+importe "padrao/lexico.rts" como lexico
+
+inicio {
+    seja fonte: texto
+    copie(fonte, "inicio { seja numero = 17 se numero > 3 e nao falso { escreva(42) } }")
+    seja codigo: bytes
+    seja estado = 9
+    codifique_utf8(codigo, fonte, estado)
+    se estado != 0 {
+        encerre(2)
+    }
+    seja total = 0
+    para repeticao de 0 ate 19999 {
+        seja unidades = lexico.analisar(empreste(codigo))
+        se lexico.primeiro_erro(empreste(unidades)) >= 0 {
+            encerre(3)
+        }
+        total = total + tamanho(unidades)
+    }
+    escreva(total)
+}

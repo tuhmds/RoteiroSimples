@@ -47,6 +47,12 @@ jobs:
       - name: Medir coleções de O0 a O8
         if: matrix.python == '3.11'
         run: python -m benchmarks.medir --fonte benchmarks/colecoes_rs042j.rts --repeticoes 3 --json relatorios/medicao-colecoes.json
+      - name: Medir léxico escrito em RS com funções mistas
+        if: matrix.python == '3.11'
+        run: python -m benchmarks.medir --fonte benchmarks/lexico_rs042s.rts --repeticoes 17 --json relatorios/medicao-lexico-misto.json
+      - name: Medir consultas de coleções com cálculo escalar
+        if: matrix.python == '3.11'
+        run: python -m benchmarks.medir --fonte benchmarks/colecoes_mistas_rs042s.rts --repeticoes 17 --json relatorios/medicao-colecoes-mistas.json
       - name: Medir crescimento da compilação em processos isolados
         if: matrix.python == '3.11'
         run: python -m benchmarks.crescimento --tamanhos 4,12 --repeticoes 2 --json relatorios/crescimento-compilacao.json

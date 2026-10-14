@@ -9,44 +9,52 @@ from .medicao_compilacao import etapa
 def otimizar_funcoes_com_ssa(ir, medidor=None):
     with etapa(medidor, 'otimizacao_ssa_funcoes'):
         programa = construir_ssa_programa(ir, medidor=medidor)
-
-    def reescrever(corpo, ssa):
-        with etapa(medidor, 'otimizacao_constantes_funcoes'):
-            constantes = analisar_constantes_ssa(ssa)
-        alteracoes = {}
-        for bid, bloco in ssa.cfg.blocos.items():
-            if not ssa.blocos[bid].alcancavel or not bloco.instrucoes:
-                continue
-            instr = bloco.instrucoes[0]
-            if instr.operacao not in ('atribua', 'imprima_num', 'retorne', 'se', 'enquanto'):
-                continue
-            expr = ssa.blocos[bid].instrucoes[0].argumentos[0]
-            novo = _reescrever_expressao(expr, constantes)
-            # Somente resultado totalmente literal volta à IR sem versões.
-            # Nenhuma instrução, chamada ou verificação de falha é eliminada.
-            if novo.operacao in ('numero', 'logico'):
-                alteracoes[id(instr)] = novo
-
-        def bloco(instrucoes):
-            novas = []
-            for instr in instrucoes:
-                op, a = instr.operacao, instr.argumentos
-                if id(instr) in alteracoes:
-                    n = 1 if op == 'atribua' else 0
-                    args = list(a)
-                    args[n] = alteracoes[id(instr)]
-                    instr = replace(instr, argumentos=tuple(args))
-                a = instr.argumentos
-                if op == 'se':
-                    instr = replace(instr, argumentos=(a[0], bloco(a[1]), bloco(a[2])))
-                elif op == 'enquanto':
-                    instr = replace(instr, argumentos=(a[0], bloco(a[1])))
-                elif op == 'para':
-                    instr = replace(instr, argumentos=(*a[:4], bloco(a[4])))
-                novas.append(instr)
-            return tuple(novas)
-        return replace(corpo, instrucoes=bloco(corpo.instrucoes))
-
-    return replace(reescrever(ir, programa.principal), funcoes={
-        nome: replace(funcao, programa=reescrever(funcao.programa, programa.funcoes[nome]))
+    return replace(reescrever_corpo(ir, programa.principal, medidor), funcoes={
+        nome: replace(funcao, programa=reescrever_corpo(funcao.programa, programa.funcoes[nome], medidor))
         for nome, funcao in ir.funcoes.items()})
+
+
+def reescrever_corpo(corpo, ssa, medidor=None):
+    with etapa(medidor, 'otimizacao_constantes_funcoes'):
+        constantes = analisar_constantes_ssa(ssa)
+    alteracoes = {}
+    for bid, bloco in ssa.cfg.blocos.items():
+        if not ssa.blocos[bid].alcancavel or not bloco.instrucoes:
+            continue
+        instr = bloco.instrucoes[0]
+        if instr.operacao not in ('atribua', 'imprima_num', 'retorne', 'se', 'enquanto'):
+            continue
+        expr = ssa.blocos[bid].instrucoes[0].argumentos[0]
+        novo = _reescrever_expressao(expr, constantes)
+        # Somente resultado totalmente literal volta à IR sem versões.
+        # Nenhuma instrução, chamada ou verificação de falha é eliminada.
+        if novo.operacao in ('numero', 'logico'):
+            alteracoes[id(instr)] = novo
+
+    def bloco(instrucoes):
+        novas = []
+        for instr in instrucoes:
+            op, a = instr.operacao, instr.argumentos
+            if id(instr) in alteracoes:
+                n = 1 if op == 'atribua' else 0
+                args = list(a)
+                args[n] = alteracoes[id(instr)]
+                instr = replace(instr, argumentos=tuple(args))
+            a = instr.argumentos
+            if op == 'se':
+                instr = replace(instr, argumentos=(a[0], bloco(a[1]), bloco(a[2])))
+            elif op == 'enquanto':
+                instr = replace(instr, argumentos=(a[0], bloco(a[1])))
+            elif op == 'para':
+                instr = replace(instr, argumentos=(*a[:4], bloco(a[4])))
+            novas.append(instr)
+        return tuple(novas)
+    return replace(corpo, instrucoes=bloco(corpo.instrucoes))
+
+
+def otimizar_grupo_funcoes(grupo, medidor=None):
+    from .ssa_funcoes import construir_ssa_funcoes
+    programa = construir_ssa_funcoes(grupo, medidor)
+    return replace(grupo, funcoes={nome: replace(funcao,
+        programa=reescrever_corpo(funcao.programa, programa.funcoes[nome], medidor))
+        for nome, funcao in grupo.funcoes.items()})

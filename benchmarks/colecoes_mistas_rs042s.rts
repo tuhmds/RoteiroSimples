@@ -1,0 +1,34 @@
+// Consulta de registros proprietários chamando cálculo escalar com laço.
+tipo Documento {
+    codigo: inteiro
+    titulo: texto
+}
+funcao calcular(numero: inteiro) -> inteiro {
+    seja valor = numero
+    para iteracao de 0 ate 4 {
+        valor = valor * 3 + 1
+    }
+    retorne valor
+}
+funcao criar(numero: inteiro) -> Documento {
+    seja documento: Documento
+    documento.codigo = numero
+    copie(documento.titulo, "Ação RS")
+    retorne mova(documento)
+}
+funcao consultar(documento: emprestimo[Documento]) -> inteiro {
+    retorne calcular(documento.codigo) + caracteres(documento.titulo)
+}
+inicio {
+    seja documentos: lista[Documento]
+    para numero de 0 ate 256 {
+        adicione(documentos, criar(numero))
+    }
+    seja total = 0
+    para repeticao de 0 ate 999 {
+        para indice de 0 ate tamanho(documentos) - 1 {
+            total = total + consultar(empreste(documentos[indice]))
+        }
+    }
+    escreva(total)
+}

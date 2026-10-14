@@ -1,5 +1,6 @@
 """Crescimento da compilacao completa em processos isolados, sem dependencias."""
 import argparse
+from dataclasses import asdict
 import ctypes
 import hashlib
 import json
@@ -26,7 +27,7 @@ from compilador.parser import analisar_programa
 from compilador.resultados_genericos import preparar_resultados_genericos
 
 FAMILIAS = ('instrucoes', 'desvios', 'funcoes', 'misto', 'modulos')
-VERSAO = 'RS 0.42R'
+VERSAO = 'RS 0.42S'
 
 
 def identidade_codigo():
@@ -144,6 +145,7 @@ def compilar_caso(configuracao, memoria=False):
         resultado = {'estado': 'aprovado', 'bytes_executavel': len(imagem),
                      'sha256_executavel': hashlib.sha256(imagem).hexdigest(),
                      'gerador': decisao.gerador, 'nivel_ir': decisao.nivel_ir,
+                     'estrategias_funcoes': [asdict(f) for f in decisao.funcoes],
                      'motivos': list(decisao.motivos), 'funcoes': len(programa.funcoes)}
         if memoria:
             atual, pico = tracemalloc.get_traced_memory()
@@ -283,7 +285,7 @@ def medir_crescimento(tamanhos=(10, 50, 100), familias=FAMILIAS, niveis=(0, 8),
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Crescimento da compilacao RS 0.42R; tempos, fases, memoria e oraculo.')
+    parser = argparse.ArgumentParser(description='Crescimento da compilacao RS 0.42S; tempos, fases, memoria e oraculo.')
     parser.add_argument('--tamanhos', default='10,50,100')
     parser.add_argument('--familias', default=','.join(FAMILIAS))
     parser.add_argument('--niveis', default='0,8')
