@@ -2,9 +2,13 @@
 import json
 from pathlib import Path
 import random
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+
+RAIZ = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(RAIZ))
 
 from backend import compilar
 from backend.funcoes_mistas import preparar_funcoes_mistas
@@ -22,7 +26,6 @@ from testes.test_cobertura_intermediaria_rs040c import executar_cli
 from testes.test_valores_dinamicos_rs042a import alvo_nativo, rodar
 from testes.test_emprestimos_registros_rs042i import COMUM
 
-RAIZ = Path(__file__).resolve().parents[1]
 ESCALAR = '''funcao calcular(numero: inteiro) -> inteiro {
     seja fator = 3 + 4
     seja ajuste = 9 * 2
@@ -139,7 +142,7 @@ inicio {''')
             self.assertEqual(set(emissores), {'calcular'})
             self.assertIsNone(plano.programa.principal)
 
-    def test_registros_colecoes_e_emprestimos_chamam_scalar(self):
+    def test_registros_colecoes_e_emprestimos_chamam_funcao_escalar(self):
         fonte = COMUM.replace('funcao criar', ESCALAR + 'funcao criar', 1).replace(
             'retorne documento.codigo +', 'retorne calcular(documento.codigo) +') + '''inicio {
     seja documentos: lista[Documento]
