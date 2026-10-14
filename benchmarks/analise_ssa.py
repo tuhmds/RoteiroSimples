@@ -90,7 +90,7 @@ def medir_analise(tamanhos=(32, 128, 512), repeticoes=5, semente=424210, referen
                          'minimo_ms': min(amostras), 'maximo_ms': max(amostras)})
     if identidade_codigo() != codigo or identidade_ferramenta(referencia) != ferramenta:
         raise AssertionError('Código alterado durante a medição.')
-    return {'versao': 'RS 0.42S', 'sistema': platform.platform(), 'python': platform.python_version(),
+    return {'versao': 'RS 0.42T', 'sistema': platform.platform(), 'python': platform.python_version(),
             'semente': semente, 'repeticoes': repeticoes, 'ordens': ordens,
             'referencia_commit': revisao, 'referencia': referencia,
             'codigo_sha256': codigo,
@@ -101,7 +101,7 @@ def medir_analise(tamanhos=(32, 128, 512), repeticoes=5, semente=424210, referen
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Comparação de análise SSA RS 0.42S com referência selecionada')
+    parser = argparse.ArgumentParser(description='Comparação de análise SSA RS 0.42T com referência selecionada')
     parser.add_argument('--tamanhos', default='32,128,512')
     parser.add_argument('--referencia', choices=('rs042p', 'rs042q'), default='rs042p')
     parser.add_argument('--repeticoes', type=int, default=5)

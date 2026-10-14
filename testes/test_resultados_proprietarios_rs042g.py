@@ -322,7 +322,7 @@ funcao consultar(a: emprestimo[texto], b: resultado[texto]) -> inteiro {
 }''')
 
     def test_recursos_emprestimos_e_resultados_aninhados_continuam_restritos(self):
-        for tipo in ('arquivo', 'emprestimo[texto]', 'resultado[texto]', 'lista[inteiro]'):
+        for tipo in ('arquivo', 'emprestimo[texto]', 'resultado[texto]'):
             with self.subTest(tipo=tipo), self.assertRaises(ErroCompilacao):
                 analisar_programa('inicio {\n    seja resposta: resultado[' + tipo + ']\n    escreva(1)\n}')
 

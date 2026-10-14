@@ -27,7 +27,7 @@ from compilador.parser import analisar_programa
 from compilador.resultados_genericos import preparar_resultados_genericos
 
 FAMILIAS = ('instrucoes', 'desvios', 'funcoes', 'misto', 'modulos')
-VERSAO = 'RS 0.42S'
+VERSAO = 'RS 0.42T'
 
 
 def identidade_codigo():
@@ -285,7 +285,7 @@ def medir_crescimento(tamanhos=(10, 50, 100), familias=FAMILIAS, niveis=(0, 8),
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Crescimento da compilacao RS 0.42S; tempos, fases, memoria e oraculo.')
+    parser = argparse.ArgumentParser(description='Crescimento da compilacao RS 0.42T; tempos, fases, memoria e oraculo.')
     parser.add_argument('--tamanhos', default='10,50,100')
     parser.add_argument('--familias', default=','.join(FAMILIAS))
     parser.add_argument('--niveis', default='0,8')

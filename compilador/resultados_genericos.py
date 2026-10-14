@@ -34,6 +34,9 @@ def _ler_tipo(itens, linha):
             raise ErroCompilacao(f'Linha {linha}: tamanho inválido em resultado[T].')
         texto = f'{itens[0]}[{capacidade}]'
         return texto, ' '.join(itens)
+    if (len(itens) == 4 and itens[:2] == ['lista', '['] and itens[-1] == ']'
+            and IDENTIFICADOR.fullmatch(itens[2]) and not itens[2].startswith(PREFIXO)):
+        return f'lista[{itens[2]}]', ' '.join(itens)
     raise ErroCompilacao(f'Linha {linha}: resultado[T] exige tipo concreto, recebeu {itens!r}.')
 
 

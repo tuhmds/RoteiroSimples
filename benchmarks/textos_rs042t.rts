@@ -1,0 +1,23 @@
+// Biblioteca RS: colecao de textos, Unicode e resultado com lista proprietaria.
+importe "padrao/textos.rts" como textos
+
+inicio {
+    seja fonte: texto = "Ação|🌱||RS|"
+    seja separador: texto = "|"
+    seja total = 0
+    para repeticao de 0 ate 199 {
+        seja partes = textos.separar(empreste(fonte), empreste(separador))
+        se partes.valido == falso {
+            encerre(2)
+        }
+        seja unido = textos.juntar(empreste(partes.valor), empreste(separador))
+        se unido.valido == falso {
+            encerre(3)
+        }
+        se unido.valor != fonte {
+            encerre(4)
+        }
+        total = total + tamanho(partes.valor)
+    }
+    escreva(total)
+}

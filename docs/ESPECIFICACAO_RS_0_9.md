@@ -1,5 +1,8 @@
 # Especificação provisória — RoteiroSimples RS 0.9
 
+Documento histórico da 0.9. A referência atual de sintaxe, tipos, propriedade
+e limites está em [A linguagem RoteiroSimples](LINGUAGEM_RS.md).
+
 **Contrato de compatibilidade**, não uma gramática definitiva.
 
 Código-fonte: arquivos `.rts`, comandos e identificadores ASCII **sem acentos**. Strings, comentários e mensagens podem usar UTF-8.

@@ -1,11 +1,12 @@
 # Atualizações da RoteiroSimples (RS)
 
-Índice das entregas técnicas verificáveis. A RS permanece **experimental**: uma versão registrada não significa que a linguagem está pronta para produção. Os detalhes de implementação, testes e limitações de cada etapa estão nas notas vinculadas. A entrada atual do compilador é `compilar.py`, e a versão documentada é **0.42S**.
+Índice das entregas técnicas verificáveis. A RS permanece **experimental**: uma versão registrada não significa que a linguagem está pronta para produção. Os detalhes de implementação, testes e limitações de cada etapa estão nas notas vinculadas. A entrada atual do compilador é `compilar.py`, e a versão documentada é **0.42T**. Consulte a [referência consolidada da linguagem](LINGUAGEM_RS.md).
 
 ## Revisões recentes
 
 | Marco | Evolução | Documentação |
 | --- | --- | --- |
+| **0.42T** | Listas de textos, resultados de listas, busca/recorte/separação/junção em RS e referência consolidada | [Nota técnica](TEXTOS_E_COLECOES_RS_0_42T.md) |
 | **0.42S** | Otimização por função escalar em programas com corpos conservadores, diagnósticos parciais e ensaios reais de ABI | [Nota técnica](FUNCOES_MISTAS_RS_0_42S.md) |
 | **0.42R** | Análises de fluxo selecionadas por fase, preservando o diagnóstico completo | [Nota técnica](FLUXO_SELETIVO_RS_0_42R.md) |
 | **0.42Q** | Custos internos de IR/SSA, buscas de alcance e fila mínima de phi com equivalência à versão anterior | [Nota técnica](ANALISE_SSA_RS_0_42Q.md) |

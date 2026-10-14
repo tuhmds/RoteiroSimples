@@ -1,0 +1,95 @@
+// Formato simples: uma chave=valor por linha, comentarios com #, UTF-8.
+importe "padrao/textos.rts" como textos
+importe "padrao/utf8.rts" como utf8
+
+funcao espaco_ascii(valor: inteiro) -> logico {
+    retorne valor == 32 ou valor == 9 ou valor == 13
+}
+
+funcao aparar(origem: emprestimo[texto]) -> resultado[texto] {
+    seja total = caracteres(origem)
+    seja primeiro = 0
+    enquanto primeiro < total {
+        se nao espaco_ascii(byte_em(origem, primeiro)) {
+            pare
+        }
+        primeiro = primeiro + 1
+    }
+    seja removidos = 0
+    enquanto removidos < total - primeiro {
+        se nao espaco_ascii(byte_em(origem, tamanho(origem) - 1 - removidos)) {
+            pare
+        }
+        removidos = removidos + 1
+    }
+    retorne textos.recortar(origem, primeiro, total - primeiro - removidos)
+}
+
+funcao examinar(linha: emprestimo[texto]) -> resultado[texto] {
+    seja limpa = aparar(linha)
+    propague limpa
+    se tamanho(limpa.valor) == 0 {
+        retorne sucesso[texto](mova(limpa.valor))
+    }
+    se byte_em(limpa.valor, 0) == 35 {
+        seja vazio: texto
+        retorne sucesso[texto](mova(vazio))
+    }
+    seja separador: texto = "="
+    seja encontrado = textos.encontrar(empreste(limpa.valor), empreste(separador))
+    propague encontrado
+    se encontrado.valor < 1 {
+        retorne falha[texto](5)
+    }
+    seja chave = textos.recortar(empreste(limpa.valor), 0, encontrado.valor)
+    propague chave
+    seja valor = textos.recortar(empreste(limpa.valor), encontrado.valor + 1, caracteres(limpa.valor) - encontrado.valor - 1)
+    propague valor
+    seja chave_limpa = aparar(empreste(chave.valor))
+    propague chave_limpa
+    seja valor_limpo = aparar(empreste(valor.valor))
+    propague valor_limpo
+    se tamanho(chave_limpa.valor) == 0 {
+        retorne falha[texto](5)
+    }
+    seja resposta: texto
+    copie(resposta, chave_limpa.valor)
+    junte(resposta, "\n")
+    junte(resposta, valor_limpo.valor)
+    retorne sucesso[texto](mova(resposta))
+}
+
+inicio {
+    seja estado = 0
+    consulte_arquivo("configuracao.txt", estado)
+    se estado != 0 {
+        escreva("Erro: configuracao.txt ausente ou recusado.")
+        encerre(2)
+    }
+    seja dados: bytes
+    carregue_arquivo("configuracao.txt", dados)
+    seja fonte = utf8.decodificar(empreste(dados))
+    se fonte.valido == falso {
+        escreva("Erro: configuracao nao e UTF-8 valido.")
+        encerre(2)
+    }
+    seja quebra: texto = "\n"
+    seja linhas = textos.separar(empreste(fonte.valor), empreste(quebra))
+    se linhas.valido == falso {
+        escreva("Erro: nao foi possivel separar as linhas.")
+        encerre(2)
+    }
+    para indice de 0 ate tamanho(linhas.valor) - 1 {
+        seja linha = examinar(empreste(linhas.valor[indice]))
+        se linha.valido == falso {
+            escreva("Erro de configuracao na linha:")
+            escreva(indice + 1)
+            escreva("Codigo:")
+            escreva(linha.codigo_erro)
+            encerre(2)
+        }
+        se tamanho(linha.valor) > 0 {
+            escreva(linha.valor)
+        }
+    }
+}

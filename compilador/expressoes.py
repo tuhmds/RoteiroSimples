@@ -117,6 +117,9 @@ class Expressao:
                     indice = self.disjuncao()
                     self.consumir(']')
                     self.consumir(')')
+                    if (isinstance(tipo, tuple) and tipo[0] in ('lista_dinamica', 'lista_emprestada')
+                            and tipo[1] == TIPO_TEXTO_DINAMICO):
+                        return NoExpressao(('empreste_texto_lista', nome, indice), getattr(token, 'origem', None))
                     if (not isinstance(tipo, tuple) or tipo[0] not in ('lista_dinamica', 'lista_emprestada')
                             or tipo[1] not in getattr(self, 'registros', {})):
                         raise ErroCompilacao(f'Linha {self.linha}: empreste(lista[indice]) exige lista de registros.')
@@ -139,7 +142,7 @@ class Expressao:
                 indice = self.disjuncao()
                 self.consumir(')')
                 if not eh_colecao_proprietaria(getattr(self, 'tipos', {}).get(nome), getattr(self, 'registros', {})):
-                    raise ErroCompilacao(f'Linha {self.linha}: retire exige lista proprietaria de registros com donos.')
+                    raise ErroCompilacao(f'Linha {self.linha}: retire exige lista proprietaria de elementos com donos.')
                 return NoExpressao(('retire_registro_lista', nome, indice), getattr(token, 'origem', None))
             if token == 'tamanho' and self.olhar() == '(':
                 self.consumir('(')
