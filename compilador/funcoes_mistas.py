@@ -70,10 +70,15 @@ def classificar_funcoes(programa):
             if dependente not in recusadas:
                 recusadas.add(dependente)
                 pendentes.append(dependente)
-    return {nome: motivos[nome] + tuple(
-        f'chamada fora do grupo escalar elegível: {chamada}'
-        for chamada in chamadas[nome] if chamada in recusadas)
-        for nome in funcoes}
+    classificacao = {}
+    for nome in funcoes:
+        dependencias_recusadas = tuple(
+            f'chamada fora do grupo escalar elegível: {chamada}'
+            for chamada in chamadas[nome]
+            if chamada in recusadas
+        )
+        classificacao[nome] = motivos[nome] + dependencias_recusadas
+    return classificacao
 
 
 def construir_ir_funcoes(programa, nomes, otimizar=True, nivel=3, medidor=None):
@@ -92,9 +97,16 @@ def construir_ir_funcoes(programa, nomes, otimizar=True, nivel=3, medidor=None):
     assinaturas = {nome: (programa.funcoes[nome].parametros, programa.funcoes[nome].retorno)
                    for nome in nomes}
     with etapa(medidor, 'ir_conversao_funcoes_mistas'):
-        grupo = GrupoFuncoesIR({nome: FuncaoIR(nome, f.parametros, f.retorno,
-            converter_corpo_ir(f.programa, assinaturas, otimizar, nivel, True, medidor), f.recursiva)
-            for nome in nomes for f in (programa.funcoes[nome],)})
+        funcoes_ir = {}
+        for nome in nomes:
+            funcao = programa.funcoes[nome]
+            corpo_ir = converter_corpo_ir(
+                funcao.programa, assinaturas, otimizar, nivel, True, medidor
+            )
+            funcoes_ir[nome] = FuncaoIR(
+                nome, funcao.parametros, funcao.retorno, corpo_ir, funcao.recursiva
+            )
+        grupo = GrupoFuncoesIR(funcoes_ir)
     if otimizar and nivel >= 3:
         from .otimizacao_funcoes_ssa import otimizar_grupo_funcoes
         with etapa(medidor, 'ir_otimizacao_funcoes_mistas'):
