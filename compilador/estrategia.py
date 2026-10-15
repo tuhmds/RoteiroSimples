@@ -4,7 +4,10 @@ Aceitar -O 8 não significa necessariamente usar SSA nesse programa.
 O gerador conservador protege construções ainda não representadas pela IR.
 """
 from dataclasses import dataclass
-from .cobertura_intermediaria import analisar_cobertura, motivos_de_cobertura, funcoes_escalares_representaveis
+from .cobertura_intermediaria import (
+    BLOCOS_DA_INSTRUCAO, analisar_cobertura, motivos_de_cobertura,
+    funcoes_escalares_representaveis,
+)
 from .propriedade import eh_proprietario
 from .funcoes_mistas import classificar_funcoes
 
@@ -59,17 +62,13 @@ def estrategias_funcoes(programa, nivel, otimizar):
         for nome, motivos in classificacao.items()
     )
 
+
 def percorrer(bloco):
     """Itera pelas operações de um bloco e de seus blocos aninhados."""
     for instrucao in bloco:
         yield instrucao
-        if instrucao[0] == 'se':
-            yield from percorrer(instrucao[2])
-            yield from percorrer(instrucao[3])
-        elif instrucao[0] == 'enquanto':
-            yield from percorrer(instrucao[2])
-        elif instrucao[0] == 'para':
-            yield from percorrer(instrucao[5])
+        for indice in BLOCOS_DA_INSTRUCAO.get(instrucao[0], ()):
+            yield from percorrer(instrucao[indice])
 
 
 def decidir_estrategia(programa, nivel=1, otimizar=True):

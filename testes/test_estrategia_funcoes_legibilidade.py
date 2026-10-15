@@ -1,9 +1,10 @@
 """Regressões do contrato de escolha do gerador para funções RS."""
 
+from copy import deepcopy
 import unittest
 from unittest.mock import patch
 
-from compilador.estrategia import EstrategiaFuncao, estrategias_funcoes
+from compilador.estrategia import EstrategiaFuncao, estrategias_funcoes, percorrer
 
 
 class TestesEstrategiaFuncoes(unittest.TestCase):
@@ -51,6 +52,25 @@ class TestesEstrategiaFuncoes(unittest.TestCase):
         ):
             funcoes = estrategias_funcoes(object(), 8, True)
         self.assertEqual([funcao.nome for funcao in funcoes], ['segunda', 'primeira'])
+
+    def test_blocos_aninhados_preservam_ordem_e_identidade_das_instrucoes(self):
+        primeira = ('imprima_num', ('numero', 1))
+        segunda = ('imprima_num', ('numero', 2))
+        terceira = ('imprima_num', ('numero', 3))
+        ultima = ('retorne', ('numero', 4))
+        repeticao = ('enquanto', ('logico', False), [primeira])
+        contagem = ('para', 'indice', ('numero', 0), ('numero', 1), 1, [segunda])
+        condicional = ('se', ('logico', False), [repeticao], [contagem, terceira])
+        programa = [condicional, ultima]
+        original = deepcopy(programa)
+
+        instrucoes = list(percorrer(programa))
+
+        esperadas = [condicional, repeticao, primeira, contagem, segunda, terceira, ultima]
+        self.assertEqual(instrucoes, esperadas)
+        for instrucao, esperada in zip(instrucoes, esperadas):
+            self.assertIs(instrucao, esperada)
+        self.assertEqual(programa, original)
 
 
 if __name__ == '__main__':
