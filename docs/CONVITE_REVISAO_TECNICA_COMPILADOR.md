@@ -32,7 +32,7 @@ Estamos usando **inteligência artificial como ferramenta ativa** de projeto, im
 
 ## O parecer técnico que gostaríamos de receber
 
-Adilson, por sua experiência com compiladores, queremos pedir uma análise crítica — **sem obrigação de escrever código**. Em especial:
+Convidamos pessoas com experiência em compiladores a apresentar uma análise crítica independente — **sem obrigação de escrever código**. Agradecemos especialmente avaliações fundamentadas nas seguintes questões:
 
 1. **Arquitetura:** a separação atual entre analisador, semântica, IR, CFG, SSA, otimização, gerador e runtime nativo é adequada? Há acoplamentos ou duplicações que se tornarão bloqueios?
 2. **Representação intermediária:** como reduzir a lacuna entre os subconjuntos otimizados em SSA e o caminho conservador, sem tornar a implementação impraticável?
