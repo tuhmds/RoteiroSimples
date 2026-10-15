@@ -1,0 +1,46 @@
+// Executavel nativo que valida e normaliza configuracao_numerica.txt.
+importe "padrao/configuracoes.rts" como configuracoes
+importe "padrao/conversoes.rts" como conversoes
+importe "padrao/textos.rts" como textos
+importe "padrao/utf8.rts" como utf8
+
+inicio {
+    seja estado = 0
+    consulte_arquivo("configuracao_numerica.txt", estado)
+    se estado != 0 {
+        escreva("Erro: configuracao_numerica.txt ausente ou recusado.")
+        encerre(2)
+    }
+    seja dados: bytes
+    carregue_arquivo("configuracao_numerica.txt", dados)
+    seja fonte = utf8.decodificar(empreste(dados))
+    se fonte.valido == falso {
+        escreva("Erro: configuracao nao e UTF-8 valido.")
+        encerre(2)
+    }
+    seja quebra: texto = "\n"
+    seja linhas = textos.separar(empreste(fonte.valor), empreste(quebra))
+    se linhas.valido == falso {
+        escreva("Erro: nao foi possivel separar as linhas.")
+        encerre(2)
+    }
+    para indice de 0 ate tamanho(linhas.valor) - 1 {
+        seja entrada = configuracoes.linha_numerica(empreste(linhas.valor[indice]))
+        se entrada.valido == falso {
+            escreva("Erro de configuracao na linha:")
+            escreva(indice + 1)
+            escreva("Codigo:")
+            escreva(entrada.codigo_erro)
+            encerre(2)
+        }
+        se nao entrada.valor.ignorada {
+            seja normalizado = conversoes.texto_de_inteiro(entrada.valor.valor)
+            se normalizado.valido == falso {
+                escreva("Erro: nao foi possivel formatar o inteiro.")
+                encerre(2)
+            }
+            escreva(entrada.valor.chave)
+            escreva(normalizado.valor)
+        }
+    }
+}

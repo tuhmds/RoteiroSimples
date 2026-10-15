@@ -38,7 +38,7 @@ class SSAPrograma:
         return True
 
     def formatar(self):
-        linhas = ['RS 0.42T - SSA por função escalar']
+        linhas = ['RS 0.42U - SSA por função escalar']
         linhas.extend(('inicio:', self.principal.formatar()) if self.principal is not None else
                       ('Análise parcial: início conservador não representado.',))
         for nome, ssa in self.funcoes.items():
@@ -47,7 +47,7 @@ class SSAPrograma:
         return '\n'.join(linhas)
 
     def para_json(self):
-        return json.dumps({'versao': 'RS 0.42T',
+        return json.dumps({'versao': 'RS 0.42U',
                            'modo': ('SSA parcial; somente funções escalares elegíveis' if self.principal is None else
                                     'SSA por função; emissão nativa com alocação em O4–O8'),
                            'principal': json.loads(self.principal.para_json()) if self.principal is not None else None,

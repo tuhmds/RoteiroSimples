@@ -1,0 +1,91 @@
+// Conversoes decimais explicitas de inteiros assinados de 64 bits.
+
+// 1: vazio; 2: formato invalido; 3: fora dos limites de inteiro.
+// Aceita somente [+-]?[0-9]+, sem aparar espacos implicitamente.
+// Um caractere invalido prevalece sobre um transbordamento anterior.
+publico funcao inteiro_de_texto(origem: emprestimo[texto]) -> resultado[inteiro] {
+    seja total = tamanho(origem)
+    se total == 0 {
+        retorne falha[inteiro](1)
+    }
+    seja indice = 0
+    seja negativo = falso
+    seja primeiro = byte_em(origem, 0)
+    se primeiro == 43 ou primeiro == 45 {
+        negativo = primeiro == 45
+        indice = 1
+    }
+    se indice == total {
+        retorne falha[inteiro](2)
+    }
+    // Acumular no dominio negativo permite representar tambem INT64_MIN.
+    seja limite_digito = 7
+    se negativo {
+        limite_digito = 8
+    }
+    seja acumulado = 0
+    seja excedeu = falso
+    enquanto indice < total {
+        seja byte = byte_em(origem, indice)
+        se byte < 48 ou byte > 57 {
+            retorne falha[inteiro](2)
+        }
+        seja digito = byte - 48
+        se nao excedeu {
+            se acumulado < -922337203685477580 {
+                excedeu = verdadeiro
+            } senao {
+                se acumulado == -922337203685477580 e digito > limite_digito {
+                    excedeu = verdadeiro
+                } senao {
+                    acumulado = acumulado * 10 - digito
+                }
+            }
+        }
+        indice = indice + 1
+    }
+    se excedeu {
+        retorne falha[inteiro](3)
+    }
+    se negativo {
+        retorne sucesso[inteiro](acumulado)
+    }
+    retorne sucesso[inteiro](-acumulado)
+}
+
+// Representacao canonica, sem sinal + nem zeros adicionais.
+// Propaga o resultado do conversor UTF-8; os bytes produzidos sao ASCII.
+publico funcao texto_de_inteiro(valor: inteiro) -> resultado[texto] {
+    seja negativo = valor < 0
+    seja restante = valor
+    se restante > 0 {
+        restante = -restante
+    }
+    // O tipo inteiro tem no maximo 19 digitos decimais e um sinal.
+    seja invertidos: bytes[20]
+    se restante == 0 {
+        adicione_byte(invertidos, 48)
+    }
+    enquanto restante < 0 {
+        // O resto da RS acompanha o sinal do dividendo, com divisao para zero.
+        seja digito = 0 - restante % 10
+        adicione_byte(invertidos, 48 + digito)
+        restante = restante / 10
+    }
+    seja ordenados: bytes[20]
+    se negativo {
+        adicione_byte(ordenados, 45)
+    }
+    seja indice = tamanho(invertidos)
+    enquanto indice > 0 {
+        indice = indice - 1
+        adicione_byte(ordenados, invertidos[indice])
+    }
+    seja convertido: texto
+    seja estado = 0
+    decodifique_utf8(convertido, ordenados, estado)
+    se estado != 0 {
+        retorne falha[texto](estado)
+    }
+    retorne sucesso[texto](mova(convertido))
+}

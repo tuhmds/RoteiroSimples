@@ -2,7 +2,7 @@
 
 **Linguagem de programação experimental em português brasileiro, com compilação nativa.**
 
-**Versão documentada:** 0.42T · **Estado:** em desenvolvimento, não indicada para produção.
+**Versão documentada:** 0.42U · **Estado:** em desenvolvimento, não indicada para produção.
 
 A **RS** nasceu para tornar a programação compreensível desde o primeiro contato, usando palavras e mensagens em português brasileiro, sem abandonar fundamentos de compiladores, tipagem, gerenciamento de memória e desempenho. Queremos que aprender a programar e construir programas nativos possam fazer parte da mesma jornada.
 
@@ -36,7 +36,17 @@ Leia o [guia de contribuição](CONTRIBUTING.md), o [modelo de pull request](.gi
 
 ## Histórico detalhado das versões
 
-## RS 0.42T — Textos e coleções para aplicações
+## RS 0.42U — Conversões e configurações escritas em RS
+
+O módulo `padrao/conversoes.rts` transforma texto decimal em inteiro com
+erros recuperáveis e formata todos os inteiros de 64 bits, incluindo o mínimo.
+`textos.aparar` remove espaços ASCII explicitamente. A biblioteca de
+configurações interpreta linhas `chave=inteiro`, preservando a origem e
+devolvendo uma chave com dono próprio. Um executável demonstra leitura,
+normalização e diagnóstico com número da linha.
+[Contrato, códigos de erro e ensaios](docs/CONVERSOES_E_CONFIGURACOES_RS_0_42U.md).
+
+## Histórico: RS 0.42T — Textos e coleções para aplicações
 
 A linguagem aceita `lista[texto]` diretamente, com transferência, retirada,
 descarte e leitura por empréstimo de chamada. Resultados podem transportar
@@ -1176,7 +1186,7 @@ mantendo o início e os demais corpos conservadores.
 `--mostrar-estrategia` informa o caminho e o nível efetivos de cada função
 nesses programas. [Limites e diagnósticos parciais](docs/FUNCOES_MISTAS_RS_0_42S.md).
 
-## Recursos presentes na RS 0.42T
+## Recursos presentes na RS 0.42U
 
 | Recurso | Situação |
 |---|---|
@@ -1222,6 +1232,8 @@ nesses programas. [Limites e diagnósticos parciais](docs/FUNCOES_MISTAS_RS_0_42
 | Coleções de registros proprietários, retirada e descarte por elemento | Implementado na 0.42H |
 | Listas diretas de texto e resultados de listas dinâmicas | Implementado na 0.42T; empréstimos de elementos durante chamadas |
 | Busca, recorte Unicode, separação e junção de textos em RS | Implementado na 0.42T; erros explícitos e posições em valores escalares Unicode |
+| Conversões explícitas texto/inteiro e aparar espaços ASCII | Implementado na 0.42U, em biblioteca RS, com verificação dos limites de 64 bits |
+| Biblioteca para linhas de configuração numérica | Implementado na 0.42U; erros tipados, comentários e exemplo nativo com diagnóstico de linha |
 | Listas de registros em campos e coleções proprietárias aninhadas | Implementado na 0.42H; até 32 níveis |
 | Empréstimos de registros e elementos de coleções para leitura dos campos | Implementado na 0.42I; duração da chamada |
 | Busca por título e totalização de conteúdo na biblioteca de documentos em RS | Implementado na 0.42I |
