@@ -156,3 +156,27 @@ publico funcao juntar(partes: emprestimo[lista[texto]], separador: emprestimo[te
     }
     retorne sucesso[texto](mova(destino))
 }
+
+privado funcao espaco_ascii(valor: inteiro) -> logico {
+    retorne valor == 32 ou (valor >= 9 e valor <= 13)
+}
+
+// Remove somente espacos ASCII 9..13 e 32 nas extremidades; cria outro dono.
+publico funcao aparar(origem: emprestimo[texto]) -> resultado[texto] {
+    seja total = caracteres(origem)
+    seja primeiro = 0
+    enquanto primeiro < total {
+        se nao espaco_ascii(byte_em(origem, primeiro)) {
+            pare
+        }
+        primeiro = primeiro + 1
+    }
+    seja removidos = 0
+    enquanto removidos < total - primeiro {
+        se nao espaco_ascii(byte_em(origem, tamanho(origem) - 1 - removidos)) {
+            pare
+        }
+        removidos = removidos + 1
+    }
+    retorne recortar(origem, primeiro, total - primeiro - removidos)
+}

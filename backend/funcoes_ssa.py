@@ -16,7 +16,7 @@ class BackendFuncoesSSA:
     alocacoes: dict
 
     def relatorio(self):
-        linhas = ['RS 0.42T - alocação por função (r13/r14/r15 preservados nas chamadas)']
+        linhas = ['RS 0.42U - alocação por função (r13/r14/r15 preservados nas chamadas)']
         for nome, aloc in self.alocacoes.items():
             linhas.extend((f'{nome}:', aloc.relatorio()))
         return '\n'.join(linhas)

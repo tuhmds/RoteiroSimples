@@ -1,0 +1,21 @@
+// Dois mil inteiros fazem a ida e volta decimal; soma independente: -1000.
+importe "padrao/conversoes.rts" como conversoes
+
+inicio {
+    seja total = 0
+    para indice de -1000 ate 999 {
+        seja escrito = conversoes.texto_de_inteiro(indice)
+        se escrito.valido == falso {
+            encerre(2)
+        }
+        seja lido = conversoes.inteiro_de_texto(empreste(escrito.valor))
+        se lido.valido == falso {
+            encerre(3)
+        }
+        se lido.valor != indice {
+            encerre(4)
+        }
+        total = total + lido.valor
+    }
+    escreva(total)
+}

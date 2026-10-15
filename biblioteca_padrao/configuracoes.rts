@@ -1,0 +1,47 @@
+// Linhas chave=inteiro. Politica de chaves repetidas pertence ao chamador.
+importe "textos.rts" como textos
+importe "conversoes.rts" como conversoes
+
+publico tipo EntradaNumerica {
+    ignorada: logico
+    chave: texto
+    valor: inteiro
+}
+
+// 1..3: conversao numerica; 4: falta de =; 5: chave vazia.
+// Linhas vazias e comentarios # devolvem sucesso com ignorada=verdadeiro.
+publico funcao linha_numerica(origem: emprestimo[texto]) -> resultado[EntradaNumerica] {
+    seja limpa = textos.aparar(origem)
+    propague limpa
+    seja entrada: EntradaNumerica
+    se tamanho(limpa.valor) == 0 {
+        entrada.ignorada = verdadeiro
+        retorne sucesso[EntradaNumerica](mova(entrada))
+    }
+    se byte_em(limpa.valor, 0) == 35 {
+        entrada.ignorada = verdadeiro
+        retorne sucesso[EntradaNumerica](mova(entrada))
+    }
+    seja separador: texto = "="
+    seja encontrado = textos.encontrar(empreste(limpa.valor), empreste(separador))
+    propague encontrado
+    se encontrado.valor < 0 {
+        retorne falha[EntradaNumerica](4)
+    }
+    seja chave = textos.recortar(empreste(limpa.valor), 0, encontrado.valor)
+    propague chave
+    seja valor = textos.recortar(empreste(limpa.valor), encontrado.valor + 1, caracteres(limpa.valor) - encontrado.valor - 1)
+    propague valor
+    seja chave_limpa = textos.aparar(empreste(chave.valor))
+    propague chave_limpa
+    se tamanho(chave_limpa.valor) == 0 {
+        retorne falha[EntradaNumerica](5)
+    }
+    seja valor_limpo = textos.aparar(empreste(valor.valor))
+    propague valor_limpo
+    seja numero = conversoes.inteiro_de_texto(empreste(valor_limpo.valor))
+    propague numero
+    mova(entrada.chave, chave_limpa.valor)
+    entrada.valor = numero.valor
+    retorne sucesso[EntradaNumerica](mova(entrada))
+}

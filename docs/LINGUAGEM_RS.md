@@ -1,6 +1,6 @@
 # A linguagem RoteiroSimples — referência consolidada
 
-**Versão: RS 0.42T, experimental.** Esta página reúne o contrato de uso atual.
+**Versão: RS 0.42U, experimental.** Esta página reúne o contrato de uso atual.
 As notas por versão registram implementação e ensaios; propostas futuras não
 se tornam sintaxe aceita por aparecerem em um documento. A gramática da 0.9
 é histórica. Esta referência não anuncia estabilização da futura RS 1.0.
@@ -136,7 +136,7 @@ Os campos `valido`, `codigo_erro` e `valor` permanecem públicos por compatibili
 mover o valor não altera automaticamente `valido`. O estado não substitui a
 verificação de vida do conteúdo.
 
-## Biblioteca de textos da 0.42T
+## Biblioteca de textos
 
 | Função em `padrao/textos.rts` | Contrato |
 | --- | --- |
@@ -145,6 +145,7 @@ verificação de vida do conteúdo.
 | `recortar(origem, posicao_inicial, quantidade)` | `resultado[texto]`; posições em caracteres, sem dividir UTF-8 |
 | `separar(origem, separador)` | `resultado[lista[texto]]`; preserva partes vazias; recusa separador vazio |
 | `juntar(partes, separador)` | `resultado[texto]`; lista vazia produz texto vazio |
+| `aparar(origem)` | `resultado[texto]`; remove ASCII 9..13 e 32 nas extremidades, preservando espaços internos e Unicode |
 
 Os parâmetros de leitura recebem empréstimos. As posições contam valores
 escalares Unicode, não bytes nem grafemas: um acento combinante conta como
@@ -161,6 +162,20 @@ O exemplo [ler_configuracao_rs042t.rts](../exemplos/ferramentas/ler_configuracao
 lê um arquivo UTF-8 de linhas `chave=valor`, admite comentários de linha `#`
 e informa a linha de uma entrada inválida. É um leitor simples: não implementa
 aspas especiais, escapes do formato, seções, expansão de variáveis ou INI completo.
+
+## Conversões e configurações
+
+`padrao/conversoes.rts` oferece `inteiro_de_texto(emprestimo[texto])` e
+`texto_de_inteiro(inteiro)`, com retornos `resultado[inteiro]` e `resultado[texto]`.
+A leitura exige decimal ASCII `[+-]?[0-9]+`, sem aparar espaços implicitamente,
+e verifica todo o intervalo de 64 bits. Códigos: 1 vazio, 2 formato inválido,
+3 fora do intervalo; formato inválido prevalece sobre excesso de dígitos.
+A escrita produz decimal canônico e propaga o contrato do conversor UTF-8.
+
+`padrao/configuracoes.rts` interpreta linhas `chave=inteiro`, devolvendo
+`resultado[EntradaNumerica]`, com chave própria e indicação de linha ignorada.
+Linhas vazias e comentários de linha `#` são ignorados; esquema, repetições e
+armazenamento ficam a cargo do chamador. [Contrato da 0.42U](CONVERSOES_E_CONFIGURACOES_RS_0_42U.md).
 
 ## Erros, execução e evolução
 
