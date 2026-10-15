@@ -4,7 +4,10 @@ Aceitar -O 8 não significa necessariamente usar SSA nesse programa.
 O gerador conservador protege construções ainda não representadas pela IR.
 """
 from dataclasses import dataclass
-from .cobertura_intermediaria import analisar_cobertura, motivos_de_cobertura, funcoes_escalares_representaveis
+from .cobertura_intermediaria import (
+    BLOCOS_DA_INSTRUCAO, analisar_cobertura, motivos_de_cobertura,
+    funcoes_escalares_representaveis,
+)
 from .propriedade import eh_proprietario
 from .funcoes_mistas import classificar_funcoes
 
@@ -28,26 +31,44 @@ class Estrategia:
     funcoes: tuple[EstrategiaFuncao, ...] = ()
 
 
+def _estrategia_de_funcao(nome, motivos, nivel, otimizar):
+    """Seleciona o caminho de uma função sem alterar sua elegibilidade."""
+    elegivel = not motivos
+    otimizacao_ativa = otimizar and nivel > 0
+
+    if not elegivel or not otimizacao_ativa:
+        gerador = 'conservador'
+    elif nivel >= 4:
+        gerador = 'ssa'
+    else:
+        gerador = 'intermediario'
+
+    nivel_ir = min(nivel, 3) if elegivel and otimizar else 0
+    if motivos:
+        justificativas = motivos
+    elif not otimizacao_ativa:
+        justificativas = ('otimização desativada',)
+    else:
+        justificativas = ()
+
+    return EstrategiaFuncao(nome, elegivel, gerador, nivel_ir, justificativas)
+
+
 def estrategias_funcoes(programa, nivel, otimizar):
-    return tuple(EstrategiaFuncao(nome, not motivos,
-        'conservador' if motivos or not otimizar or nivel == 0 else
-        'ssa' if nivel >= 4 else 'intermediario',
-        min(nivel, 3) if not motivos and otimizar else 0,
-        motivos if motivos else ('otimização desativada',) if not otimizar or nivel == 0 else ())
-        for nome, motivos in classificar_funcoes(programa).items())
+    """Mantém a decisão por função na mesma ordem das declarações."""
+    classificacao = classificar_funcoes(programa)
+    return tuple(
+        _estrategia_de_funcao(nome, motivos, nivel, otimizar)
+        for nome, motivos in classificacao.items()
+    )
 
 
 def percorrer(bloco):
     """Itera pelas operações de um bloco e de seus blocos aninhados."""
     for instrucao in bloco:
         yield instrucao
-        if instrucao[0] == 'se':
-            yield from percorrer(instrucao[2])
-            yield from percorrer(instrucao[3])
-        elif instrucao[0] == 'enquanto':
-            yield from percorrer(instrucao[2])
-        elif instrucao[0] == 'para':
-            yield from percorrer(instrucao[5])
+        for indice in BLOCOS_DA_INSTRUCAO.get(instrucao[0], ()):
+            yield from percorrer(instrucao[indice])
 
 
 def decidir_estrategia(programa, nivel=1, otimizar=True):
