@@ -1,0 +1,27 @@
+importe "padrao/pools.rts" como pools
+inicio {
+    seja r = pools.criar(16, 3)
+    se nao r.valido {
+        encerre(2)
+    }
+    seja p = mova(r.valor)
+    seja q = pools.alocar(mova(p))
+    mova(p, q)
+    seja primeiro = pools.ultimo(empreste(p))
+    seja escrita = pools.escrever(mova(p), primeiro, 0, 239)
+    mova(p, escrita)
+    seja valor = pools.ler(empreste(p), primeiro, 0)
+    escreva(valor.valor)
+    seja livre = pools.liberar(mova(p), primeiro)
+    mova(p, livre)
+    seja novamente = pools.alocar(mova(p))
+    mova(p, novamente)
+    seja segundo = pools.ultimo(empreste(p))
+    escreva(segundo.indice)
+    escreva(segundo.versao)
+    seja obsoleto = pools.ler(empreste(p), primeiro, 0)
+    escreva(obsoleto.codigo_erro)
+    seja zerado = pools.ler(empreste(p), segundo, 0)
+    escreva(zerado.valor)
+    escreva(pools.ocupados(empreste(p)))
+}
