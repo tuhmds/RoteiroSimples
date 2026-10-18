@@ -56,19 +56,19 @@ inicio {
         seja nova = arenas.acrescentar(mova(area), i + 90)
         mova(area, nova)
     }
-    escreva(arenas.tamanho(empreste(area)))
+    escreva(arenas.ocupados(empreste(area)))
     seja anterior = arenas.recuar(mova(area), marcador)
     mova(area, anterior)
-    escreva(arenas.tamanho(empreste(area)))
+    escreva(arenas.ocupados(empreste(area)))
     seja fora = arenas.ler(empreste(area), 12)
     escreva(fora.valido)
     escreva(fora.codigo_erro)
     seja nova = arenas.acrescentar(mova(area), 201)
     mova(area, nova)
-    escreva(arenas.tamanho(empreste(area)))
+    escreva(arenas.ocupados(empreste(area)))
     seja lido = arenas.ler(empreste(area), 10)
     escreva(lido.valor)
-    escreva(arenas.capacidade(empreste(area)))
+    escreva(arenas.capacidade_total(empreste(area)))
 }'''
         self._executar(fonte, b'15\n10\n0\n1\n11\n201\n32\n')
 
@@ -77,7 +77,7 @@ inicio {
 inicio {
     seja area = arenas.criar(16)
     seja alterada = arenas.recuar(mova(area), 99)
-    escreva(arenas.tamanho(empreste(alterada)))
+    escreva(arenas.ocupados(empreste(alterada)))
 }'''
         self._executar(fonte, falha=True)
 
@@ -89,17 +89,17 @@ inicio {
         seja nova = arenas.acrescentar(mova(area), i % 256)
         mova(area, nova)
     }
-    escreva(arenas.tamanho(empreste(area)))
-    escreva(arenas.capacidade(empreste(area)))
+    escreva(arenas.ocupados(empreste(area)))
+    escreva(arenas.capacidade_total(empreste(area)))
     seja reiniciada = arenas.reiniciar(mova(area))
     mova(area, reiniciada)
-    escreva(arenas.tamanho(empreste(area)))
-    escreva(arenas.capacidade(empreste(area)))
+    escreva(arenas.ocupados(empreste(area)))
+    escreva(arenas.capacidade_total(empreste(area)))
     para i de 0 ate 15 {
         seja nova = arenas.acrescentar(mova(area), 100 + i)
         mova(area, nova)
     }
-    escreva(arenas.tamanho(empreste(area)))
+    escreva(arenas.ocupados(empreste(area)))
     seja x = arenas.ler(empreste(area), 15)
     escreva(x.valor)
 }'''

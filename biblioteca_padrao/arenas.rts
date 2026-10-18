@@ -18,11 +18,11 @@ publico funcao marca(arena: emprestimo[Arena]) -> inteiro {
     retorne arena.usados
 }
 
-publico funcao tamanho(arena: emprestimo[Arena]) -> inteiro {
+publico funcao ocupados(arena: emprestimo[Arena]) -> inteiro {
     retorne arena.usados
 }
 
-publico funcao capacidade(arena: emprestimo[Arena]) -> inteiro {
+publico funcao capacidade_total(arena: emprestimo[Arena]) -> inteiro {
     retorne capacidade(arena.dados)
 }
 

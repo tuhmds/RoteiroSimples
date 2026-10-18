@@ -11,7 +11,7 @@ O tipo `arenas.Arena` possui um buffer `bytes` e um cursor lógico.
 A API permite `criar(capacidade)`, `acrescentar(arena, byte)`,
 `ler(empreste(arena), indice)`, `marca(empreste(arena))`,
 `recuar(arena, marca)`, `reiniciar(arena)`,
-`tamanho(empreste(arena))`, `capacidade(empreste(arena))` e
+`ocupados(empreste(arena))`, `capacidade_total(empreste(arena))` e
 `reservar(arena, minimo)`.
 
 Operações mutáveis **consomem** a arena e devolvem seu dono sem duplicar
