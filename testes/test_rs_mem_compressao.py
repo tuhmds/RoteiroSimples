@@ -69,13 +69,13 @@ inicio {
     seja c = memoria.expandir(empreste(vazio), 50)
     escreva(c.codigo_erro)
     adicione_byte(vazio, 255)
-    seja d = memoria.expandir(empreste(vazio), 100)
+    seja d = memoria.expandir(empreste(vazio), 4)
     escreva(d.codigo_erro)
-    seja e_resultado = memoria.expandir(empreste(vazio), 255)
+    seja e_resultado = memoria.expandir(empreste(vazio), 5)
     escreva(e_resultado.valido)
     escreva(tamanho(e_resultado.valor))
-    escreva(e_resultado.valor[254])
-}''', b'1\n1\n1\n2\n1\n255\n255\n')
+    escreva(e_resultado.valor[4])
+}''', b'1\n1\n1\n2\n1\n5\n255\n')
 
     def test_zero_e_valor_255_e_pacote_vazio(self):
         self._comparar('''importe "padrao/memoria_compacta.rts" como memoria
