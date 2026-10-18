@@ -81,6 +81,38 @@ class TestesRsMemCrescimento(unittest.TestCase):
         }"""
         self._executar_comparar(fonte, 'ação - RS\n11\n'.encode('utf-8'))
 
+    def test_linux_fallback_quando_mremap_e_recusado(self):
+        if sys.platform != 'linux' or os.uname().machine != 'x86_64':
+            self.skipTest('O fallback alterado em execução exige Linux x86-64.')
+        # Altera somente o número da syscall no executável de ensaio.
+        # O kernel devolve ENOSYS e executamos o caminho antigo com cópia.
+        fonte = """inicio {
+            seja numeros: lista[]
+            seja dados: bytes
+            para i de 0 ate 8191 {
+                adicione(numeros, i + 5)
+                adicione_byte(dados, i % 256)
+            }
+            escreva(numeros[0])
+            escreva(numeros[8191])
+            escreva(dados[0])
+            escreva(dados[8191])
+            escreva(capacidade(numeros))
+            escreva(capacidade(dados))
+        }"""
+        binario = compilar(analisar_programa(fonte), 'linux', nivel=8)
+        original = bytes.fromhex('B8 19 00 00 00 0F 05')
+        invalida = bytes.fromhex('B8 FF FF FF FF 0F 05')
+        self.assertEqual(binario.count(original), 1)
+        binario = binario.replace(original, invalida, 1)
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / 'teste_fallback'
+            caminho.write_bytes(binario)
+            caminho.chmod(0o755)
+            resultado = subprocess.run([str(caminho)], capture_output=True, timeout=30)
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        self.assertEqual(resultado.stdout, b'5\n8196\n0\n255\n8192\n8192\n')
+
     def test_emissor_usa_mremap_somente_no_linux(self):
         fonte = analisar_programa("""inicio {
             seja dados: bytes

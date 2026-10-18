@@ -37,9 +37,14 @@ compactador, sistema de memória NUMA ou garantia de ganho de desempenho.
 - desempenho medido, inclusive casos em que `mremap` é mais lento.
 
 Testes automatizados: `testes/test_rs_mem_crescimento.py` e toda a suíte
-preexistente. A presença da syscall no binário é testada; **os testes
-funcionais não forçam ainda uma falha da syscall**, portanto não a tratamos
-como caminho integralmente comprovado.
+preexistente. Um ensaio substitui a syscall `mremap` por um número inválido
+no executável de teste: o núcleo retorna `ENOSYS` e a reserva, cópia e
+liberação anterior precisa preservar os dados. Isso não substitui uma
+campanha completa de pressão de memória e falhas.
+
+Benchmark: `benchmarks/realocacao_rs_mem.rts`. Executar com
+`python -m benchmarks.medir --fonte benchmarks/realocacao_rs_mem.rts --repeticoes 17 --json realocacao.json`.
+Comparar os resultados com a `main` anterior antes de afirmar ganho.
 
 ## Próximas etapas condicionadas aos resultados
 
