@@ -59,6 +59,9 @@ jobs:
       - name: Medir conversões decimais escritas em RS
         if: matrix.python == '3.11'
         run: python -m benchmarks.medir --fonte benchmarks/conversoes_rs042u.rts --repeticoes 17 --json relatorios/medicao-conversoes.json
+      - name: Comparar RS-MEM nativo e fallback Linux
+        if: matrix.python == '3.11' && matrix.so == 'ubuntu-latest'
+        run: python -m benchmarks.realocacao_comparativa --repeticoes 9 --json relatorios/realocacao-rs-mem.json
       - name: Medir crescimento da compilação em processos isolados
         if: matrix.python == '3.11'
         run: python -m benchmarks.crescimento --tamanhos 4,12 --repeticoes 2 --json relatorios/crescimento-compilacao.json
