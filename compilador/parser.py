@@ -185,7 +185,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     contexto = _contexto or ContextoSemantico(importa, assinaturas, registros)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'retire', 'codifique_utf8', 'decodifique_utf8', 'consulte_arquivo', 'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'encerre', 'arquivo', 'abra_arquivo', 'grave_em', 'carregue_de', 'sincronize_arquivo', 'feche_arquivo', 'publique_arquivo', 'bloqueie_arquivo', 'funcao', 'retorne', 'tipo'}
+    reservadas = {'retire', 'codifique_utf8', 'decodifique_utf8', 'consulte_arquivo', 'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'reserve_capacidade', 'encerre', 'arquivo', 'abra_arquivo', 'grave_em', 'carregue_de', 'sincronize_arquivo', 'feche_arquivo', 'publique_arquivo', 'bloqueie_arquivo', 'funcao', 'retorne', 'tipo'}
     reservadas.update(PALAVRAS_LOGICAS)
 
     def indice_lista(partes, linha):
@@ -415,6 +415,15 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     raise ErroCompilacao(f'Linha {n}: use encerre(codigo_inteiro).')
                 codigo, _ = expressao_tipada(t[2:-1], n, 'inteiro')
                 adicionar(('encerre', codigo), n, t)
+            elif t[0] == 'reserve_capacidade' and t[1:2] == ['('] and t[-1:] == [')']:
+                grupos = argumentos_externos(t, n)
+                if len(grupos) != 2:
+                    raise ErroCompilacao(f'Linha {n}: use reserve_capacidade(valor, minimo).')
+                nome = contexto.resolver_caminho(grupos[0], n)
+                if not eh_proprietario(tipos.get(nome)):
+                    raise ErroCompilacao(f'Linha {n}: reserva exige lista, texto ou bytes dinamicos proprietarios.')
+                minimo, _ = expressao_tipada(grupos[1], n, 'inteiro')
+                adicionar(('reserve_capacidade_dinamica', nome, minimo), n, t)
             elif t[0] == 'adicione_byte' and t[1:2] == ['('] and t[-1:] == [')']:
                 grupos = argumentos_externos(t, n)
                 if len(grupos) != 2:
