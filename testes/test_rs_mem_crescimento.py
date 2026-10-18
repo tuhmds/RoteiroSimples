@@ -19,7 +19,7 @@ from compilador.parser import analisar_programa
 
 
 class TestesRsMemCrescimento(unittest.TestCase):
-    def testar_execucao(self, fonte, esperado):
+    def _executar_comparar(self, fonte, esperado):
         sistema = sys.platform
         if sistema not in ('linux', 'win32') or (sistema == 'linux' and
                                                 os.uname().machine != 'x86_64'):
@@ -51,7 +51,7 @@ class TestesRsMemCrescimento(unittest.TestCase):
             escreva(dados[16383])
             escreva(capacidade(dados))
         }"""
-        self.testar_execucao(fonte, b'16384\n0\n4095\n16383\n16384\n')
+        self._executar_comparar(fonte, b'16384\n0\n4095\n16383\n16384\n')
 
     def test_bytes_crescem_entre_paginas_sem_perder_conteudo(self):
         fonte = """funcao gerar() -> bytes {
@@ -70,7 +70,7 @@ class TestesRsMemCrescimento(unittest.TestCase):
             escreva(dados[32768])
             escreva(capacidade(dados))
         }"""
-        self.testar_execucao(fonte, b'32769\n0\n255\n0\n0\n65536\n')
+        self._executar_comparar(fonte, b'32769\n0\n255\n0\n0\n65536\n')
 
     def test_textos_continuam_funcionando(self):
         fonte = """inicio {
@@ -79,7 +79,7 @@ class TestesRsMemCrescimento(unittest.TestCase):
             escreva(texto_original)
             escreva(tamanho(texto_original))
         }"""
-        self.testar_execucao(fonte, 'ação - RS\n11\n'.encode('utf-8'))
+        self._executar_comparar(fonte, 'ação - RS\n11\n'.encode('utf-8'))
 
     def test_emissor_usa_mremap_somente_no_linux(self):
         fonte = analisar_programa("""inicio {
