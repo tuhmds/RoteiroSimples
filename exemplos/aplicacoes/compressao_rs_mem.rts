@@ -1,0 +1,20 @@
+importe "padrao/memoria_compacta.rts" como memoria
+inicio {
+    seja dados: bytes
+    para indice de 0 ate 999 {
+        adicione_byte(dados, 0)
+    }
+    seja pacote = memoria.compactar(empreste(dados))
+    se nao pacote.valido {
+        encerre(2)
+    }
+    escreva(tamanho(dados))
+    escreva(tamanho(pacote.valor))
+    seja retorno = memoria.expandir(empreste(pacote.valor), 1000)
+    se nao retorno.valido {
+        encerre(2)
+    }
+    escreva(tamanho(retorno.valor))
+    escreva(retorno.valor[0])
+    escreva(retorno.valor[999])
+}
