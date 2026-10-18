@@ -1,0 +1,176 @@
+// RS-MEM 0.2: pool de blocos pequenos, sem ponteiros crus.
+// A implementacao e inteiramente escrita na linguagem RS.
+publico tipo Identificador {
+    indice: inteiro
+    versao: inteiro
+}
+publico tipo Pool {
+    dados: bytes
+    livres: lista[inteiro]
+    estados: lista[inteiro]
+    versoes: lista[inteiro]
+    classe: inteiro
+    total: inteiro
+    proximo: inteiro
+    ocupados: inteiro
+    ultimo: Identificador
+    codigo_erro: inteiro
+}
+
+// Classes de 16, 64 e 256 bytes. Um maximo explicito impede
+// multiplos e contagens absurdas antes de qualquer alocacao.
+publico funcao criar(classe: inteiro, quantidade: inteiro) -> resultado[Pool] {
+    se classe != 16 {
+        se classe != 64 {
+            se classe != 256 {
+                retorne falha[Pool](1)
+            }
+        }
+    }
+    se quantidade < 1 {
+        retorne falha[Pool](2)
+    }
+    se quantidade > 4096 {
+        retorne falha[Pool](2)
+    }
+    seja pool: Pool
+    pool.classe = classe
+    pool.total = quantidade
+    pool.proximo = 0
+    pool.ocupados = 0
+    pool.ultimo.indice = -1
+    pool.ultimo.versao = 0
+    pool.codigo_erro = 0
+    reserve_capacidade(pool.dados, classe * quantidade)
+    reserve_capacidade(pool.estados, quantidade)
+    reserve_capacidade(pool.versoes, quantidade)
+    reserve_capacidade(pool.livres, quantidade)
+    para indice de 0 ate classe * quantidade - 1 {
+        adicione_byte(pool.dados, 0)
+    }
+    para indice de 0 ate quantidade - 1 {
+        adicione(pool.estados, 0)
+        adicione(pool.versoes, 0)
+    }
+    retorne sucesso[Pool](mova(pool))
+}
+
+// Insere uma ocupacao: ocupa um slot novo ou reutiliza um bloco liberado.
+// Resultado e transmitido por pool.ultimo; codigo_erro=4 indica cheio.
+publico funcao alocar(pool: Pool) -> Pool {
+    pool.ultimo.indice = -1
+    pool.ultimo.versao = 0
+    pool.codigo_erro = 0
+    seja indice = 0
+    se tamanho(pool.livres) > 0 {
+        indice = pool.livres[tamanho(pool.livres) - 1]
+        remova_ultimo(pool.livres)
+    } senao {
+        se pool.proximo >= pool.total {
+            pool.codigo_erro = 4
+            retorne mova(pool)
+        }
+        indice = pool.proximo
+        pool.proximo = pool.proximo + 1
+    }
+    // Nao voltamos ao estado zero: a geracao invalida identificadores antigos.
+    se pool.versoes[indice] >= 2147483646 {
+        pool.codigo_erro = 5
+        retorne mova(pool)
+    }
+    pool.versoes[indice] = pool.versoes[indice] + 1
+    pool.estados[indice] = 1
+    pool.ocupados = pool.ocupados + 1
+    pool.ultimo.indice = indice
+    pool.ultimo.versao = pool.versoes[indice]
+    retorne mova(pool)
+}
+
+publico funcao ultimo(pool: emprestimo[Pool]) -> Identificador {
+    seja id: Identificador
+    id.indice = pool.ultimo.indice
+    id.versao = pool.ultimo.versao
+    retorne id
+}
+
+publico funcao ocupados(pool: emprestimo[Pool]) -> inteiro {
+    retorne pool.ocupados
+}
+publico funcao capacidade(pool: emprestimo[Pool]) -> inteiro {
+    retorne pool.total
+}
+publico funcao erro(pool: emprestimo[Pool]) -> inteiro {
+    retorne pool.codigo_erro
+}
+
+// Interno: verifica id e geracao antes de acessar o buffer.
+privado funcao valido(pool: emprestimo[Pool], id: Identificador) -> logico {
+    se id.indice < 0 {
+        retorne falso
+    }
+    se id.indice >= pool.proximo {
+        retorne falso
+    }
+    se pool.estados[id.indice] != 1 {
+        retorne falso
+    }
+    retorne pool.versoes[id.indice] == id.versao
+}
+
+// Escrita segura, sem realocacao. Codigos: 0 OK, 3 id, 6 offset, 7 byte.
+publico funcao escrever(pool: Pool, id: Identificador, deslocamento: inteiro, valor: inteiro) -> Pool {
+    pool.codigo_erro = 0
+    se nao valido(empreste(pool), id) {
+        pool.codigo_erro = 3
+        retorne mova(pool)
+    }
+    se deslocamento < 0 {
+        pool.codigo_erro = 6
+        retorne mova(pool)
+    }
+    se deslocamento >= pool.classe {
+        pool.codigo_erro = 6
+        retorne mova(pool)
+    }
+    se valor < 0 {
+        pool.codigo_erro = 7
+        retorne mova(pool)
+    }
+    se valor > 255 {
+        pool.codigo_erro = 7
+        retorne mova(pool)
+    }
+    pool.dados[id.indice * pool.classe + deslocamento] = valor
+    retorne mova(pool)
+}
+
+// Leitura devolve falha, sem revelar conteudo de slots liberados.
+publico funcao ler(pool: emprestimo[Pool], id: Identificador, deslocamento: inteiro) -> resultado[inteiro] {
+    se nao valido(pool, id) {
+        retorne falha[inteiro](3)
+    }
+    se deslocamento < 0 {
+        retorne falha[inteiro](6)
+    }
+    se deslocamento >= pool.classe {
+        retorne falha[inteiro](6)
+    }
+    retorne sucesso[inteiro](pool.dados[id.indice * pool.classe + deslocamento])
+}
+
+// Libera e zera os bytes, evitando vazamento de dados no proximo uso.
+// Liberações repetidas e identificadores antigos retornam erro 3.
+publico funcao liberar(pool: Pool, id: Identificador) -> Pool {
+    pool.codigo_erro = 0
+    se nao valido(empreste(pool), id) {
+        pool.codigo_erro = 3
+        retorne mova(pool)
+    }
+    para indice de 0 ate pool.classe - 1 {
+        pool.dados[id.indice * pool.classe + indice] = 0
+    }
+    pool.estados[id.indice] = 0
+    pool.ocupados = pool.ocupados - 1
+    adicione(pool.livres, id.indice)
+    retorne mova(pool)
+}
