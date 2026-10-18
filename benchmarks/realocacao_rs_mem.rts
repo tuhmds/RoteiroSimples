@@ -1,0 +1,12 @@
+inicio {
+    seja valores: lista[]
+    seja dados: bytes
+    para i de 0 ate 65535 {
+        adicione(valores, i)
+        adicione_byte(dados, i % 256)
+    }
+    escreva(tamanho(valores))
+    escreva(tamanho(dados))
+    escreva(valores[65535])
+    escreva(dados[65535])
+}

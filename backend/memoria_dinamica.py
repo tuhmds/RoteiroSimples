@@ -131,7 +131,29 @@ def emitir_rotinas(g, windows):
     g.marcar(nome + '_alocar')
     _emitir(g, '48 89 45 E0 48 0F AF 45 E8')
     g.salto('erro_lista_memoria', 'jo')
-    _emitir(g, '48 89 C7')
+    if not windows:
+        # Linux x86-64: mremap(antigo, bytes_antigos, bytes_novos,
+        # MREMAP_MAYMOVE). A chamada pode realocar sem copiar os dados.
+        # Se o kernel recusar o redimensionamento, o caminho histórico
+        # aloca, copia o comprimento usado e libera o mapeamento antigo.
+        # Preservamos o contrato público do descritor (três palavras).
+        _emitir(g, '48 89 45 D0')  # [rbp-48] = novo tamanho em bytes
+        _emitir(g, '4C 8B 55 F8 49 8B 3A 48 85 FF')  # ponteiro antigo
+        g.salto(nome + '_copia', 'jz')
+        _emitir(g, '49 8B 72 F0 48 0F AF 75 E8')  # capacidade * passo
+        g.salto('erro_lista_memoria', 'jo')
+        _emitir(g, '48 8B 55 D0')  # rdx = bytes novos
+        _emitir(g, '41 BA 01 00 00 00')  # r10d = MREMAP_MAYMOVE
+        _emitir(g, 'B8 19 00 00 00 0F 05')  # syscall mremap (25)
+        _emitir(g, '48 3D 01 F0 FF FF')  # -4095: erro Linux
+        g.salto(nome + '_copia', 'jae')
+        _emitir(g, '48 89 45 D8')  # ponteiro retornado (inclusive movido)
+        g.salto(nome + '_atualizar')
+        g.marcar(nome + '_copia')
+        _emitir(g, '48 8B 7D D0')  # tamanho novo para mmap
+    else:
+        # Manter o caminho Windows byte a byte (VirtualAlloc/VirtualFree).
+        _emitir(g, '48 89 C7')
     g.chamada('rs_lista_alocar')
     _emitir(g, '48 89 45 D8 4C 8B 55 F8 49 8B 32 48 85 F6')
     g.salto(nome + '_atualizar', 'jz')
