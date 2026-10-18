@@ -1,0 +1,75 @@
+// RS-MEM: arena de bytes com propriedade unica e reutilizacao por offsets.
+// Nao exporta ponteiros crus nem permite acessar a parte logica inativa.
+publico tipo Arena {
+    dados: bytes
+    usados: inteiro
+}
+
+// A reserva inicial nao altera o comprimento do buffer subjacente.
+publico funcao criar(capacidade_inicial: inteiro) -> Arena {
+    seja arena: Arena
+    reserve_capacidade(arena.dados, capacidade_inicial)
+    arena.usados = 0
+    retorne mova(arena)
+}
+
+// Devolve indice estavel dentro da arena enquanto nao for reiniciada/recuada.
+publico funcao marca(arena: emprestimo[Arena]) -> inteiro {
+    retorne arena.usados
+}
+
+publico funcao ocupados(arena: emprestimo[Arena]) -> inteiro {
+    retorne arena.usados
+}
+
+publico funcao capacidade_total(arena: emprestimo[Arena]) -> inteiro {
+    retorne capacidade(arena.dados)
+}
+
+// Aumenta capacidade, mas preserva os bytes e o marcador logico.
+publico funcao reservar(arena: Arena, minimo: inteiro) -> Arena {
+    reserve_capacidade(arena.dados, minimo)
+    retorne mova(arena)
+}
+
+// Quando o marcador recua, reutiliza os mesmos bytes, sem nova alocacao.
+// A rotina nativa adicione_byte valida 0..255 antes de armazenar.
+publico funcao acrescentar(arena: Arena, valor: inteiro) -> Arena {
+    se arena.usados < tamanho(arena.dados) {
+        arena.dados[arena.usados] = valor
+    } senao {
+        adicione_byte(arena.dados, valor)
+    }
+    arena.usados = arena.usados + 1
+    retorne mova(arena)
+}
+
+// A leitura e recuperavel; a faixa inativa nunca fica acessivel pela API.
+publico funcao ler(arena: emprestimo[Arena], posicao: inteiro) -> resultado[inteiro] {
+    se posicao < 0 {
+        retorne falha[inteiro](1)
+    }
+    se posicao >= arena.usados {
+        retorne falha[inteiro](1)
+    }
+    retorne sucesso[inteiro](arena.dados[posicao])
+}
+
+// Recuo sem liberar bytes: futuras gravacoes reaproveitam as posicoes.
+publico funcao recuar(arena: Arena, marcador: inteiro) -> Arena {
+    se marcador < 0 {
+        escreva("Erro: marcador negativo na arena.")
+        encerre(2)
+    }
+    se marcador > arena.usados {
+        escreva("Erro: marcador alem da parte ativa da arena.")
+        encerre(2)
+    }
+    arena.usados = marcador
+    retorne mova(arena)
+}
+
+publico funcao reiniciar(arena: Arena) -> Arena {
+    arena.usados = 0
+    retorne mova(arena)
+}
