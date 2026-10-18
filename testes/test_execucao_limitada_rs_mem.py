@@ -47,6 +47,27 @@ class TesteLimiteMemoria(unittest.TestCase):
         self.assertTrue(resposta['tempo_esgotado'])
 
     @unittest.skipUnless(sys.platform == 'linux', 'Somente Linux')
+    def test_elf_rs_real_executa_dentro_do_orcamento(self):
+        from verificacao.execucao_limitada import executar
+        from compilador.parser import analisar_programa
+        from backend import compilar
+        programa = analisar_programa("""inicio {
+            seja dados: bytes
+            para i de 0 ate 8191 {
+                adicione_byte(dados, i % 256)
+            }
+            escreva(tamanho(dados))
+            escreva(dados[8191])
+        }""")
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / 'aplicativo_rs'
+            caminho.write_bytes(compilar(programa, 'linux', nivel=8))
+            caminho.chmod(0o755)
+            relatorio = executar([str(caminho)], 128, timeout=15)
+            self.assertEqual(relatorio['codigo_saida'], 0)
+            self.assertEqual(relatorio['saida_inicio'], '8192\\n255\\n')
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Somente Linux')
     def test_cli_json_e_codigo_da_aplicacao(self):
         import json
         with tempfile.TemporaryDirectory() as pasta:
