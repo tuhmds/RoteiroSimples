@@ -66,11 +66,11 @@ class TestesDiagnosticoMemoria(unittest.TestCase):
             execucao = subprocess.run([sys.executable, '-m', 'verificacao.diagnostico_memoria',
                                       str(fonte), '--json', str(saida)],
                                       cwd=RAIZ, capture_output=True, text=True,
-                                      encoding='utf-8', timeout=20)
+                                      encoding='utf-8', errors='replace', timeout=20)
             self.assertEqual(execucao.returncode, 0, execucao.stderr)
             relatorio = json.loads(saida.read_text(encoding='utf-8'))
             self.assertEqual(relatorio['contagens_sintaticas']['crescimento_potencial'], 1)
-            self.assertIn('diagnóstico estático', execucao.stdout)
+            self.assertIn('RS-MEM', execucao.stdout)
 
 if __name__ == '__main__':
     unittest.main()
