@@ -1,0 +1,26 @@
+// Exemplo: armazenar bytes por offsets sem criar um objeto heap por byte.
+importe "padrao/arenas.rts" como arenas
+
+inicio {
+    seja regiao = arenas.criar(1024)
+    para indice de 0 ate 255 {
+        seja proxima = arenas.acrescentar(mova(regiao), indice)
+        mova(regiao, proxima)
+    }
+    escreva(arenas.tamanho(empreste(regiao)))
+    escreva(arenas.capacidade(empreste(regiao)))
+    seja lido = arenas.ler(empreste(regiao), 255)
+    se lido.valido {
+        escreva(lido.valor)
+    }
+    seja reutilizada = arenas.reiniciar(mova(regiao))
+    mova(regiao, reutilizada)
+    escreva(arenas.tamanho(empreste(regiao)))
+    para indice de 0 ate 31 {
+        seja proxima = arenas.acrescentar(mova(regiao), indice + 40)
+        mova(regiao, proxima)
+    }
+    escreva(arenas.tamanho(empreste(regiao)))
+    seja novo = arenas.ler(empreste(regiao), 0)
+    escreva(novo.valor)
+}
