@@ -79,7 +79,7 @@ class TestesRsMemCrescimento(unittest.TestCase):
             escreva(texto_original)
             escreva(tamanho(texto_original))
         }"""
-        self.testar_execucao(fonte, 'ação - RS\n9\n'.encode('utf-8'))
+        self.testar_execucao(fonte, 'ação - RS\n11\n'.encode('utf-8'))
 
     def test_emissor_usa_mremap_somente_no_linux(self):
         fonte = analisar_programa("""inicio {
