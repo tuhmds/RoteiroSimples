@@ -65,7 +65,7 @@ class TesteLimiteMemoria(unittest.TestCase):
             caminho.chmod(0o755)
             relatorio = executar([str(caminho)], 128, timeout=15)
             self.assertEqual(relatorio['codigo_saida'], 0)
-            self.assertEqual(relatorio['saida_inicio'], '8192\\n255\\n')
+            self.assertEqual(relatorio['saida_inicio'], '8192\n255\n')
 
     @unittest.skipUnless(sys.platform == 'linux', 'Somente Linux')
     def test_cli_json_e_codigo_da_aplicacao(self):
