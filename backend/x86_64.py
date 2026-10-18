@@ -5,6 +5,7 @@ from compilador.erros import ErroCompilacao
 from compilador.propriedade import eh_proprietario, eh_emprestimo, eh_texto, eh_bytes, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
 from compilador.propriedade import eh_registro_proprietario, donos_do_agregado, contrato_valor
 from compilador.propriedade import eh_colecao_proprietaria
+from compilador.propriedade import passo_armazenamento
 from . import colecoes_proprietarias
 from . import valores_dinamicos, memoria_dinamica, sequencias_dinamicas, textos_dinamicos, listas_dinamicas, arquivos, arquivos_posicionais, bytes_seguros, arquivos_abertos, publicacao_atomica, politica_caminhos
 from compilador.disposicao_tipos import palavras_tipo as _palavras_tipo
@@ -1203,6 +1204,16 @@ def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes
             elif op[0] == 'leia_texto_dinamico':
                 valores_dinamicos.endereco_descritor(g, variaveis, op[1], windows)
                 g.chamada('rs_texto_ler_linha')
+            elif op[0] == 'reserve_capacidade_dinamica':
+                # O valor e avaliado uma unica vez antes de obter o endereco
+                # do descritor; a propria rotina verifica vida, limites e OOM.
+                nome, minimo = op[1:]
+                expressao(g, minimo, variaveis, windows)
+                g.bytes(b'\x48\x89\xC6')  # RSI = capacidade minima
+                valores_dinamicos.endereco_descritor(g, variaveis, nome, windows)
+                g.bytes(b'\xBA' + struct.pack('<I',
+                    passo_armazenamento(tipos[nome], g.registros)))  # EDX = bytes por unidade
+                g.chamada('rs_valor_reservar')
             elif op[0] in ('crie_lista_dinamica', 'crie_valor_dinamico'):
                 valores_dinamicos.criar_vazio(g, variaveis, op[1], windows)
             elif op[0] == 'receba_valor_dinamico':
