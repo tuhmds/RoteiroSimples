@@ -1,0 +1,93 @@
+// RS-MEM 0.3: envelope binario compacto, RLE adaptativo com teto de expansao.
+// Formato: byte 0 + conteudo original OU byte 1 + pares [quantidade,byte].
+// Codificacao independente do sistema; sem ponteiros crus ou LLM.
+publico funcao compactar(origem: emprestimo[bytes]) -> resultado[bytes] {
+    // Limite de escopo para evitar arquivos enormes nesta primeira versao.
+    se tamanho(origem) > 1048576 {
+        retorne falha[bytes](3)
+    }
+    seja quantidade_pares = 0
+    seja posicao = 0
+    enquanto posicao < tamanho(origem) {
+        seja valor = origem[posicao]
+        seja repeticoes = 1
+        enquanto repeticoes < 255 e posicao + repeticoes < tamanho(origem) {
+            se origem[posicao + repeticoes] != valor {
+                pare
+            }
+            repeticoes = repeticoes + 1
+        }
+        quantidade_pares = quantidade_pares + 1
+        posicao = posicao + repeticoes
+    }
+    seja destino: bytes
+    se quantidade_pares * 2 >= tamanho(origem) {
+        adicione_byte(destino, 0)
+        para indice de 0 ate tamanho(origem) - 1 {
+            adicione_byte(destino, origem[indice])
+        }
+        retorne sucesso[bytes](mova(destino))
+    }
+    adicione_byte(destino, 1)
+    posicao = 0
+    enquanto posicao < tamanho(origem) {
+        seja valor = origem[posicao]
+        seja repeticoes = 1
+        enquanto repeticoes < 255 e posicao + repeticoes < tamanho(origem) {
+            se origem[posicao + repeticoes] != valor {
+                pare
+            }
+            repeticoes = repeticoes + 1
+        }
+        adicione_byte(destino, repeticoes)
+        adicione_byte(destino, valor)
+        posicao = posicao + repeticoes
+    }
+    retorne sucesso[bytes](mova(destino))
+}
+
+// Códigos: 1 estrutura invalida, 2 expansao ultrapassa teto;
+//           3 excede limite de entrada da API.
+// O limite e conferido antes de cada sequencia RLE para evitar zip bomb.
+publico funcao expandir(armazenado: emprestimo[bytes], limite: inteiro) -> resultado[bytes] {
+    se limite < 0 {
+        retorne falha[bytes](2)
+    }
+    se limite > 1048576 {
+        retorne falha[bytes](3)
+    }
+    se tamanho(armazenado) < 1 {
+        retorne falha[bytes](1)
+    }
+    seja formato = armazenado[0]
+    seja destino: bytes
+    se formato == 0 {
+        se tamanho(armazenado) - 1 > limite {
+            retorne falha[bytes](2)
+        }
+        para indice de 1 ate tamanho(armazenado) - 1 {
+            adicione_byte(destino, armazenado[indice])
+        }
+        retorne sucesso[bytes](mova(destino))
+    }
+    se formato != 1 {
+        retorne falha[bytes](1)
+    }
+    se (tamanho(armazenado) - 1) % 2 != 0 {
+        retorne falha[bytes](1)
+    }
+    para indice de 0 ate (tamanho(armazenado) - 1) / 2 - 1 {
+        seja posicao = indice * 2 + 1
+        seja repeticoes = armazenado[posicao]
+        se repeticoes == 0 {
+            retorne falha[bytes](1)
+        }
+        se repeticoes > limite - tamanho(destino) {
+            retorne falha[bytes](2)
+        }
+        para n de 0 ate repeticoes - 1 {
+            adicione_byte(destino, armazenado[posicao + 1])
+        }
+    }
+    retorne sucesso[bytes](mova(destino))
+}
