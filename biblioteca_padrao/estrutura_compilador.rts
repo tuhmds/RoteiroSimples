@@ -41,12 +41,12 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
                         resposta.unidade_erro = indice
                         retorne mova(resposta)
                     }
-                    seja tipo = tipos[tamanho(tipos) - 1]
-                    seja esperado = tipo + 1
-                    se tipo == 91 {
+                    seja tipo_aberto = tipos[tamanho(tipos) - 1]
+                    seja esperado = tipo_aberto + 1
+                    se tipo_aberto == 91 {
                         esperado = 93
                     }
-                    se tipo == 123 {
+                    se tipo_aberto == 123 {
                         esperado = 125
                     }
                     se simbolo != esperado {
@@ -58,7 +58,7 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
                     par.abertura = retire(aberturas, tamanho(aberturas) - 1)
                     remova_ultimo(tipos)
                     par.fechamento = indice
-                    par.tipo = tipo
+                    par.tipo = tipo_aberto
                     par.profundidade = tamanho(aberturas)
                     adicione(resposta.pares, par)
                 }
