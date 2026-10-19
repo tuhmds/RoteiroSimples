@@ -78,7 +78,7 @@ class TestesEstruturaCompiladorRS(unittest.TestCase):
     def test_erros_recuperaveis_com_indice_exato(self):
         casos = [
             ("inicio { escreva(1 }", 3, 5),
-            ("inicio { escreva(1)) }", 2, 6),
+            ("inicio { escreva(1)) }", 3, 6),
             ("inicio { escreva(1)", 4, 1),
             ("inicio { escreva(@) }", 1, 4),
             (")", 2, 0),
