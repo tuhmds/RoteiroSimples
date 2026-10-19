@@ -1,0 +1,74 @@
+// Estruturas por indices para o futuro analisador sintatico em RS.
+// Os pares delimitadores nao usam ponteiros, objetos Python ou copia da fonte.
+importe "lexico.rts" como lexico
+
+publico tipo ParDelimitador {
+    abertura: inteiro
+    fechamento: inteiro
+    tipo: inteiro
+    profundidade: inteiro
+}
+
+publico tipo EstruturaFonte {
+    pares: lista[ParDelimitador]
+    erro: inteiro
+    unidade_erro: inteiro
+}
+
+// Erros: 1 token lexico invalido, 2 fechamento sem abertura,
+// 3 fechamento incompativel, 4 abertura nao fechada.
+publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]]) -> EstruturaFonte {
+    seja resposta: EstruturaFonte
+    seja aberturas: lista[inteiro]
+    seja tipos: lista[inteiro]
+    seja indice = 0
+    enquanto indice < tamanho(unidades) {
+        seja unidade: lexico.UnidadeLexica = unidades[indice]
+        se unidade.classe < 0 {
+            resposta.erro = 1
+            resposta.unidade_erro = indice
+            retorne mova(resposta)
+        }
+        se unidade.classe == 4 e unidade.comprimento_byte == 1 {
+            seja simbolo = fonte[unidade.inicio_byte]
+            se simbolo == 40 ou simbolo == 91 ou simbolo == 123 {
+                adicione(aberturas, indice)
+                adicione(tipos, simbolo)
+            } senao {
+                se simbolo == 41 ou simbolo == 93 ou simbolo == 125 {
+                    se tamanho(aberturas) == 0 {
+                        resposta.erro = 2
+                        resposta.unidade_erro = indice
+                        retorne mova(resposta)
+                    }
+                    seja tipo = tipos[tamanho(tipos) - 1]
+                    seja esperado = tipo + 1
+                    se tipo == 91 {
+                        esperado = 93
+                    }
+                    se tipo == 123 {
+                        esperado = 125
+                    }
+                    se simbolo != esperado {
+                        resposta.erro = 3
+                        resposta.unidade_erro = indice
+                        retorne mova(resposta)
+                    }
+                    seja par: ParDelimitador
+                    par.abertura = retire(aberturas, tamanho(aberturas) - 1)
+                    remova_ultimo(tipos)
+                    par.fechamento = indice
+                    par.tipo = tipo
+                    par.profundidade = tamanho(aberturas)
+                    adicione(resposta.pares, par)
+                }
+            }
+        }
+        indice = indice + 1
+    }
+    se tamanho(aberturas) > 0 {
+        resposta.erro = 4
+        resposta.unidade_erro = aberturas[tamanho(aberturas) - 1]
+    }
+    retorne mova(resposta)
+}
