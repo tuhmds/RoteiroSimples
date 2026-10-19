@@ -55,7 +55,8 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
                         retorne mova(resposta)
                     }
                     seja par: ParDelimitador
-                    par.abertura = retire(aberturas, tamanho(aberturas) - 1)
+                    par.abertura = aberturas[tamanho(aberturas) - 1]
+                    remova_ultimo(aberturas)
                     remova_ultimo(tipos)
                     par.fechamento = indice
                     par.tipo = tipo_aberto
