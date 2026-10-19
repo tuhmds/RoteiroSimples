@@ -70,5 +70,8 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
         resposta.erro = 4
         resposta.unidade_erro = aberturas[tamanho(aberturas) - 1]
     }
+    se resposta.erro == 0 {
+        resposta.unidade_erro = tamanho(unidades)
+    }
     retorne mova(resposta)
 }
