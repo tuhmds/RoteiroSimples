@@ -1,0 +1,36 @@
+// Demonstra a leitura de assinaturas de funcoes na propria RS.
+importe "padrao/lexico.rts" como lexico
+importe "padrao/assinaturas_compilador.rts" como assinaturas
+
+inicio {
+    seja fonte: bytes
+    carregue_arquivo("codigo_fonte.rts", fonte)
+    seja unidades = lexico.analisar(empreste(fonte))
+    seja resultado = assinaturas.analisar(empreste(fonte), empreste(unidades))
+    escreva(resultado.codigo_erro)
+    escreva(resultado.unidade_erro)
+    escreva(tamanho(resultado.funcoes))
+    escreva(tamanho(resultado.parametros))
+    seja indice = 0
+    enquanto indice < tamanho(resultado.funcoes) {
+        seja funcao_atual: assinaturas.AssinaturaFuncao = resultado.funcoes[indice]
+        escreva(funcao_atual.unidade_nome)
+        escreva(funcao_atual.unidade_abertura)
+        escreva(funcao_atual.unidade_fechamento)
+        escreva(funcao_atual.retorno_inicio)
+        escreva(funcao_atual.retorno_fim)
+        escreva(funcao_atual.corpo_abertura)
+        escreva(funcao_atual.corpo_fechamento)
+        escreva(funcao_atual.primeiro_parametro)
+        escreva(funcao_atual.quantidade_parametros)
+        indice = indice + 1
+    }
+    indice = 0
+    enquanto indice < tamanho(resultado.parametros) {
+        seja parametro: assinaturas.ParametroFuncao = resultado.parametros[indice]
+        escreva(parametro.unidade_nome)
+        escreva(parametro.tipo_inicio)
+        escreva(parametro.tipo_fim)
+        indice = indice + 1
+    }
+}
