@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import random
+import re
 import subprocess
 import sys
 import tempfile
@@ -125,14 +126,26 @@ class TestesExpressoesCompiladorRS(unittest.TestCase):
             for nivel in (0, 8):
                 codigo, _, raiz, nos = self.analisar(fonte, nivel)
                 self.assertEqual(codigo, 0)
+                tokens = re.findall(r"[0-9]+|[+*()\\-]", fonte)
                 def avaliar(indice):
                     categoria, unidade, operador, esq, dir = nos[indice]
                     if categoria == 1:
-                        return int(fonte.split()[0]) if len(nos) == 1 else None
-                    return categoria, operador, esq, dir
+                        return int(tokens[unidade])
+                    if categoria == 3:
+                        valor = avaliar(dir)
+                        return -valor if operador == 300 else valor
+                    self.assertEqual(categoria, 4)
+                    esquerdo = avaliar(esq)
+                    direito = avaliar(dir)
+                    if operador == 43:
+                        return esquerdo + direito
+                    if operador == 45:
+                        return esquerdo - direito
+                    self.assertEqual(operador, 42)
+                    return esquerdo * direito
                 self.assertEqual(nos[raiz][0], 4)
                 self.assertEqual(len(nos), 15)
-                self.assertIsInstance(esperado, int)
+                self.assertEqual(avaliar(raiz), esperado)
 
 
 if __name__ == "__main__":
