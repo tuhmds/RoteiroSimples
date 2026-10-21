@@ -1,0 +1,224 @@
+// Primeira representacao de expressoes para o futuro compilador escrito em RS.
+// Arvore por indices, sem ponteiros e sem referencias recursivas.
+// Subconjunto inicial: inteiros, nomes, parenteses, operadores + - * / %.
+importe "lexico.rts" como lexico
+
+publico tipo NoExpressao {
+    // 1 literal, 2 nome, 3 unario, 4 binario.
+    categoria: inteiro
+    unidade: inteiro
+    operador: inteiro
+    esquerdo: inteiro
+    direito: inteiro
+}
+
+publico tipo ArvoreExpressao {
+    nos: lista[NoExpressao]
+    valores: lista[inteiro]
+    operadores: lista[inteiro]
+    origens: lista[inteiro]
+    raiz: inteiro
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+privado funcao prioridade(operador: inteiro) -> inteiro {
+    se operador == 300 ou operador == 301 {
+        retorne 3
+    }
+    se operador == 42 ou operador == 47 ou operador == 37 {
+        retorne 2
+    }
+    se operador == 43 ou operador == 45 {
+        retorne 1
+    }
+    retorne 0
+}
+
+// Retira um operador e liga seus operandos aos indices ja existentes.
+// Codigos de erro ficam na propria arvore, sem encerrar o processo.
+privado funcao reduzir(arvore: ArvoreExpressao) -> ArvoreExpressao {
+    se tamanho(arvore.operadores) == 0 {
+        arvore.codigo_erro = 8
+        retorne mova(arvore)
+    }
+    seja topo = tamanho(arvore.operadores) - 1
+    seja operador = arvore.operadores[topo]
+    seja origem = arvore.origens[topo]
+    remova_ultimo(arvore.operadores)
+    remova_ultimo(arvore.origens)
+    seja necessario = 2
+    se operador == 300 ou operador == 301 {
+        necessario = 1
+    }
+    se tamanho(arvore.valores) < necessario {
+        arvore.codigo_erro = 3
+        arvore.unidade_erro = origem
+        retorne mova(arvore)
+    }
+    seja no: NoExpressao
+    no.unidade = origem
+    no.operador = operador
+    no.esquerdo = -1
+    no.direito = -1
+    seja ultimo = tamanho(arvore.valores) - 1
+    no.direito = arvore.valores[ultimo]
+    remova_ultimo(arvore.valores)
+    se necessario == 1 {
+        no.categoria = 3
+    } senao {
+        no.categoria = 4
+        ultimo = tamanho(arvore.valores) - 1
+        no.esquerdo = arvore.valores[ultimo]
+        remova_ultimo(arvore.valores)
+    }
+    adicione(arvore.nos, no)
+    adicione(arvore.valores, tamanho(arvore.nos) - 1)
+    retorne mova(arvore)
+}
+
+// Entrada do analisador: intervalo de tokens [primeiro, ultimo).
+// Erros: 1 intervalo, 2 vazio, 3 operando, 4 operador,
+// 5 abertura pendente, 6 fechamento solto, 7 token, 8 estado.
+publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], primeiro: inteiro, ultimo: inteiro) -> ArvoreExpressao {
+    seja arvore: ArvoreExpressao
+    arvore.raiz = -1
+    arvore.unidade_erro = primeiro
+    se primeiro < 0 ou ultimo < primeiro ou ultimo > tamanho(unidades) {
+        arvore.codigo_erro = 1
+        retorne mova(arvore)
+    }
+    se primeiro == ultimo {
+        arvore.codigo_erro = 2
+        retorne mova(arvore)
+    }
+    seja espera_valor = verdadeiro
+    seja indice = primeiro
+    enquanto indice < ultimo {
+        arvore.unidade_erro = indice
+        seja unidade: lexico.UnidadeLexica = unidades[indice]
+        se unidade.classe < 0 {
+            arvore.codigo_erro = 7
+            retorne mova(arvore)
+        }
+        se unidade.classe == 1 ou unidade.classe == 2 {
+            se nao espera_valor {
+                arvore.codigo_erro = 4
+                retorne mova(arvore)
+            }
+            seja folha: NoExpressao
+            folha.categoria = 2
+            se unidade.classe == 2 {
+                folha.categoria = 1
+            }
+            folha.unidade = indice
+            folha.operador = 0
+            folha.esquerdo = -1
+            folha.direito = -1
+            adicione(arvore.nos, folha)
+            adicione(arvore.valores, tamanho(arvore.nos) - 1)
+            espera_valor = falso
+        } senao {
+            se unidade.classe != 4 ou unidade.comprimento_byte != 1 {
+                arvore.codigo_erro = 7
+                retorne mova(arvore)
+            }
+            seja simbolo = fonte[unidade.inicio_byte]
+            se simbolo == 40 {
+                se nao espera_valor {
+                    arvore.codigo_erro = 4
+                    retorne mova(arvore)
+                }
+                adicione(arvore.operadores, 40)
+                adicione(arvore.origens, indice)
+            } senao {
+                se simbolo == 41 {
+                    se espera_valor {
+                        arvore.codigo_erro = 3
+                        retorne mova(arvore)
+                    }
+                    seja encontrou = falso
+                    enquanto tamanho(arvore.operadores) > 0 {
+                        seja topo = arvore.operadores[tamanho(arvore.operadores) - 1]
+                        se topo == 40 {
+                            remova_ultimo(arvore.operadores)
+                            remova_ultimo(arvore.origens)
+                            encontrou = verdadeiro
+                            pare
+                        }
+                        seja reduzida = reduzir(mova(arvore))
+                        mova(arvore, reduzida)
+                        se arvore.codigo_erro != 0 {
+                            retorne mova(arvore)
+                        }
+                    }
+                    se nao encontrou {
+                        arvore.codigo_erro = 6
+                        retorne mova(arvore)
+                    }
+                    espera_valor = falso
+                } senao {
+                    se simbolo != 43 e simbolo != 45 e simbolo != 42 e simbolo != 47 e simbolo != 37 {
+                        arvore.codigo_erro = 7
+                        retorne mova(arvore)
+                    }
+                    seja operador = simbolo
+                    se espera_valor {
+                        se simbolo == 43 {
+                            operador = 301
+                        } senao {
+                            se simbolo == 45 {
+                                operador = 300
+                            } senao {
+                                arvore.codigo_erro = 3
+                                retorne mova(arvore)
+                            }
+                        }
+                    } senao {
+                        enquanto tamanho(arvore.operadores) > 0 {
+                            seja topo = arvore.operadores[tamanho(arvore.operadores) - 1]
+                            se topo == 40 {
+                                pare
+                            }
+                            se prioridade(topo) < prioridade(operador) {
+                                pare
+                            }
+                            seja reduzida = reduzir(mova(arvore))
+                            mova(arvore, reduzida)
+                            se arvore.codigo_erro != 0 {
+                                retorne mova(arvore)
+                            }
+                        }
+                    }
+                    adicione(arvore.operadores, operador)
+                    adicione(arvore.origens, indice)
+                    espera_valor = verdadeiro
+                }
+            }
+        }
+        indice = indice + 1
+    }
+    arvore.unidade_erro = ultimo
+    se espera_valor {
+        arvore.codigo_erro = 3
+        retorne mova(arvore)
+    }
+    enquanto tamanho(arvore.operadores) > 0 {
+        se arvore.operadores[tamanho(arvore.operadores) - 1] == 40 {
+            arvore.codigo_erro = 5
+            arvore.unidade_erro = arvore.origens[tamanho(arvore.origens) - 1]
+            retorne mova(arvore)
+        }
+        seja reduzida = reduzir(mova(arvore))
+        mova(arvore, reduzida)
+        se arvore.codigo_erro != 0 {
+            retorne mova(arvore)
+        }
+    }
+    se tamanho(arvore.valores) != 1 {
+        arvore.codigo_erro = 8
+        retorne mova(arvore)
+    }
+    arvore.raiz = arvore.valores[0]
+    retorne mova(arvore)
+}

@@ -1,0 +1,24 @@
+// Inspeciona a arvore de uma expressao, inteiramente em RS.
+importe "padrao/lexico.rts" como lexico
+importe "padrao/expressoes_compilador.rts" como expressoes
+
+inicio {
+    seja fonte: bytes
+    carregue_arquivo("expressao.rts", fonte)
+    seja unidades = lexico.analisar(empreste(fonte))
+    seja arvore = expressoes.analisar(empreste(fonte), empreste(unidades), 0, tamanho(unidades))
+    escreva(arvore.codigo_erro)
+    escreva(arvore.unidade_erro)
+    escreva(arvore.raiz)
+    escreva(tamanho(arvore.nos))
+    seja indice = 0
+    enquanto indice < tamanho(arvore.nos) {
+        seja no: expressoes.NoExpressao = arvore.nos[indice]
+        escreva(no.categoria)
+        escreva(no.unidade)
+        escreva(no.operador)
+        escreva(no.esquerdo)
+        escreva(no.direito)
+        indice = indice + 1
+    }
+}
