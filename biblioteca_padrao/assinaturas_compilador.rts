@@ -1,0 +1,68 @@
+// Inspecao de assinaturas de funcoes em RS, sem codigo Python na analise.
+// Os tipos continuam como intervalos de tokens; verificacao semantica virá depois.
+importe "lexico.rts" como lexico
+importe "estrutura_compilador.rts" como estrutura
+
+publico tipo ParametroFuncao {
+    unidade_nome: inteiro
+    tipo_inicio: inteiro
+    tipo_fim: inteiro
+}
+
+publico tipo AssinaturaFuncao {
+    unidade_nome: inteiro
+    unidade_abertura: inteiro
+    unidade_fechamento: inteiro
+    retorno_inicio: inteiro
+    retorno_fim: inteiro
+    corpo_abertura: inteiro
+    corpo_fechamento: inteiro
+    primeiro_parametro: inteiro
+    quantidade_parametros: inteiro
+}
+
+publico tipo Assinaturas {
+    funcoes: lista[AssinaturaFuncao]
+    parametros: lista[ParametroFuncao]
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+// Comparacao ASCII de uma palavra reservada, preservando posicoes originais.
+// Nenhuma copia do identificador e feita durante a leitura de tokens.
+privado funcao igual(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, nome: emprestimo[texto]) -> logico {
+    se unidade.classe != 1 {
+        retorne falso
+    }
+    se unidade.comprimento_byte != tamanho(nome) {
+        retorne falso
+    }
+    seja indice = 0
+    enquanto indice < tamanho(nome) {
+        se fonte[unidade.inicio_byte + indice] != byte_em(nome, indice) {
+            retorne falso
+        }
+        indice = indice + 1
+    }
+    retorne verdadeiro
+}
+
+privado funcao simbolo(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, valor: inteiro) -> logico {
+    se unidade.classe != 4 ou unidade.comprimento_byte != 1 {
+        retorne falso
+    }
+    retorne fonte[unidade.inicio_byte] == valor
+}
+
+// Os pares de delimitadores ja foram validados pela biblioteca de estrutura.
+privado funcao fechar(pares: emprestimo[lista[estrutura.ParDelimitador]], abertura: inteiro) -> inteiro {
+    seja indice = 0
+    enquanto indice < tamanho(pares) {
+        seja par: estrutura.ParDelimitador = pares[indice]
+        se par.abertura == abertura {
+            retorne par.fechamento
+        }
+        indice = indice + 1
+    }
+    retorne -1
+}
