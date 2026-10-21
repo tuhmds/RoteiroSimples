@@ -1,0 +1,153 @@
+// Extracao inicial de declaracoes locais em RS.
+// Mantem nomes, tipos e inicializadores como intervalos de tokens.
+// Ainda nao faz resolucao de nomes ou checagem de tipos.
+importe "lexico.rts" como lexico
+importe "estrutura_compilador.rts" como estrutura
+
+publico tipo Declaracao {
+    unidade_nome: inteiro
+    tipo_inicio: inteiro
+    tipo_fim: inteiro
+    valor_inicio: inteiro
+    valor_fim: inteiro
+}
+
+publico tipo Declaracoes {
+    itens: lista[Declaracao]
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+privado funcao igual(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, nome: emprestimo[texto]) -> logico {
+    se unidade.classe != 1 ou unidade.comprimento_byte != tamanho(nome) {
+        retorne falso
+    }
+    seja indice = 0
+    enquanto indice < tamanho(nome) {
+        se fonte[unidade.inicio_byte + indice] != byte_em(nome, indice) {
+            retorne falso
+        }
+        indice = indice + 1
+    }
+    retorne verdadeiro
+}
+
+privado funcao sinal(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, simbolo: inteiro) -> logico {
+    se unidade.classe != 4 ou unidade.comprimento_byte != 1 {
+        retorne falso
+    }
+    retorne fonte[unidade.inicio_byte] == simbolo
+}
+
+// Erros: 1 estrutura, 2 nome, 3 tipo vazio, 4 inicializador vazio,
+// 5 declaracao sem tipo ou valor. Declaracoes multilinha simples aceitas
+// somente quando o delimitador esta aninhado.
+publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]]) -> Declaracoes {
+    seja resposta: Declaracoes
+    seja estrutura_fonte = estrutura.analisar(fonte, unidades)
+    se estrutura_fonte.erro != 0 {
+        resposta.codigo_erro = 1
+        resposta.unidade_erro = estrutura_fonte.unidade_erro
+        retorne mova(resposta)
+    }
+    seja palavra_seja: texto = "seja"
+    seja indice = 0
+    enquanto indice < tamanho(unidades) {
+        seja atual: lexico.UnidadeLexica = unidades[indice]
+        se igual(fonte, atual, empreste(palavra_seja)) {
+            resposta.unidade_erro = indice
+            se indice + 1 >= tamanho(unidades) {
+                resposta.codigo_erro = 2
+                retorne mova(resposta)
+            }
+            seja nome: lexico.UnidadeLexica = unidades[indice + 1]
+            se nome.classe != 1 {
+                resposta.codigo_erro = 2
+                resposta.unidade_erro = indice + 1
+                retorne mova(resposta)
+            }
+            seja declaracao: Declaracao
+            declaracao.unidade_nome = indice + 1
+            declaracao.tipo_inicio = -1
+            declaracao.tipo_fim = -1
+            declaracao.valor_inicio = -1
+            declaracao.valor_fim = -1
+            seja cursor = indice + 2
+            se cursor < tamanho(unidades) {
+                seja token: lexico.UnidadeLexica = unidades[cursor]
+                se sinal(fonte, token, 58) {
+                    declaracao.tipo_inicio = cursor + 1
+                    cursor = cursor + 1
+                    seja profundidade = 0
+                    enquanto cursor < tamanho(unidades) {
+                        token = unidades[cursor]
+                        se profundidade == 0 {
+                            se token.linha > nome.linha {
+                                pare
+                            }
+                            se sinal(fonte, token, 61) ou sinal(fonte, token, 59) ou sinal(fonte, token, 125) {
+                                pare
+                            }
+                        }
+                        se sinal(fonte, token, 91) {
+                            profundidade = profundidade + 1
+                        }
+                        se sinal(fonte, token, 93) {
+                            profundidade = profundidade - 1
+                        }
+                        cursor = cursor + 1
+                    }
+                    declaracao.tipo_fim = cursor
+                    se declaracao.tipo_inicio == cursor ou profundidade != 0 {
+                        resposta.codigo_erro = 3
+                        resposta.unidade_erro = cursor
+                        retorne mova(resposta)
+                    }
+                }
+            }
+            se cursor < tamanho(unidades) {
+                seja token: lexico.UnidadeLexica = unidades[cursor]
+                se sinal(fonte, token, 61) {
+                    declaracao.valor_inicio = cursor + 1
+                    cursor = cursor + 1
+                    seja profundidade = 0
+                    enquanto cursor < tamanho(unidades) {
+                        token = unidades[cursor]
+                        se profundidade == 0 {
+                            se token.linha > nome.linha {
+                                pare
+                            }
+                            se sinal(fonte, token, 59) ou sinal(fonte, token, 125) {
+                                pare
+                            }
+                        }
+                        se sinal(fonte, token, 40) ou sinal(fonte, token, 91) {
+                            profundidade = profundidade + 1
+                        }
+                        se sinal(fonte, token, 41) ou sinal(fonte, token, 93) {
+                            profundidade = profundidade - 1
+                        }
+                        cursor = cursor + 1
+                    }
+                    declaracao.valor_fim = cursor
+                    se declaracao.valor_inicio == cursor ou profundidade != 0 {
+                        resposta.codigo_erro = 4
+                        resposta.unidade_erro = cursor
+                        retorne mova(resposta)
+                    }
+                }
+            }
+            se declaracao.tipo_inicio < 0 e declaracao.valor_inicio < 0 {
+                resposta.codigo_erro = 5
+                resposta.unidade_erro = indice
+                retorne mova(resposta)
+            }
+            adicione(resposta.itens, declaracao)
+            indice = cursor
+        } senao {
+            indice = indice + 1
+        }
+    }
+    resposta.unidade_erro = tamanho(unidades)
+    retorne mova(resposta)
+}

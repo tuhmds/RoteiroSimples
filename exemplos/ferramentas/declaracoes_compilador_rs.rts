@@ -1,0 +1,23 @@
+// Demonstra reconhecedor de declaracoes locais escrito em RS.
+importe "padrao/lexico.rts" como lexico
+importe "padrao/declaracoes_compilador.rts" como declaracoes
+
+inicio {
+    seja fonte: bytes
+    carregue_arquivo("codigo_fonte.rts", fonte)
+    seja unidades = lexico.analisar(empreste(fonte))
+    seja resposta = declaracoes.analisar(empreste(fonte), empreste(unidades))
+    escreva(resposta.codigo_erro)
+    escreva(resposta.unidade_erro)
+    escreva(tamanho(resposta.itens))
+    seja indice = 0
+    enquanto indice < tamanho(resposta.itens) {
+        seja item: declaracoes.Declaracao = resposta.itens[indice]
+        escreva(item.unidade_nome)
+        escreva(item.tipo_inicio)
+        escreva(item.tipo_fim)
+        escreva(item.valor_inicio)
+        escreva(item.valor_fim)
+        indice = indice + 1
+    }
+}
