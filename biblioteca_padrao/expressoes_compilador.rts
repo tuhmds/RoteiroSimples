@@ -1,0 +1,78 @@
+// Primeira representacao de expressoes para o futuro compilador escrito em RS.
+// Arvore por indices, sem ponteiros e sem referencias recursivas.
+// Subconjunto inicial: inteiros, nomes, parenteses, operadores + - * / %.
+importe "lexico.rts" como lexico
+
+publico tipo NoExpressao {
+    // 1 literal, 2 nome, 3 unario, 4 binario.
+    categoria: inteiro
+    unidade: inteiro
+    operador: inteiro
+    esquerdo: inteiro
+    direito: inteiro
+}
+
+publico tipo ArvoreExpressao {
+    nos: lista[NoExpressao]
+    valores: lista[inteiro]
+    operadores: lista[inteiro]
+    origens: lista[inteiro]
+    raiz: inteiro
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+privado funcao prioridade(operador: inteiro) -> inteiro {
+    se operador == 300 ou operador == 301 {
+        retorne 3
+    }
+    se operador == 42 ou operador == 47 ou operador == 37 {
+        retorne 2
+    }
+    se operador == 43 ou operador == 45 {
+        retorne 1
+    }
+    retorne 0
+}
+
+// Retira um operador e liga seus operandos aos indices ja existentes.
+// Codigos de erro ficam na propria arvore, sem encerrar o processo.
+privado funcao reduzir(arvore: ArvoreExpressao) -> ArvoreExpressao {
+    se tamanho(arvore.operadores) == 0 {
+        arvore.codigo_erro = 8
+        retorne mova(arvore)
+    }
+    seja topo = tamanho(arvore.operadores) - 1
+    seja operador = arvore.operadores[topo]
+    seja origem = arvore.origens[topo]
+    remova_ultimo(arvore.operadores)
+    remova_ultimo(arvore.origens)
+    seja necessario = 2
+    se operador == 300 ou operador == 301 {
+        necessario = 1
+    }
+    se tamanho(arvore.valores) < necessario {
+        arvore.codigo_erro = 3
+        arvore.unidade_erro = origem
+        retorne mova(arvore)
+    }
+    seja no: NoExpressao
+    no.unidade = origem
+    no.operador = operador
+    no.esquerdo = -1
+    no.direito = -1
+    seja ultimo = tamanho(arvore.valores) - 1
+    no.direito = arvore.valores[ultimo]
+    remova_ultimo(arvore.valores)
+    se necessario == 1 {
+        no.categoria = 3
+    } senao {
+        no.categoria = 4
+        ultimo = tamanho(arvore.valores) - 1
+        no.esquerdo = arvore.valores[ultimo]
+        remova_ultimo(arvore.valores)
+    }
+    adicione(arvore.nos, no)
+    adicione(arvore.valores, tamanho(arvore.nos) - 1)
+    retorne mova(arvore)
+}
