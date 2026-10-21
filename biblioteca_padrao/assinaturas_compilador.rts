@@ -66,3 +66,145 @@ privado funcao fechar(pares: emprestimo[lista[estrutura.ParDelimitador]], abertu
     }
     retorne -1
 }
+
+// Erros: 1 estrutura, 2 nome, 3 abertura, 4 parametros,
+// 5 seta do retorno, 6 tipo de retorno, 7 corpo ausente.
+// Nao verifica se tipos existem nem se uma funcao e chamada corretamente.
+publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]]) -> Assinaturas {
+    seja resposta: Assinaturas
+    seja forma = estrutura.analisar(fonte, unidades)
+    se forma.erro != 0 {
+        resposta.codigo_erro = 1
+        resposta.unidade_erro = forma.unidade_erro
+        retorne mova(resposta)
+    }
+    seja nome_funcao: texto = "funcao"
+    seja indice = 0
+    enquanto indice < tamanho(unidades) {
+        seja atual: lexico.UnidadeLexica = unidades[indice]
+        se igual(fonte, atual, empreste(nome_funcao)) {
+            se indice + 2 >= tamanho(unidades) {
+                resposta.codigo_erro = 2
+                resposta.unidade_erro = indice
+                retorne mova(resposta)
+            }
+            seja nome: lexico.UnidadeLexica = unidades[indice + 1]
+            se nome.classe != 1 {
+                resposta.codigo_erro = 2
+                resposta.unidade_erro = indice + 1
+                retorne mova(resposta)
+            }
+            seja abertura: lexico.UnidadeLexica = unidades[indice + 2]
+            se nao simbolo(fonte, abertura, 40) {
+                resposta.codigo_erro = 3
+                resposta.unidade_erro = indice + 2
+                retorne mova(resposta)
+            }
+            seja fim_parametros = fechar(empreste(forma.pares), indice + 2)
+            se fim_parametros < 0 {
+                resposta.codigo_erro = 3
+                resposta.unidade_erro = indice + 2
+                retorne mova(resposta)
+            }
+            seja assinatura: AssinaturaFuncao
+            assinatura.unidade_nome = indice + 1
+            assinatura.unidade_abertura = indice + 2
+            assinatura.unidade_fechamento = fim_parametros
+            assinatura.primeiro_parametro = tamanho(resposta.parametros)
+            seja cursor = indice + 3
+            enquanto cursor < fim_parametros {
+                se cursor + 2 >= fim_parametros {
+                    resposta.codigo_erro = 4
+                    resposta.unidade_erro = cursor
+                    retorne mova(resposta)
+                }
+                seja nome_parametro: lexico.UnidadeLexica = unidades[cursor]
+                seja separador: lexico.UnidadeLexica = unidades[cursor + 1]
+                se nome_parametro.classe != 1 ou nao simbolo(fonte, separador, 58) {
+                    resposta.codigo_erro = 4
+                    resposta.unidade_erro = cursor
+                    retorne mova(resposta)
+                }
+                seja parametro: ParametroFuncao
+                parametro.unidade_nome = cursor
+                parametro.tipo_inicio = cursor + 2
+                cursor = parametro.tipo_inicio
+                seja nivel = 0
+                enquanto cursor < fim_parametros {
+                    seja token: lexico.UnidadeLexica = unidades[cursor]
+                    se simbolo(fonte, token, 91) {
+                        nivel = nivel + 1
+                    }
+                    se simbolo(fonte, token, 93) {
+                        nivel = nivel - 1
+                    }
+                    se simbolo(fonte, token, 44) e nivel == 0 {
+                        pare
+                    }
+                    cursor = cursor + 1
+                }
+                se nivel != 0 ou cursor == parametro.tipo_inicio {
+                    resposta.codigo_erro = 4
+                    resposta.unidade_erro = cursor
+                    retorne mova(resposta)
+                }
+                parametro.tipo_fim = cursor
+                adicione(resposta.parametros, parametro)
+                se cursor < fim_parametros {
+                    cursor = cursor + 1
+                    se cursor == fim_parametros {
+                        resposta.codigo_erro = 4
+                        resposta.unidade_erro = cursor
+                        retorne mova(resposta)
+                    }
+                }
+            }
+            assinatura.quantidade_parametros = tamanho(resposta.parametros) - assinatura.primeiro_parametro
+            se fim_parametros + 2 >= tamanho(unidades) {
+                resposta.codigo_erro = 5
+                resposta.unidade_erro = fim_parametros
+                retorne mova(resposta)
+            }
+            seja menos: lexico.UnidadeLexica = unidades[fim_parametros + 1]
+            seja maior: lexico.UnidadeLexica = unidades[fim_parametros + 2]
+            se nao simbolo(fonte, menos, 45) ou nao simbolo(fonte, maior, 62) {
+                resposta.codigo_erro = 5
+                resposta.unidade_erro = fim_parametros + 1
+                retorne mova(resposta)
+            }
+            assinatura.retorno_inicio = fim_parametros + 3
+            cursor = assinatura.retorno_inicio
+            enquanto cursor < tamanho(unidades) {
+                seja token: lexico.UnidadeLexica = unidades[cursor]
+                se simbolo(fonte, token, 123) {
+                    pare
+                }
+                cursor = cursor + 1
+            }
+            assinatura.retorno_fim = cursor
+            se assinatura.retorno_inicio >= cursor {
+                resposta.codigo_erro = 6
+                resposta.unidade_erro = cursor
+                retorne mova(resposta)
+            }
+            se cursor == tamanho(unidades) {
+                resposta.codigo_erro = 7
+                resposta.unidade_erro = cursor
+                retorne mova(resposta)
+            }
+            assinatura.corpo_abertura = cursor
+            assinatura.corpo_fechamento = fechar(empreste(forma.pares), cursor)
+            se assinatura.corpo_fechamento < 0 {
+                resposta.codigo_erro = 7
+                resposta.unidade_erro = cursor
+                retorne mova(resposta)
+            }
+            adicione(resposta.funcoes, assinatura)
+            indice = assinatura.corpo_fechamento + 1
+        } senao {
+            indice = indice + 1
+        }
+    }
+    resposta.unidade_erro = tamanho(unidades)
+    retorne mova(resposta)
+}
