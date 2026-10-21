@@ -1,0 +1,40 @@
+// Extracao inicial de declaracoes locais em RS.
+// Mantem nomes, tipos e inicializadores como intervalos de tokens.
+// Ainda nao faz resolucao de nomes ou checagem de tipos.
+importe "lexico.rts" como lexico
+importe "estrutura_compilador.rts" como estrutura
+
+publico tipo Declaracao {
+    unidade_nome: inteiro
+    tipo_inicio: inteiro
+    tipo_fim: inteiro
+    valor_inicio: inteiro
+    valor_fim: inteiro
+}
+
+publico tipo Declaracoes {
+    itens: lista[Declaracao]
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+privado funcao igual(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, nome: emprestimo[texto]) -> logico {
+    se unidade.classe != 1 ou unidade.comprimento_byte != tamanho(nome) {
+        retorne falso
+    }
+    seja indice = 0
+    enquanto indice < tamanho(nome) {
+        se fonte[unidade.inicio_byte + indice] != byte_em(nome, indice) {
+            retorne falso
+        }
+        indice = indice + 1
+    }
+    retorne verdadeiro
+}
+
+privado funcao sinal(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, simbolo: inteiro) -> logico {
+    se unidade.classe != 4 ou unidade.comprimento_byte != 1 {
+        retorne falso
+    }
+    retorne fonte[unidade.inicio_byte] == simbolo
+}
