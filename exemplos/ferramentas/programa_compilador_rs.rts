@@ -1,0 +1,43 @@
+// Inspecao da primeira AST unificada de programa em RS.
+importe "padrao/lexico.rts" como lexico
+importe "padrao/programa_compilador.rts" como programa
+
+inicio {
+    seja fonte: bytes
+    carregue_arquivo("codigo_fonte.rts", fonte)
+    seja tokens = lexico.analisar(empreste(fonte))
+    seja resultado = programa.analisar(empreste(fonte), empreste(tokens))
+    escreva(resultado.codigo_erro)
+    escreva(resultado.unidade_erro)
+    escreva(tamanho(resultado.simbolos))
+    escreva(tamanho(resultado.instrucoes))
+    escreva(tamanho(resultado.nos))
+    seja i = 0
+    enquanto i < tamanho(resultado.simbolos) {
+        seja s: programa.SimboloPrograma = resultado.simbolos[i]
+        escreva(s.classe)
+        escreva(s.unidade_nome)
+        escreva(s.escopo)
+        i = i + 1
+    }
+    i = 0
+    enquanto i < tamanho(resultado.instrucoes) {
+        seja s: programa.InstrucaoPrograma = resultado.instrucoes[i]
+        escreva(s.classe)
+        escreva(s.unidade_inicio)
+        escreva(s.indice_simbolo)
+        escreva(s.raiz)
+        i = i + 1
+    }
+    i = 0
+    enquanto i < tamanho(resultado.nos) {
+        seja no: programa.NoPrograma = resultado.nos[i]
+        escreva(no.categoria)
+        escreva(no.unidade)
+        escreva(no.operador)
+        escreva(no.esquerdo)
+        escreva(no.direito)
+        escreva(no.indice_simbolo)
+        i = i + 1
+    }
+}
