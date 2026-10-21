@@ -1,0 +1,22 @@
+// Primeira ferramenta de preparacao de arvore sintatica, em RS.
+importe "padrao/lexico.rts" como lexico
+importe "padrao/estrutura_compilador.rts" como estrutura
+
+inicio {
+    seja fonte: bytes
+    carregue_arquivo("entrada.rts", fonte)
+    seja unidades = lexico.analisar(empreste(fonte))
+    seja resposta = estrutura.analisar(empreste(fonte), empreste(unidades))
+    escreva(resposta.erro)
+    escreva(resposta.unidade_erro)
+    escreva(tamanho(resposta.pares))
+    seja indice = 0
+    enquanto indice < tamanho(resposta.pares) {
+        seja par: estrutura.ParDelimitador = resposta.pares[indice]
+        escreva(par.abertura)
+        escreva(par.fechamento)
+        escreva(par.tipo)
+        escreva(par.profundidade)
+        indice = indice + 1
+    }
+}
