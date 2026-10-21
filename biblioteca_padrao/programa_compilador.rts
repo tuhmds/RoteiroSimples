@@ -145,3 +145,158 @@ privado funcao existe_no_escopo(fonte: emprestimo[bytes], unidades: emprestimo[l
     }
     retorne falso
 }
+
+// Compila a estrutura de funcoes, parametros e declaracoes em uma AST comum.
+// Codigos: 1 estrutura, 2 assinatura, 3 declaracao, 4 funcao duplicada,
+// 5 parametro duplicado, 6 nome local duplicado, 7 referencia nao definida,
+// 8 tipo ainda nao suportado, 9 declaracao fora de bloco,
+// 20..28 erros do analisador de expressoes (20 + codigo original).
+publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]]) -> ProgramaInicial {
+    seja programa: ProgramaInicial
+    seja blocos = estrutura.analisar(fonte, unidades)
+    se blocos.erro != 0 {
+        programa.codigo_erro = 1
+        programa.unidade_erro = blocos.unidade_erro
+        retorne mova(programa)
+    }
+    seja funcoes = assinaturas.analisar(fonte, unidades)
+    se funcoes.codigo_erro != 0 {
+        programa.codigo_erro = 2
+        programa.unidade_erro = funcoes.unidade_erro
+        retorne mova(programa)
+    }
+    seja variaveis = declaracoes.analisar(fonte, unidades)
+    se variaveis.codigo_erro != 0 {
+        programa.codigo_erro = 3
+        programa.unidade_erro = variaveis.unidade_erro
+        retorne mova(programa)
+    }
+    seja i = 0
+    enquanto i < tamanho(funcoes.funcoes) {
+        seja funcao_atual: assinaturas.AssinaturaFuncao = funcoes.funcoes[i]
+        se existe_no_escopo(fonte, unidades, empreste(programa.simbolos), funcao_atual.unidade_nome, -1) {
+            programa.codigo_erro = 4
+            programa.unidade_erro = funcao_atual.unidade_nome
+            retorne mova(programa)
+        }
+        se funcao_atual.retorno_fim != funcao_atual.retorno_inicio + 1 {
+            programa.codigo_erro = 8
+            programa.unidade_erro = funcao_atual.retorno_inicio
+            retorne mova(programa)
+        }
+        se nao eh_inteiro(fonte, unidades, funcao_atual.retorno_inicio) {
+            programa.codigo_erro = 8
+            programa.unidade_erro = funcao_atual.retorno_inicio
+            retorne mova(programa)
+        }
+        seja simbolo_funcao: SimboloPrograma
+        simbolo_funcao.classe = 2
+        simbolo_funcao.unidade_nome = funcao_atual.unidade_nome
+        simbolo_funcao.escopo = -1
+        adicione(programa.simbolos, simbolo_funcao)
+        seja j = funcao_atual.primeiro_parametro
+        enquanto j < funcao_atual.primeiro_parametro + funcao_atual.quantidade_parametros {
+            seja parametro: assinaturas.ParametroFuncao = funcoes.parametros[j]
+            se parametro.tipo_fim != parametro.tipo_inicio + 1 {
+                programa.codigo_erro = 8
+                programa.unidade_erro = parametro.tipo_inicio
+                retorne mova(programa)
+            }
+            se nao eh_inteiro(fonte, unidades, parametro.tipo_inicio) {
+                programa.codigo_erro = 8
+                programa.unidade_erro = parametro.tipo_inicio
+                retorne mova(programa)
+            }
+            se existe_no_escopo(fonte, unidades, empreste(programa.simbolos), parametro.unidade_nome, funcao_atual.corpo_abertura) {
+                programa.codigo_erro = 5
+                programa.unidade_erro = parametro.unidade_nome
+                retorne mova(programa)
+            }
+            seja simbolo_parametro: SimboloPrograma
+            simbolo_parametro.classe = 3
+            simbolo_parametro.unidade_nome = parametro.unidade_nome
+            simbolo_parametro.escopo = funcao_atual.corpo_abertura
+            adicione(programa.simbolos, simbolo_parametro)
+            j = j + 1
+        }
+        i = i + 1
+    }
+    i = 0
+    enquanto i < tamanho(variaveis.itens) {
+        seja declaracao: declaracoes.Declaracao = variaveis.itens[i]
+        seja escopo = escopo_da_unidade(empreste(blocos.pares), declaracao.unidade_nome)
+        se escopo < 0 {
+            programa.codigo_erro = 9
+            programa.unidade_erro = declaracao.unidade_nome
+            retorne mova(programa)
+        }
+        se existe_no_escopo(fonte, unidades, empreste(programa.simbolos), declaracao.unidade_nome, escopo) {
+            programa.codigo_erro = 6
+            programa.unidade_erro = declaracao.unidade_nome
+            retorne mova(programa)
+        }
+        se declaracao.tipo_inicio >= 0 {
+            se declaracao.tipo_fim != declaracao.tipo_inicio + 1 {
+                programa.codigo_erro = 8
+                programa.unidade_erro = declaracao.tipo_inicio
+                retorne mova(programa)
+            }
+            se nao eh_inteiro(fonte, unidades, declaracao.tipo_inicio) {
+                programa.codigo_erro = 8
+                programa.unidade_erro = declaracao.tipo_inicio
+                retorne mova(programa)
+            }
+        }
+        seja instrucao: InstrucaoPrograma
+        instrucao.classe = 1
+        instrucao.unidade_inicio = declaracao.unidade_nome - 1
+        instrucao.raiz = -1
+        instrucao.indice_simbolo = tamanho(programa.simbolos)
+        se declaracao.valor_inicio >= 0 {
+            seja arvore = expressoes.analisar(fonte, unidades, declaracao.valor_inicio, declaracao.valor_fim)
+            se arvore.codigo_erro != 0 {
+                programa.codigo_erro = 20 + arvore.codigo_erro
+                programa.unidade_erro = arvore.unidade_erro
+                retorne mova(programa)
+            }
+            seja deslocamento = tamanho(programa.nos)
+            seja j = 0
+            enquanto j < tamanho(arvore.nos) {
+                seja no_antigo: expressoes.NoExpressao = arvore.nos[j]
+                seja no_novo: NoPrograma
+                no_novo.categoria = no_antigo.categoria
+                no_novo.unidade = no_antigo.unidade
+                no_novo.operador = no_antigo.operador
+                no_novo.esquerdo = no_antigo.esquerdo
+                no_novo.direito = no_antigo.direito
+                no_novo.indice_simbolo = -1
+                se no_novo.esquerdo >= 0 {
+                    no_novo.esquerdo = no_novo.esquerdo + deslocamento
+                }
+                se no_novo.direito >= 0 {
+                    no_novo.direito = no_novo.direito + deslocamento
+                }
+                se no_novo.categoria == 2 {
+                    no_novo.indice_simbolo = resolver(fonte, unidades, empreste(blocos.pares), empreste(programa.simbolos), no_novo.unidade)
+                    se no_novo.indice_simbolo < 0 {
+                        programa.codigo_erro = 7
+                        programa.unidade_erro = no_novo.unidade
+                        retorne mova(programa)
+                    }
+                }
+                adicione(programa.nos, no_novo)
+                j = j + 1
+            }
+            instrucao.raiz = deslocamento + arvore.raiz
+        }
+        seja simbolo_local: SimboloPrograma
+        simbolo_local.classe = 1
+        simbolo_local.unidade_nome = declaracao.unidade_nome
+        simbolo_local.escopo = escopo
+        adicione(programa.simbolos, simbolo_local)
+        adicione(programa.instrucoes, instrucao)
+        i = i + 1
+    }
+    programa.unidade_erro = tamanho(unidades)
+    retorne mova(programa)
+}
