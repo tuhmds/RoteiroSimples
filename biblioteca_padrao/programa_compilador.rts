@@ -1,0 +1,147 @@
+// Representacao inicial de programa em RS: simbolos lexicais e AST por indices.
+// Subconjunto intencional: funcoes com parametros inteiro e declaracoes seja
+// com inicializadores aritmeticos inteiros. Sem emissao de codigo.
+importe "lexico.rts" como lexico
+importe "estrutura_compilador.rts" como estrutura
+importe "assinaturas_compilador.rts" como assinaturas
+importe "declaracoes_compilador.rts" como declaracoes
+importe "expressoes_compilador.rts" como expressoes
+
+publico tipo SimboloPrograma {
+    // 1 declaracao, 2 funcao, 3 parametro.
+    classe: inteiro
+    unidade_nome: inteiro
+    escopo: inteiro
+}
+
+publico tipo NoPrograma {
+    // As categorias seguem padrao/expressoes_compilador.rts.
+    categoria: inteiro
+    unidade: inteiro
+    operador: inteiro
+    esquerdo: inteiro
+    direito: inteiro
+    indice_simbolo: inteiro
+}
+
+publico tipo InstrucaoPrograma {
+    // 1 declaracao com inicializador opcional.
+    classe: inteiro
+    unidade_inicio: inteiro
+    indice_simbolo: inteiro
+    raiz: inteiro
+}
+
+publico tipo ProgramaInicial {
+    simbolos: lista[SimboloPrograma]
+    nos: lista[NoPrograma]
+    instrucoes: lista[InstrucaoPrograma]
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+// Compara nomes diretamente sobre a fonte, evitando copiar os identificadores.
+privado funcao mesmo_nome(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], a: inteiro, b: inteiro) -> logico {
+    seja primeiro: lexico.UnidadeLexica = unidades[a]
+    seja segundo: lexico.UnidadeLexica = unidades[b]
+    se primeiro.classe != 1 ou segundo.classe != 1 {
+        retorne falso
+    }
+    se primeiro.comprimento_byte != segundo.comprimento_byte {
+        retorne falso
+    }
+    seja indice = 0
+    enquanto indice < primeiro.comprimento_byte {
+        se fonte[primeiro.inicio_byte + indice] != fonte[segundo.inicio_byte + indice] {
+            retorne falso
+        }
+        indice = indice + 1
+    }
+    retorne verdadeiro
+}
+
+privado funcao eh_inteiro(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], posicao: inteiro) -> logico {
+    seja esperado: texto = "inteiro"
+    seja unidade: lexico.UnidadeLexica = unidades[posicao]
+    se unidade.classe != 1 ou unidade.comprimento_byte != tamanho(esperado) {
+        retorne falso
+    }
+    seja indice = 0
+    enquanto indice < tamanho(esperado) {
+        se fonte[unidade.inicio_byte + indice] != byte_em(esperado, indice) {
+            retorne falso
+        }
+        indice = indice + 1
+    }
+    retorne verdadeiro
+}
+
+// Devolve o bloco { mais interno que contem a unidade informada.
+privado funcao escopo_da_unidade(pares: emprestimo[lista[estrutura.ParDelimitador]], unidade: inteiro) -> inteiro {
+    seja escolhido = -1
+    seja indice = 0
+    enquanto indice < tamanho(pares) {
+        seja par: estrutura.ParDelimitador = pares[indice]
+        se par.tipo == 123 e par.abertura < unidade e par.fechamento > unidade {
+            se par.abertura > escolhido {
+                escolhido = par.abertura
+            }
+        }
+        indice = indice + 1
+    }
+    retorne escolhido
+}
+
+privado funcao escopo_visivel(pares: emprestimo[lista[estrutura.ParDelimitador]], abertura: inteiro, unidade: inteiro) -> logico {
+    se abertura < 0 {
+        retorne falso
+    }
+    seja indice = 0
+    enquanto indice < tamanho(pares) {
+        seja par: estrutura.ParDelimitador = pares[indice]
+        se par.tipo == 123 e par.abertura == abertura {
+            retorne abertura < unidade e unidade < par.fechamento
+        }
+        indice = indice + 1
+    }
+    retorne falso
+}
+
+// Apenas locais e parametros podem ser referenciados no subconjunto atual.
+// Maior indice de abertura indica o escopo visivel mais interno.
+privado funcao resolver(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], pares: emprestimo[lista[estrutura.ParDelimitador]], simbolos: emprestimo[lista[SimboloPrograma]], unidade: inteiro) -> inteiro {
+    seja encontrado = -1
+    seja profundidade = -1
+    seja indice = 0
+    enquanto indice < tamanho(simbolos) {
+        seja simbolo: SimboloPrograma = simbolos[indice]
+        se simbolo.classe != 2 e simbolo.unidade_nome < unidade {
+            se escopo_visivel(pares, simbolo.escopo, unidade) {
+                se mesmo_nome(fonte, unidades, simbolo.unidade_nome, unidade) {
+                    se simbolo.escopo > profundidade {
+                        profundidade = simbolo.escopo
+                        encontrado = indice
+                    }
+                }
+            }
+        }
+        indice = indice + 1
+    }
+    retorne encontrado
+}
+
+// O proprio escopo pode conter no maximo um simbolo de mesmo nome.
+// Funcoes globais ocupam escopo -1; parametros ocupam o bloco da funcao.
+privado funcao existe_no_escopo(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], simbolos: emprestimo[lista[SimboloPrograma]], unidade: inteiro, escopo: inteiro) -> logico {
+    seja indice = 0
+    enquanto indice < tamanho(simbolos) {
+        seja simbolo: SimboloPrograma = simbolos[indice]
+        se simbolo.escopo == escopo {
+            se mesmo_nome(fonte, unidades, unidade, simbolo.unidade_nome) {
+                retorne verdadeiro
+            }
+        }
+        indice = indice + 1
+    }
+    retorne falso
+}
