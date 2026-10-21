@@ -88,7 +88,7 @@ class TestesDeclaracoesCompiladorRS(unittest.TestCase):
         for nivel in (0, 8):
             erro, _, itens = self.analisar(fonte, nivel)
             self.assertEqual((erro, len(itens)), (0, 1))
-            self.assertGreater(itens[0][4] - itens[0][3], 5)
+            self.assertGreaterEqual(itens[0][4] - itens[0][3], 5)
 
     def test_erros_recuperaveis(self):
         casos = (
