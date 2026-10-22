@@ -9,7 +9,9 @@ inicio {
     escreva(resultado.codigo_erro)
     escreva(resultado.unidade_erro)
     se resultado.codigo_erro == 0 {
-        grave_arquivo("resultado_elf", resultado.arquivo)
-        escreva(tamanho(resultado.arquivo))
+        seja imagem: bytes
+        mova(imagem, resultado.arquivo)
+        grave_arquivo("resultado_elf", imagem)
+        escreva(tamanho(imagem))
     }
 }
