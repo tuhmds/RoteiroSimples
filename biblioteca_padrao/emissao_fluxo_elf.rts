@@ -544,8 +544,8 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoFluxoELF {
     adicione_byte(codigo, 0)
     adicione_byte(codigo, 15)
     adicione_byte(codigo, 5)
-    seja arquivo = elf.cabecalho(empreste(codigo))
-    mova(resposta.arquivo, arquivo)
+    seja imagem_final = elf.cabecalho(empreste(codigo))
+    mova(resposta.arquivo, imagem_final)
     resposta.unidade_erro = total
     retorne mova(resposta)
 }
