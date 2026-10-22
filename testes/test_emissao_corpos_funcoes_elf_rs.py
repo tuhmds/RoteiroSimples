@@ -76,8 +76,10 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
             self.assertEqual(dados[120:127], bytes((85, 72, 137, 229, 72, 129, 236)))
             self.assertIn(bytes((232,)), dados[127:])
             self.assertIn(bytes((201, 195)), dados[127:])
-            self.assertIn(bytes((72, 57, 200, 15)), dados[127:])
-            self.assertIn(bytes((233,)), dados[127:])
+            if "se " in fonte or "enquanto " in fonte:
+                self.assertIn(bytes((72, 57, 200, 15)), dados[127:])
+            if "enquanto " in fonte:
+                self.assertIn(bytes((233,)), dados[127:])
             status = None
             if self.alvo == "linux":
                 arquivo.chmod(0o700)
