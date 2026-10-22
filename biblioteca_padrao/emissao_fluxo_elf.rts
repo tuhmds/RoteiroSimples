@@ -313,8 +313,8 @@ privado funcao emitir_condicao(codigo: bytes, fonte: emprestimo[bytes], unidades
 }
 
 // Calcula o fim da expressao de atribuicao na mesma linha.
-privado funcao fim_expressao(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], inicio: inteiro, linha: inteiro) -> inteiro {
-    seja i = inicio
+privado funcao fim_expressao(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], primeiro_token: inteiro, linha: inteiro) -> inteiro {
+    seja i = primeiro_token
     enquanto i < tamanho(unidades) {
         seja token: lexico.UnidadeLexica = unidades[i]
         se token.linha != linha {
