@@ -304,11 +304,11 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                     retorne mova(resposta)
                 }
                 mova(codigo, interior.codigo)
-                seja j = 0
-                enquanto j < tamanho(interior.ligacoes) {
-                    seja ligacao_interior: Ligacao = interior.ligacoes[j]
+                seja indice_ligacao_sinal = 0
+                enquanto indice_ligacao_sinal < tamanho(interior.ligacoes) {
+                    seja ligacao_interior: Ligacao = interior.ligacoes[indice_ligacao_sinal]
                     adicione(resposta.ligacoes, ligacao_interior)
-                    j = j + 1
+                    indice_ligacao_sinal = indice_ligacao_sinal + 1
                 }
                 se sinal_inicial == 45 {
                     adicione_byte(codigo, 88) // pop rax
