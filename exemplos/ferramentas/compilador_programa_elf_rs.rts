@@ -1,0 +1,17 @@
+// Compila um subconjunto de programa RS (declaracoes locais com inteiro)
+// diretamente para ELF Linux x86-64, utilizando o emissor escrito em RS.
+importe "padrao/emissao_programa_elf.rts" como emissor
+
+inicio {
+    seja fonte: bytes
+    carregue_arquivo("codigo_fonte.rts", fonte)
+    seja resultado = emissor.compilar(empreste(fonte))
+    escreva(resultado.codigo_erro)
+    escreva(resultado.unidade_erro)
+    se resultado.codigo_erro == 0 {
+        seja imagem: bytes
+        mova(imagem, resultado.arquivo)
+        grave_arquivo("resultado_programa_elf", imagem)
+        escreva(tamanho(imagem))
+    }
+}
