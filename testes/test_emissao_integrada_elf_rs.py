@@ -104,7 +104,7 @@ class TestesEmissaoIntegradaELFRS(unittest.TestCase):
             ("funcao dois(x: inteiro, y: inteiro) -> inteiro {\n retorne x * y\n}\n"
              "inicio {\n seja n = 0\n seja total = 0\n enquanto n < 4 {\n"
              " n = n + 1\n se n == 3 {\n total = dois(n, 7)\n }\n"
-             " se n == 4 {\n total = total + 1\n }\n }\n}", 4),
+             " se n == 4 {\n total = total + 1\n }\n }\n}", 22),
         )
         for nivel in (0, 8):
             for fonte, esperado in casos:
@@ -119,7 +119,6 @@ class TestesEmissaoIntegradaELFRS(unittest.TestCase):
         for _ in range(12):
             multiplicador = rng.randrange(1, 7)
             limite = rng.randrange(2, 9)
-            esperado = sum(n * multiplicador for n in range(1, limite + 1)) % 256
             fonte = (
                 "funcao produto(x: inteiro, y: inteiro) -> inteiro {\n"
                 " retorne x * y\n}\n"
@@ -129,7 +128,6 @@ class TestesEmissaoIntegradaELFRS(unittest.TestCase):
                 f" total = produto(total + n, {multiplicador})\n"
                 " }\n}"
             )
-            # The recurrence above is total = (total+n)*m, not a simple sum.
             esperado = 0
             for n in range(1, limite + 1):
                 esperado = (esperado + n) * multiplicador
