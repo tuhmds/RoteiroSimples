@@ -47,9 +47,13 @@ na pilha e retorno em `rax`, com `leave; ret`.
 - **Obrigatorio um `retorne expressao` final no nivel exterior de cada
   funcao**, garantindo que a execucao nao termine por um caminho sem
   retorno. Outros retornos dentro de `se` e `enquanto` sao permitidos.
-- Chamada direta permitida no lado direito completo de declaracao,
-  atribuicao e `retorne`. Assim `retorne calcular(n)` funciona sem
-  variavel temporaria, com zero a quatro argumentos inteiros.
+- Chamadas diretas permitidas no lado direito completo de declaracao,
+  atribuicao e `retorne`, inclusive chamadas aninhadas como argumento
+  integral: `retorne soma(dobro(n), soma(2, 3))`.
+- Ate oito niveis internos de chamada (a chamada exterior conta como nivel
+  zero). Cada argumento pode ser uma expressao aritmetica ou outra chamada;
+  combinacoes como `dobro(n) + 1` no mesmo argumento ainda nao funcionam.
+  O emissor rejeita chamadas malformadas, recursivas ou futuras.
 - Para impedir recursao nesta etapa, uma funcao somente pode chamar
   funcoes **declaradas anteriormente**; chamadas futuras, recursivas e
   ciclos entre funcoes sao rejeitados.
@@ -81,7 +85,7 @@ falhar sem gerar arquivo. A CI geral e obrigatoria antes da integracao.
 
 ## Proximo passo
 
-Completar expressoes com chamadas aninhadas ou misturadas a
-operadores (por exemplo, `retorne calcular(n) + 1`), fazer
-verificacao semantica de todas as saidas e tipos e depois suporte a
+Completar expressoes com chamadas misturadas a operadores (por exemplo,
+`retorne calcular(n) + 1`), fazer verificacao semantica de todas as
+saidas e tipos e depois suporte a
 recursao controlada e ABI publica, antes de tentar o bootstrap completo.
