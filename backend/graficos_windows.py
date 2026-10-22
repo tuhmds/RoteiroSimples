@@ -20,8 +20,8 @@ def emitir_dialogo(g, titulo, mensagem, windows):
     textos[titulo_id] = titulo
     textos[corpo_id] = mensagem
 
-    g.bytes(b'\\x31\\xC9')                     # xor ecx,ecx  (HWND = NULL)
-    g.relativo(b'\\x48\\x8D\\x15', corpo_id) # lea rdx,[rip+texto]
-    g.relativo(b'\\x4C\\x8D\\x05', titulo_id) # lea r8,[rip+titulo]
-    g.bytes(b'\\x45\\x31\\xC9')              # xor r9d,r9d (MB_OK)
-    g.relativo(b'\\xFF\\x15', 'MessageBoxW')    # call [rip+IAT]
+    g.bytes(b'\x31\xC9')                     # xor ecx,ecx  (HWND = NULL)
+    g.relativo(b'\x48\x8D\x15', corpo_id) # lea rdx,[rip+texto]
+    g.relativo(b'\x4C\x8D\x05', titulo_id) # lea r8,[rip+titulo]
+    g.bytes(b'\x45\x31\xC9')              # xor r9d,r9d (MB_OK)
+    g.relativo(b'\xFF\x15', 'MessageBoxW')    # call [rip+IAT]
