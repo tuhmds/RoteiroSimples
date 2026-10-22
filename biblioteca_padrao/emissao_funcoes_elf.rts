@@ -287,6 +287,10 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoFuncoesELF {
                 resposta.codigo_erro = 6
                 retorne mova(resposta)
             }
+            se inicio_argumento == ultimo - 1 e inicio_argumento != primeiro + 2 {
+                resposta.codigo_erro = 6
+                retorne mova(resposta)
+            }
             se inicio_argumento < ultimo - 1 {
                 adicione(inicios, inicio_argumento)
                 adicione(finais, ultimo - 1)
