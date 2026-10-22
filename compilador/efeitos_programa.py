@@ -138,6 +138,8 @@ def efeito_instrucao_arvore(no):
         return _ler(no[1]).combinar(Efeitos(saida=True, pode_falhar=True))
     if operacao == 'imprima_num':
         return efeito_expressao_arvore(no[1]).combinar(Efeitos(saida=True))
+    if operacao == 'janela_mensagem':
+        return Efeitos(entrada=True, saida=True, pode_falhar=True)
     if operacao in ('leia_int', 'leia_texto', 'leia_texto_dinamico'):
         return _gravar(no[1]).combinar(Efeitos(entrada=True, pode_falhar=True))
     if operacao == 'atribua_byte_dinamico':
