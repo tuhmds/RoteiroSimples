@@ -12,7 +12,7 @@ publico tipo EmissaoELF {
 }
 
 // Escreve 1, 2, 4 ou 8 bytes little-endian de um numero NAO negativo.
-privado funcao anexar_inteiro(destino: bytes, valor: inteiro, quantidade: inteiro) -> bytes {
+publico funcao anexar_inteiro(destino: bytes, valor: inteiro, quantidade: inteiro) -> bytes {
     seja restante = valor
     seja indice = 0
     enquanto indice < quantidade {
@@ -25,7 +25,7 @@ privado funcao anexar_inteiro(destino: bytes, valor: inteiro, quantidade: inteir
 
 // Valida limites antes de multiplicar; nunca confia em numero muito longo.
 // O teto inicial evita estouro de inteiro durante a conversao decimal.
-privado funcao literal(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica) -> inteiro {
+publico funcao literal(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica) -> inteiro {
     seja valor = 0
     seja indice = 0
     enquanto indice < unidade.comprimento_byte {
@@ -47,7 +47,7 @@ privado funcao literal(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica) 
 
 // ELF64 ET_EXEC, um segmento PT_LOAD RX, codigo em offset 120.
 // Sem bibliotecas, interpretador, relocacoes ou dependencia de runtime RS.
-privado funcao cabecalho(codigo: emprestimo[bytes]) -> bytes {
+publico funcao cabecalho(codigo: emprestimo[bytes]) -> bytes {
     seja imagem: bytes
     adicione_byte(imagem, 127)
     adicione_byte(imagem, 69)
