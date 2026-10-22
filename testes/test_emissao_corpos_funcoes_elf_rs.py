@@ -220,13 +220,66 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
             "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
             "inicio {\n seja r = f(nao_existe(2))\n}",
             "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
-            "inicio {\n seja r = f(f(2)) + 1\n}",
+            "inicio {\n seja r = f(f(2)) / 1\n}",
             "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
             "inicio {\n seja r = f(f(2)) (3)\n}",
         )
         fontes += (
             "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
             "inicio {\n seja r = " + "f(" * 10 + "1" + ")" * 10 + "\n}",
+        )
+        for nivel in (0, 8):
+            for fonte in fontes:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertNotEqual(codigo, 0)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
+    def test_chamadas_misturadas_com_aritmetica(self):
+        casos = (
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+             "inicio {\n seja r = f(f(2)) + 1\n}", 5),
+            ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "funcao calcular(n: inteiro) -> inteiro {\n retorne dobro(n) + 1\n}\n"
+             "inicio {\n seja r = calcular(3)\n}", 7),
+            ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "funcao soma(a: inteiro, b: inteiro) -> inteiro {\n retorne a + b\n}\n"
+             "funcao calcular(n: inteiro) -> inteiro {\n retorne soma(dobro(n) + 1, 4)\n}\n"
+             "inicio {\n seja r = calcular(3)\n}", 11),
+            ("funcao soma(a: inteiro, b: inteiro) -> inteiro {\n retorne a + b\n}\n"
+             "inicio {\n seja r = soma(3, 4) * 2 - 1\n}", 13),
+            ("funcao soma(a: inteiro, b: inteiro) -> inteiro {\n retorne a + b\n}\n"
+             "inicio {\n seja r = (soma(3, 4) + 5) * 2\n}", 24),
+            ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "inicio {\n seja r = dobro(3) + dobro(4) * 2\n}", 22),
+            ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "funcao calcular(n: inteiro) -> inteiro {\n retorne -(dobro(n) + 1)\n}\n"
+             "inicio {\n seja r = calcular(3)\n}", 249),
+            ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "inicio {\n seja r = dobro(8) - 4 - 2\n}", 10),
+            ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "inicio {\n seja r = dobro(-2) + 3\n}", 255),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIn(bytes((232,)), dados[127:])
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
+    def test_chamadas_com_operadores_invalidas(self):
+        fontes = (
+            "funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+            "inicio {\n seja r = dobro(3) / 2\n}",
+            "funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+            "inicio {\n seja r = dobro(3) +\n}",
+            "funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+            "inicio {\n seja r = dobro(3) * desconhecida(2)\n}",
+            "funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+            "inicio {\n seja r = dobro(3) + (2 * 4\n}",
         )
         for nivel in (0, 8):
             for fonte in fontes:
