@@ -1,0 +1,423 @@
+// Emissor experimental de chamadas nativas ELF64 Linux x86-64 em RS.
+// Funcoes antes do inicio, com 0..4 parametros inteiro, corpo "retorne expr".
+// A chamada no inicio ocupa todo o lado direito de uma declaracao.
+// ABI privada deste modulo: argumentos na pilha da direita para esquerda.
+// Ainda nao implementa o ABI C/System V nem recursao.
+importe "lexico.rts" como lexico
+importe "assinaturas_compilador.rts" como assinaturas
+importe "emissao_elf_minima.rts" como elf
+importe "emissao_fluxo_elf.rts" como fluxo
+
+publico tipo ResultadoFuncoesELF {
+    arquivo: bytes
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+privado tipo Ligacao {
+    indice_funcao: inteiro
+    posicao_deslocamento: inteiro
+}
+
+// Emite um endereco local de 8 bytes relativo ao rbp.
+privado funcao guardar_local(codigo: bytes, indice: inteiro) -> bytes {
+    adicione_byte(codigo, 88)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 133)
+    seja gravado = fluxo.endereco(mova(codigo), indice)
+    mova(codigo, gravado)
+    retorne mova(codigo)
+}
+
+privado funcao prologo(codigo: bytes, quantidade: inteiro) -> bytes {
+    adicione_byte(codigo, 85)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 229)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 129)
+    adicione_byte(codigo, 236)
+    seja preparado = elf.anexar_inteiro(mova(codigo), quantidade * 8, 4)
+    mova(codigo, preparado)
+    retorne mova(codigo)
+}
+
+privado funcao executar_expressao(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], primeiro: inteiro, ultimo: inteiro) -> fluxo.Trecho {
+    retorne fluxo.emitir_expressao(mova(codigo), fonte, unidades, nomes, primeiro, ultimo)
+}
+
+// Verifica a assinatura e o corpo inteiro: retorne expressao.
+// Diagnostico: 2 assinatura, 3 corpo, 4 duplicidade.
+privado funcao validar_funcoes(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], grupo: emprestimo[assinaturas.Assinaturas]) -> inteiro {
+    seja retorno: texto = "inteiro"
+    seja palavra_funcao: texto = "funcao"
+    seja palavra_retorne: texto = "retorne"
+    seja posicao = 0
+    seja i = 0
+    enquanto i < tamanho(grupo.funcoes) {
+        seja atual: assinaturas.AssinaturaFuncao = grupo.funcoes[i]
+        se atual.unidade_nome != posicao + 1 {
+            retorne 2
+        }
+        seja inicio_token: lexico.UnidadeLexica = unidades[posicao]
+        se nao fluxo.igual(fonte, inicio_token, empreste(palavra_funcao)) {
+            retorne 2
+        }
+        se atual.quantidade_parametros < 0 ou atual.quantidade_parametros > 4 {
+            retorne 2
+        }
+        se atual.retorno_fim != atual.retorno_inicio + 1 {
+            retorne 2
+        }
+        seja tipo_retorno: lexico.UnidadeLexica = unidades[atual.retorno_inicio]
+        se nao fluxo.igual(fonte, tipo_retorno, empreste(retorno)) {
+            retorne 2
+        }
+        seja j = 0
+        enquanto j < i {
+            seja anterior: assinaturas.AssinaturaFuncao = grupo.funcoes[j]
+            seja nome_anterior: lexico.UnidadeLexica = unidades[anterior.unidade_nome]
+            seja nome_atual: lexico.UnidadeLexica = unidades[atual.unidade_nome]
+            se fluxo.mesmo_nome(fonte, nome_anterior, nome_atual) {
+                retorne 4
+            }
+            j = j + 1
+        }
+        j = 0
+        enquanto j < atual.quantidade_parametros {
+            seja p: assinaturas.ParametroFuncao = grupo.parametros[atual.primeiro_parametro + j]
+            se p.tipo_fim != p.tipo_inicio + 1 {
+                retorne 2
+            }
+            seja tipo_parametro: lexico.UnidadeLexica = unidades[p.tipo_inicio]
+            se nao fluxo.igual(fonte, tipo_parametro, empreste(retorno)) {
+                retorne 2
+            }
+            seja k = 0
+            enquanto k < j {
+                seja q: assinaturas.ParametroFuncao = grupo.parametros[atual.primeiro_parametro + k]
+                seja nome_p: lexico.UnidadeLexica = unidades[p.unidade_nome]
+                seja nome_q: lexico.UnidadeLexica = unidades[q.unidade_nome]
+                se fluxo.mesmo_nome(fonte, nome_p, nome_q) {
+                    retorne 4
+                }
+                k = k + 1
+            }
+            j = j + 1
+        }
+        se atual.corpo_abertura + 3 >= atual.corpo_fechamento {
+            retorne 3
+        }
+        seja token_retorne: lexico.UnidadeLexica = unidades[atual.corpo_abertura + 1]
+        se nao fluxo.igual(fonte, token_retorne, empreste(palavra_retorne)) {
+            retorne 3
+        }
+        // A expressao final sera integralmente validada pelo parser RS,
+        // rejeitando comandos adicionais antes do fechamento do bloco.
+        posicao = atual.corpo_fechamento + 1
+        i = i + 1
+    }
+    seja palavra_inicio: texto = "inicio"
+    se posicao + 3 >= tamanho(unidades) {
+        retorne 2
+    }
+    seja nome_inicio: lexico.UnidadeLexica = unidades[posicao]
+    seja abre: lexico.UnidadeLexica = unidades[posicao + 1]
+    seja fecha: lexico.UnidadeLexica = unidades[tamanho(unidades) - 1]
+    se nao fluxo.igual(fonte, nome_inicio, empreste(palavra_inicio)) {
+        retorne 2
+    }
+    se nao fluxo.simbolo(fonte, abre, 123) ou nao fluxo.simbolo(fonte, fecha, 125) {
+        retorne 2
+    }
+    // Um segundo bloco inicio ou fechamento antecipado nao pode ser ignorado.
+    seja j = posicao + 2
+    enquanto j < tamanho(unidades) - 1 {
+        seja token: lexico.UnidadeLexica = unidades[j]
+        se fluxo.simbolo(fonte, token, 123) ou fluxo.simbolo(fonte, token, 125) {
+            retorne 2
+        }
+        j = j + 1
+    }
+    retorne 0
+}
+
+// Gera entrada _start, funcoes mais tarde, remendando call rel32.
+publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoFuncoesELF {
+    seja resposta: ResultadoFuncoesELF
+    seja unidades = lexico.analisar(fonte)
+    se lexico.primeiro_erro(empreste(unidades)) >= 0 {
+        resposta.codigo_erro = 1
+        retorne mova(resposta)
+    }
+    se tamanho(unidades) > 10000 {
+        resposta.codigo_erro = 8
+        retorne mova(resposta)
+    }
+    seja assinadas = assinaturas.analisar(fonte, empreste(unidades))
+    se assinadas.codigo_erro != 0 {
+        resposta.codigo_erro = 2
+        resposta.unidade_erro = assinadas.unidade_erro
+        retorne mova(resposta)
+    }
+    se tamanho(assinadas.funcoes) < 1 ou tamanho(assinadas.funcoes) > 16 {
+        resposta.codigo_erro = 2
+        retorne mova(resposta)
+    }
+    seja validacao = validar_funcoes(fonte, empreste(unidades), empreste(assinadas))
+    se validacao != 0 {
+        resposta.codigo_erro = validacao
+        retorne mova(resposta)
+    }
+    seja inicio_principal = 0
+    seja f = 0
+    enquanto f < tamanho(assinadas.funcoes) {
+        seja assinatura: assinaturas.AssinaturaFuncao = assinadas.funcoes[f]
+        inicio_principal = assinatura.corpo_fechamento + 1
+        f = f + 1
+    }
+    // Contar locais do bloco principal, sem outras instrucoes ocultas.
+    seja palavra_seja: texto = "seja"
+    seja numero_locais = 0
+    seja cursor = inicio_principal + 2
+    enquanto cursor < tamanho(unidades) - 1 {
+        seja token: lexico.UnidadeLexica = unidades[cursor]
+        se fluxo.igual(fonte, token, empreste(palavra_seja)) {
+            numero_locais = numero_locais + 1
+        }
+        cursor = cursor + 1
+    }
+    se numero_locais < 1 ou numero_locais > 128 {
+        resposta.codigo_erro = 8
+        retorne mova(resposta)
+    }
+
+    seja codigo: bytes
+    seja preparado = prologo(mova(codigo), numero_locais)
+    mova(codigo, preparado)
+    seja nomes: lista[lexico.UnidadeLexica]
+    seja ligacoes: lista[Ligacao]
+    cursor = inicio_principal + 2
+    enquanto cursor < tamanho(unidades) - 1 {
+        resposta.unidade_erro = cursor
+        seja chave: lexico.UnidadeLexica = unidades[cursor]
+        se nao fluxo.igual(fonte, chave, empreste(palavra_seja)) {
+            resposta.codigo_erro = 5
+            retorne mova(resposta)
+        }
+        se cursor + 3 >= tamanho(unidades) {
+            resposta.codigo_erro = 5
+            retorne mova(resposta)
+        }
+        seja nome: lexico.UnidadeLexica = unidades[cursor + 1]
+        seja atribuicao: lexico.UnidadeLexica = unidades[cursor + 2]
+        se nome.classe != 1 ou nao fluxo.simbolo(fonte, atribuicao, 61) {
+            resposta.codigo_erro = 5
+            retorne mova(resposta)
+        }
+        se fluxo.resolver(fonte, empreste(nomes), nome) >= 0 {
+            resposta.codigo_erro = 4
+            retorne mova(resposta)
+        }
+        seja primeiro = cursor + 3
+        seja ultimo = fluxo.fim_expressao(fonte, empreste(unidades), primeiro, nome.linha)
+        se ultimo <= primeiro {
+            resposta.codigo_erro = 5
+            retorne mova(resposta)
+        }
+        seja primeiro_valor: lexico.UnidadeLexica = unidades[primeiro]
+        seja chamada = falso
+        se primeiro + 1 < ultimo {
+            seja segundo_valor: lexico.UnidadeLexica = unidades[primeiro + 1]
+            se primeiro_valor.classe == 1 e fluxo.simbolo(fonte, segundo_valor, 40) {
+                chamada = verdadeiro
+            }
+        }
+        se chamada {
+            seja ultimo_token: lexico.UnidadeLexica = unidades[ultimo - 1]
+            se nao fluxo.simbolo(fonte, ultimo_token, 41) {
+                resposta.codigo_erro = 6
+                retorne mova(resposta)
+            }
+            seja indice_funcao = -1
+            f = 0
+            enquanto f < tamanho(assinadas.funcoes) {
+                seja candidata: assinaturas.AssinaturaFuncao = assinadas.funcoes[f]
+                seja nome_funcao: lexico.UnidadeLexica = unidades[candidata.unidade_nome]
+                se fluxo.mesmo_nome(fonte, primeiro_valor, nome_funcao) {
+                    indice_funcao = f
+                }
+                f = f + 1
+            }
+            se indice_funcao < 0 {
+                resposta.codigo_erro = 6
+                retorne mova(resposta)
+            }
+            seja funcao_alvo: assinaturas.AssinaturaFuncao = assinadas.funcoes[indice_funcao]
+            seja inicios: lista[inteiro]
+            seja finais: lista[inteiro]
+            seja abertura_nivel = 0
+            seja inicio_argumento = primeiro + 2
+            seja posicao = inicio_argumento
+            enquanto posicao < ultimo - 1 {
+                seja token_argumento: lexico.UnidadeLexica = unidades[posicao]
+                se fluxo.simbolo(fonte, token_argumento, 40) {
+                    abertura_nivel = abertura_nivel + 1
+                }
+                se fluxo.simbolo(fonte, token_argumento, 41) {
+                    abertura_nivel = abertura_nivel - 1
+                }
+                se abertura_nivel < 0 {
+                    resposta.codigo_erro = 6
+                    retorne mova(resposta)
+                }
+                se fluxo.simbolo(fonte, token_argumento, 44) e abertura_nivel == 0 {
+                    se posicao == inicio_argumento {
+                        resposta.codigo_erro = 6
+                        retorne mova(resposta)
+                    }
+                    adicione(inicios, inicio_argumento)
+                    adicione(finais, posicao)
+                    inicio_argumento = posicao + 1
+                }
+                posicao = posicao + 1
+            }
+            se abertura_nivel != 0 {
+                resposta.codigo_erro = 6
+                retorne mova(resposta)
+            }
+            se inicio_argumento < ultimo - 1 {
+                adicione(inicios, inicio_argumento)
+                adicione(finais, ultimo - 1)
+            }
+            se tamanho(inicios) != funcao_alvo.quantidade_parametros {
+                resposta.codigo_erro = 6
+                retorne mova(resposta)
+            }
+            seja argumento = tamanho(inicios) - 1
+            enquanto argumento >= 0 {
+                seja trecho = executar_expressao(mova(codigo), fonte, empreste(unidades), empreste(nomes), inicios[argumento], finais[argumento])
+                se trecho.erro != 0 {
+                    resposta.codigo_erro = 7
+                    resposta.unidade_erro = trecho.unidade
+                    retorne mova(resposta)
+                }
+                mova(codigo, trecho.codigo)
+                argumento = argumento - 1
+            }
+            // call rel32, resultado em rax; limpa argumentos sem desalinhamento.
+            adicione_byte(codigo, 232)
+            seja ligacao: Ligacao
+            ligacao.indice_funcao = indice_funcao
+            ligacao.posicao_deslocamento = tamanho(codigo)
+            adicione(ligacoes, ligacao)
+            seja j = 0
+            enquanto j < 4 {
+                adicione_byte(codigo, 0)
+                j = j + 1
+            }
+            se tamanho(inicios) > 0 {
+                adicione_byte(codigo, 72)
+                adicione_byte(codigo, 129)
+                adicione_byte(codigo, 196)
+                seja limpeza = elf.anexar_inteiro(mova(codigo), tamanho(inicios) * 8, 4)
+                mova(codigo, limpeza)
+            }
+            adicione_byte(codigo, 80)
+        } senao {
+            seja expressao_principal = executar_expressao(mova(codigo), fonte, empreste(unidades), empreste(nomes), primeiro, ultimo)
+            se expressao_principal.erro != 0 {
+                resposta.codigo_erro = 7
+                resposta.unidade_erro = expressao_principal.unidade
+                retorne mova(resposta)
+            }
+            mova(codigo, expressao_principal.codigo)
+        }
+        seja local_guardado = guardar_local(mova(codigo), tamanho(nomes))
+        mova(codigo, local_guardado)
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 137)
+        adicione_byte(codigo, 199) // mov rdi, rax
+        adicione(nomes, nome)
+        cursor = ultimo
+        se cursor < tamanho(unidades) - 1 {
+            seja separador: lexico.UnidadeLexica = unidades[cursor]
+            se fluxo.simbolo(fonte, separador, 59) {
+                cursor = cursor + 1
+            }
+        }
+    }
+    se cursor != tamanho(unidades) - 1 ou tamanho(nomes) != numero_locais {
+        resposta.codigo_erro = 5
+        retorne mova(resposta)
+    }
+    // Codigo de entrada termina antes das funcoes; somente _start usa exit.
+    adicione_byte(codigo, 184)
+    adicione_byte(codigo, 60)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 5)
+
+    // Gerar funcao separada, prologo, parametros copiados e epilogo.
+    seja enderecos: lista[inteiro]
+    f = 0
+    enquanto f < tamanho(assinadas.funcoes) {
+        seja assinatura: assinaturas.AssinaturaFuncao = assinadas.funcoes[f]
+        adicione(enderecos, tamanho(codigo))
+        seja preparo_funcao = prologo(mova(codigo), assinatura.quantidade_parametros)
+        mova(codigo, preparo_funcao)
+        seja parametros: lista[lexico.UnidadeLexica]
+        seja j = 0
+        enquanto j < assinatura.quantidade_parametros {
+            seja parametro: assinaturas.ParametroFuncao = assinadas.parametros[assinatura.primeiro_parametro + j]
+            seja token_parametro: lexico.UnidadeLexica = unidades[parametro.unidade_nome]
+            adicione(parametros, token_parametro)
+            // mov rax, [rbp + 16+8*j], cdecl interno com pilha.
+            adicione_byte(codigo, 72)
+            adicione_byte(codigo, 139)
+            adicione_byte(codigo, 133)
+            seja entrada = elf.anexar_inteiro(mova(codigo), 16 + j * 8, 4)
+            mova(codigo, entrada)
+            adicione_byte(codigo, 80) // push rax
+            seja transferido = guardar_local(mova(codigo), j)
+            mova(codigo, transferido)
+            j = j + 1
+        }
+        seja retorno_inicio = assinatura.corpo_abertura + 2
+        seja retorno_fim = assinatura.corpo_fechamento
+        se retorno_fim > retorno_inicio {
+            seja ultima_unidade: lexico.UnidadeLexica = unidades[retorno_fim - 1]
+            se fluxo.simbolo(fonte, ultima_unidade, 59) {
+                retorno_fim = retorno_fim - 1
+            }
+        }
+        seja valor_retorno = executar_expressao(mova(codigo), fonte, empreste(unidades), empreste(parametros), retorno_inicio, retorno_fim)
+        se valor_retorno.erro != 0 {
+            resposta.codigo_erro = 3
+            resposta.unidade_erro = valor_retorno.unidade
+            retorne mova(resposta)
+        }
+        mova(codigo, valor_retorno.codigo)
+        adicione_byte(codigo, 88) // pop rax
+        adicione_byte(codigo, 201) // leave
+        adicione_byte(codigo, 195) // ret
+        f = f + 1
+    }
+
+    // Corrigir call rel32 apos conhecer todos os destinos.
+    seja i = 0
+    enquanto i < tamanho(ligacoes) {
+        seja ligacao: Ligacao = ligacoes[i]
+        seja posicao_final = enderecos[ligacao.indice_funcao]
+        seja corrigido = fluxo.corrigir(mova(codigo), ligacao.posicao_deslocamento, posicao_final)
+        mova(codigo, corrigido)
+        i = i + 1
+    }
+    seja imagem_final = elf.cabecalho(empreste(codigo))
+    mova(resposta.arquivo, imagem_final)
+    resposta.unidade_erro = tamanho(unidades)
+    retorne mova(resposta)
+}
