@@ -155,8 +155,7 @@ privado tipo ValorEmitido {
 
 // Uma chamada pode ser argumento integral de outra chamada. A emissao
 // recursiva limita a profundidade e preserva os argumentos em ordem inversa
-// na pilha, conforme a ABI interna. Expressoes aritmeticas continuam usando
-// a arvore de expressoes existente e nao admitem chamadas misturadas.
+// na pilha, conforme a ABI interna. Expressoes e chamadas podem ser misturadas.
 privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], assinadas: emprestimo[assinaturas.Assinaturas], primeiro: inteiro, ultimo: inteiro, funcao_atual: inteiro, nivel: inteiro) -> ValorEmitido {
     seja resposta: ValorEmitido
     resposta.unidade_erro = primeiro
@@ -207,7 +206,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                     se sinal == 43 ou sinal == 45 {
                         prioridade = 1
                     }
-                    se sinal == 42 {
+                    se sinal == 42 ou sinal == 47 ou sinal == 37 {
                         prioridade = 2
                     }
                     se prioridade > 0 e prioridade <= prioridade_corte {
@@ -266,6 +265,18 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 adicione_byte(codigo, 15)
                 adicione_byte(codigo, 175)
                 adicione_byte(codigo, 193) // imul rax, rcx
+            }
+            se operador_corte == 47 ou operador_corte == 37 {
+                // cqo; idiv rcx -> quociente rax, resto rdx (signed64).
+                adicione_byte(codigo, 153)
+                adicione_byte(codigo, 72)
+                adicione_byte(codigo, 247)
+                adicione_byte(codigo, 249)
+                se operador_corte == 37 {
+                    adicione_byte(codigo, 72)
+                    adicione_byte(codigo, 137)
+                    adicione_byte(codigo, 208) // mov rax, rdx
+                }
             }
             adicione_byte(codigo, 80) // push rax
             mova(resposta.codigo, codigo)
@@ -442,6 +453,89 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
     retorne mova(resposta)
 }
 
+// Compila uma comparacao signed64. Ambos os lados aceitam chamadas e
+// expressoes compostas, preservando todas as ligacoes call rel32.
+privado funcao emitir_predicado(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], assinadas: emprestimo[assinaturas.Assinaturas], primeiro: inteiro, ultimo: inteiro, funcao_atual: inteiro) -> ValorEmitido {
+    seja resposta: ValorEmitido
+    resposta.unidade_erro = primeiro
+    seja posicao = -1
+    seja opcode = -1
+    seja profundidade = 0
+    seja i = primeiro
+    enquanto i < ultimo {
+        seja token: lexico.UnidadeLexica = unidades[i]
+        se fluxo.simbolo(fonte, token, 40) {
+            profundidade = profundidade + 1
+        }
+        se fluxo.simbolo(fonte, token, 41) {
+            profundidade = profundidade - 1
+        }
+        se profundidade < 0 {
+            resposta.codigo_erro = 7
+            resposta.unidade_erro = i
+            retorne mova(resposta)
+        }
+        se profundidade == 0 {
+            seja salto = fluxo.salto_falso(fonte, token)
+            se salto >= 0 {
+                se posicao >= 0 {
+                    resposta.codigo_erro = 7
+                    resposta.unidade_erro = i
+                    retorne mova(resposta)
+                }
+                posicao = i
+                opcode = salto
+            }
+        }
+        i = i + 1
+    }
+    se profundidade != 0 ou posicao <= primeiro ou posicao >= ultimo - 1 {
+        resposta.codigo_erro = 7
+        retorne mova(resposta)
+    }
+    seja esquerda = emitir_valor(mova(codigo), fonte, unidades, nomes, assinadas, primeiro, posicao, funcao_atual, 0)
+    se esquerda.codigo_erro != 0 {
+        resposta.codigo_erro = esquerda.codigo_erro
+        resposta.unidade_erro = esquerda.unidade_erro
+        retorne mova(resposta)
+    }
+    mova(codigo, esquerda.codigo)
+    seja j = 0
+    enquanto j < tamanho(esquerda.ligacoes) {
+        seja ligacao_esquerda: Ligacao = esquerda.ligacoes[j]
+        adicione(resposta.ligacoes, ligacao_esquerda)
+        j = j + 1
+    }
+    seja direita = emitir_valor(mova(codigo), fonte, unidades, nomes, assinadas, posicao + 1, ultimo, funcao_atual, 0)
+    se direita.codigo_erro != 0 {
+        resposta.codigo_erro = direita.codigo_erro
+        resposta.unidade_erro = direita.unidade_erro
+        retorne mova(resposta)
+    }
+    mova(codigo, direita.codigo)
+    j = 0
+    enquanto j < tamanho(direita.ligacoes) {
+        seja ligacao_direita: Ligacao = direita.ligacoes[j]
+        adicione(resposta.ligacoes, ligacao_direita)
+        j = j + 1
+    }
+    // pop rcx; pop rax; cmp rax, rcx; jcc falso rel32.
+    adicione_byte(codigo, 89)
+    adicione_byte(codigo, 88)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 57)
+    adicione_byte(codigo, 200)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, opcode)
+    j = 0
+    enquanto j < 4 {
+        adicione_byte(codigo, 0)
+        j = j + 1
+    }
+    mova(resposta.codigo, codigo)
+    retorne mova(resposta)
+}
+
 // Mesmo emissor de IR para o programa principal e para cada funcao.
 // Posicoes de call/jcc sao offsets absolutos no vetor 'codigo'.
 privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], assinadas: emprestimo[assinaturas.Assinaturas], plano_principal: emprestimo[instrucoes.Plano], parametros: emprestimo[lista[lexico.UnidadeLexica]], funcao_atual: inteiro) -> EstadoCorpo {
@@ -495,13 +589,19 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         }
         se instrucao.categoria == 3 ou instrucao.categoria == 4 {
             seja inicio_condicao = tamanho(codigo)
-            seja predicado = fluxo.emitir_condicao(mova(codigo), fonte, unidades, empreste(nomes), instrucao.valor_inicio, instrucao.valor_fim)
-            se predicado.erro != 0 {
-                resposta.codigo_erro = predicado.erro
-                resposta.unidade_erro = predicado.unidade
+            seja predicado = emitir_predicado(mova(codigo), fonte, unidades, empreste(nomes), assinadas, instrucao.valor_inicio, instrucao.valor_fim, funcao_atual)
+            se predicado.codigo_erro != 0 {
+                resposta.codigo_erro = predicado.codigo_erro
+                resposta.unidade_erro = predicado.unidade_erro
                 retorne mova(resposta)
             }
             mova(codigo, predicado.codigo)
+            seja indice_ligacao_predicado = 0
+            enquanto indice_ligacao_predicado < tamanho(predicado.ligacoes) {
+                seja ligacao_predicado: Ligacao = predicado.ligacoes[indice_ligacao_predicado]
+                adicione(ligacoes, ligacao_predicado)
+                indice_ligacao_predicado = indice_ligacao_predicado + 1
+            }
             seja controle: ControleIntegrado
             controle.classe = instrucao.categoria
             controle.inicio_condicao = inicio_condicao
