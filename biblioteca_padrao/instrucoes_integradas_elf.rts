@@ -1,0 +1,181 @@
+// Plano intermediario de instrucoes para emissao ELF em RS.
+// Uma representacao tipada ordenada (sem codigo de maquina) para o bloco inicio.
+// Categoria: 1 declaracao, 2 atribuicao, 3 se, 4 enquanto,
+// 5 fechamento de controle, 6 fechamento de inicio.
+importe "lexico.rts" como lexico
+importe "emissao_fluxo_elf.rts" como fluxo
+
+publico tipo Instrucao {
+    categoria: inteiro
+    unidade_inicio: inteiro
+    unidade_nome: inteiro
+    valor_inicio: inteiro
+    valor_fim: inteiro
+    profundidade: inteiro
+}
+
+publico tipo Plano {
+    instrucoes: lista[Instrucao]
+    quantidade_locais: inteiro
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+// Analisar toda a area principal, sem ignorar comandos nao suportados.
+// Limites para o primeiro backend unificado: 128 locais, 32 niveis e
+// ate 12000 tokens. Funcoes anteriores ao inicio sao tratadas fora daqui.
+publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], unidade_inicio: inteiro) -> Plano {
+    seja plano: Plano
+    seja total = tamanho(unidades)
+    se total > 12000 ou unidade_inicio + 2 >= total {
+        plano.codigo_erro = 8
+        retorne mova(plano)
+    }
+    seja texto_inicio: texto = "inicio"
+    seja texto_seja: texto = "seja"
+    seja texto_se: texto = "se"
+    seja texto_enquanto: texto = "enquanto"
+    seja principal: lexico.UnidadeLexica = unidades[unidade_inicio]
+    seja abertura: lexico.UnidadeLexica = unidades[unidade_inicio + 1]
+    se nao fluxo.igual(fonte, principal, empreste(texto_inicio)) ou nao fluxo.simbolo(fonte, abertura, 123) {
+        plano.codigo_erro = 2
+        plano.unidade_erro = unidade_inicio
+        retorne mova(plano)
+    }
+    seja profundidade = 0
+    seja i = unidade_inicio + 2
+    enquanto i < total {
+        plano.unidade_erro = i
+        seja token: lexico.UnidadeLexica = unidades[i]
+        seja instrucao: Instrucao
+        instrucao.unidade_inicio = i
+        instrucao.unidade_nome = -1
+        instrucao.valor_inicio = -1
+        instrucao.valor_fim = -1
+        instrucao.profundidade = profundidade
+        se fluxo.simbolo(fonte, token, 125) {
+            se profundidade == 0 {
+                se i != total - 1 {
+                    plano.codigo_erro = 2
+                    retorne mova(plano)
+                }
+                instrucao.categoria = 6
+                adicione(plano.instrucoes, instrucao)
+                i = i + 1
+                pare
+            }
+            instrucao.categoria = 5
+            adicione(plano.instrucoes, instrucao)
+            profundidade = profundidade - 1
+            i = i + 1
+            continue
+        }
+        seja eh_se = fluxo.igual(fonte, token, empreste(texto_se))
+        seja eh_enquanto = fluxo.igual(fonte, token, empreste(texto_enquanto))
+        se eh_se ou eh_enquanto {
+            se profundidade >= 32 {
+                plano.codigo_erro = 8
+                retorne mova(plano)
+            }
+            seja cursor = i + 1
+            seja nivel_parenteses = 0
+            enquanto cursor < total {
+                seja atual: lexico.UnidadeLexica = unidades[cursor]
+                se fluxo.simbolo(fonte, atual, 40) {
+                    nivel_parenteses = nivel_parenteses + 1
+                }
+                se fluxo.simbolo(fonte, atual, 41) {
+                    nivel_parenteses = nivel_parenteses - 1
+                }
+                se nivel_parenteses < 0 {
+                    pare
+                }
+                se nivel_parenteses == 0 e fluxo.simbolo(fonte, atual, 123) {
+                    pare
+                }
+                cursor = cursor + 1
+            }
+            se cursor >= total ou cursor == i + 1 ou nivel_parenteses != 0 {
+                plano.codigo_erro = 7
+                retorne mova(plano)
+            }
+            seja inicio_bloco: lexico.UnidadeLexica = unidades[cursor]
+            se nao fluxo.simbolo(fonte, inicio_bloco, 123) {
+                plano.codigo_erro = 7
+                retorne mova(plano)
+            }
+            instrucao.categoria = 3
+            se eh_enquanto {
+                instrucao.categoria = 4
+            }
+            instrucao.valor_inicio = i + 1
+            instrucao.valor_fim = cursor
+            adicione(plano.instrucoes, instrucao)
+            profundidade = profundidade + 1
+            i = cursor + 1
+            continue
+        }
+        se fluxo.simbolo(fonte, token, 123) {
+            plano.codigo_erro = 3
+            retorne mova(plano)
+        }
+        seja declaracao = fluxo.igual(fonte, token, empreste(texto_seja))
+        seja posicao_nome = i
+        se declaracao {
+            se profundidade != 0 {
+                plano.codigo_erro = 3
+                retorne mova(plano)
+            }
+            posicao_nome = i + 1
+            plano.quantidade_locais = plano.quantidade_locais + 1
+            se plano.quantidade_locais > 128 {
+                plano.codigo_erro = 8
+                retorne mova(plano)
+            }
+        }
+        se posicao_nome + 2 >= total {
+            plano.codigo_erro = 3
+            retorne mova(plano)
+        }
+        seja nome: lexico.UnidadeLexica = unidades[posicao_nome]
+        seja atribuicao: lexico.UnidadeLexica = unidades[posicao_nome + 1]
+        se nome.classe != 1 ou nao fluxo.simbolo(fonte, atribuicao, 61) {
+            plano.codigo_erro = 3
+            retorne mova(plano)
+        }
+        instrucao.categoria = 2
+        se declaracao {
+            instrucao.categoria = 1
+        }
+        instrucao.unidade_nome = posicao_nome
+        instrucao.valor_inicio = posicao_nome + 2
+        instrucao.valor_fim = fluxo.fim_expressao(fonte, unidades, instrucao.valor_inicio, nome.linha)
+        se instrucao.valor_fim <= instrucao.valor_inicio {
+            plano.codigo_erro = 4
+            retorne mova(plano)
+        }
+        adicione(plano.instrucoes, instrucao)
+        i = instrucao.valor_fim
+        se i < total {
+            seja separador: lexico.UnidadeLexica = unidades[i]
+            se fluxo.simbolo(fonte, separador, 59) {
+                i = i + 1
+            }
+        }
+    }
+    se i != total ou profundidade != 0 ou plano.quantidade_locais < 1 {
+        plano.codigo_erro = 2
+        retorne mova(plano)
+    }
+    se tamanho(plano.instrucoes) == 0 {
+        plano.codigo_erro = 2
+        retorne mova(plano)
+    }
+    seja ultima: Instrucao = plano.instrucoes[tamanho(plano.instrucoes) - 1]
+    se ultima.categoria != 6 {
+        plano.codigo_erro = 2
+        retorne mova(plano)
+    }
+    plano.unidade_erro = total
+    retorne mova(plano)
+}

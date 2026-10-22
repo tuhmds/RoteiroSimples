@@ -1,0 +1,17 @@
+// Emissor integrado escrito em RS: instrucoes, funcoes e fluxo em ELF.
+// Entrada: codigo_fonte.rts. Saida: resultado_integrado_elf.
+importe "padrao/emissao_integrada_elf.rts" como integrado
+
+inicio {
+    seja fonte: bytes
+    carregue_arquivo("codigo_fonte.rts", fonte)
+    seja resultado = integrado.compilar(empreste(fonte))
+    escreva(resultado.codigo_erro)
+    escreva(resultado.unidade_erro)
+    se resultado.codigo_erro == 0 {
+        seja imagem: bytes
+        mova(imagem, resultado.arquivo)
+        grave_arquivo("resultado_integrado_elf", imagem)
+        escreva(tamanho(imagem))
+    }
+}

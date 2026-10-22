@@ -244,7 +244,7 @@ privado funcao salto_falso(fonte: emprestimo[bytes], operador: lexico.UnidadeLex
 
 // Compila o predicado formado por: expressao COMPARADOR expressao.
 // O operador relacional externo nao faz parte do parser aritmetico.
-privado funcao emitir_condicao(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], primeiro: inteiro, ultimo: inteiro) -> Trecho {
+publico funcao emitir_condicao(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], primeiro: inteiro, ultimo: inteiro) -> Trecho {
     seja resposta: Trecho
     seja posicao = -1
     seja opcode = -1
