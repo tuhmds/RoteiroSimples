@@ -300,7 +300,7 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
             ("funcao base(n: inteiro) -> inteiro {\n retorne n\n}\n"
              "inicio {\n seja r = (base(-17) / 5) + 10\n}", 7),
             ("funcao base(n: inteiro) -> inteiro {\n retorne n\n}\n"
-             "inicio {\n seja r = base(-17) % 5\n}", 252),
+             "inicio {\n seja r = base(-17) % 5\n}", 254),
             ("funcao base(n: inteiro) -> inteiro {\n retorne n\n}\n"
              "inicio {\n seja r = base(17) % -5\n}", 2),
             ("funcao f(n: inteiro) -> inteiro {\n retorne n / 2\n}\n"
