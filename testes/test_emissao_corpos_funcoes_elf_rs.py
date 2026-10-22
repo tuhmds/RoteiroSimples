@@ -220,7 +220,7 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
             "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
             "inicio {\n seja r = f(nao_existe(2))\n}",
             "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
-            "inicio {\n seja r = f(f(2)) + 1\n}",
+            "inicio {\n seja r = f(f(2)) / 1\n}",
             "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
             "inicio {\n seja r = f(f(2)) (3)\n}",
         )
@@ -238,6 +238,8 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
 
     def test_chamadas_misturadas_com_aritmetica(self):
         casos = (
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+             "inicio {\n seja r = f(f(2)) + 1\n}", 5),
             ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
              "funcao calcular(n: inteiro) -> inteiro {\n retorne dobro(n) + 1\n}\n"
              "inicio {\n seja r = calcular(3)\n}", 7),
