@@ -50,10 +50,16 @@ na pilha e retorno em `rax`, com `leave; ret`.
 - Chamadas diretas permitidas no lado direito completo de declaracao,
   atribuicao e `retorne`, inclusive chamadas aninhadas como argumento
   integral: `retorne soma(dobro(n), soma(2, 3))`.
-- Ate oito niveis internos de chamada (a chamada exterior conta como nivel
-  zero). Cada argumento pode ser uma expressao aritmetica ou outra chamada;
-  combinacoes como `dobro(n) + 1` no mesmo argumento ainda nao funcionam.
-  O emissor rejeita chamadas malformadas, recursivas ou futuras.
+- Cada argumento admite uma expressao aritmetica, uma chamada ou
+  combinacoes como `soma(dobro(n) + 1, 4)` e `dobro(n) * 2 - 1`.
+  O emissor preserva precedencia entre `+`, `-` e `*`, parenteses
+  de agrupamento e sinais unarios. Emissoes com chamadas e operadores
+  sao separadas recursivamente; chamadas puramente aritmeticas mantem o
+  analisador de expressoes existente.
+- Ate oito niveis de composicao recursiva (incluindo chamadas, grupos e
+  operacoes). O emissor rejeita chamadas malformadas, recursivas ou
+  futuras. Divisao, resto, comparacoes em expressoes de valor e chamadas
+  em predicados `se`/`enquanto` ainda nao sao suportados.
 - Para impedir recursao nesta etapa, uma funcao somente pode chamar
   funcoes **declaradas anteriormente**; chamadas futuras, recursivas e
   ciclos entre funcoes sao rejeitados.
@@ -85,7 +91,7 @@ falhar sem gerar arquivo. A CI geral e obrigatoria antes da integracao.
 
 ## Proximo passo
 
-Completar expressoes com chamadas misturadas a operadores (por exemplo,
-`retorne calcular(n) + 1`), fazer verificacao semantica de todas as
-saidas e tipos e depois suporte a
-recursao controlada e ABI publica, antes de tentar o bootstrap completo.
+Expandir a representacao intermediaria para chamadas em predicados,
+divisao e resto com verificacoes de erro, e fortalecer analise semantica
+de saidas e tipos. Depois estudar recursao controlada, ABI publica e
+etapas de bootstrap completo do compilador.
