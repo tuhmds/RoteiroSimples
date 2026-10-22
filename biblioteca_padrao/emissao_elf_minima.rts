@@ -1,0 +1,112 @@
+// Emissor ELF64 Linux x86-64 inicial escrito em RoteiroSimples.
+// Contrato: uma expressao inteira; o executavel termina com seu resultado
+// como status do processo (somente os oito bits baixos sao observaveis).
+// Este modulo nao compila ainda um programa RS completo.
+importe "lexico.rts" como lexico
+importe "expressoes_compilador.rts" como expressoes
+
+publico tipo EmissaoELF {
+    arquivo: bytes
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+// Escreve 1, 2, 4 ou 8 bytes little-endian de um numero NAO negativo.
+privado funcao anexar_inteiro(destino: bytes, valor: inteiro, quantidade: inteiro) -> bytes {
+    seja restante = valor
+    seja indice = 0
+    enquanto indice < quantidade {
+        adicione_byte(destino, restante % 256)
+        restante = restante / 256
+        indice = indice + 1
+    }
+    retorne mova(destino)
+}
+
+// Valida limites antes de multiplicar; nunca confia em numero muito longo.
+// O teto inicial evita estouro de inteiro durante a conversao decimal.
+privado funcao literal(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica) -> inteiro {
+    seja valor = 0
+    seja indice = 0
+    enquanto indice < unidade.comprimento_byte {
+        seja digito = fonte[unidade.inicio_byte + indice] - 48
+        se digito < 0 ou digito > 9 {
+            retorne -1
+        }
+        se valor > 100000000 {
+            retorne -1
+        }
+        valor = valor * 10 + digito
+        se valor > 1000000000 {
+            retorne -1
+        }
+        indice = indice + 1
+    }
+    retorne valor
+}
+
+// ELF64 ET_EXEC, um segmento PT_LOAD RX, codigo em offset 120.
+// Sem bibliotecas, interpretador, relocacoes ou dependencia de runtime RS.
+privado funcao cabecalho(codigo: emprestimo[bytes]) -> bytes {
+    seja imagem: bytes
+    adicione_byte(imagem, 127)
+    adicione_byte(imagem, 69)
+    adicione_byte(imagem, 76)
+    adicione_byte(imagem, 70)
+    adicione_byte(imagem, 2)
+    adicione_byte(imagem, 1)
+    adicione_byte(imagem, 1)
+    seja indice = 7
+    enquanto indice < 16 {
+        adicione_byte(imagem, 0)
+        indice = indice + 1
+    }
+    seja proxima = anexar_inteiro(mova(imagem), 2, 2)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 62, 2)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 1, 4)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 4194424, 8)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 64, 8)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 0, 8)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 0, 4)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 64, 2)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 56, 2)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 1, 2)
+    mova(imagem, proxima)
+    indice = 0
+    enquanto indice < 6 {
+        adicione_byte(imagem, 0)
+        indice = indice + 1
+    }
+    // Cabecalho de programa ELF64: tipo, flags, offset, VA, PA, tamanho.
+    proxima = anexar_inteiro(mova(imagem), 1, 4)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 5, 4)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 0, 8)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 4194304, 8)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 4194304, 8)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 120 + tamanho(codigo), 8)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 120 + tamanho(codigo), 8)
+    mova(imagem, proxima)
+    proxima = anexar_inteiro(mova(imagem), 4096, 8)
+    mova(imagem, proxima)
+    indice = 0
+    enquanto indice < tamanho(codigo) {
+        adicione_byte(imagem, codigo[indice])
+        indice = indice + 1
+    }
+    retorne mova(imagem)
+}
