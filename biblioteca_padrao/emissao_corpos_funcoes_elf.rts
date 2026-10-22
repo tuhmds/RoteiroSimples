@@ -198,7 +198,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         }
         se instrucao.categoria == 3 ou instrucao.categoria == 4 {
             seja inicio_condicao = tamanho(codigo)
-            seja predicado = fluxo.emitir_condicao(mova(codigo), fonte, empreste(unidades), empreste(nomes), instrucao.valor_inicio, instrucao.valor_fim)
+            seja predicado = fluxo.emitir_condicao(mova(codigo), fonte, unidades, empreste(nomes), instrucao.valor_inicio, instrucao.valor_fim)
             se predicado.erro != 0 {
                 resposta.codigo_erro = predicado.erro
                 resposta.unidade_erro = predicado.unidade
@@ -220,7 +220,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             }
             // Retorne aceita expressao aritmetica; chamadas podem ser
             // feitas em declaracoes/atribuicoes anteriores.
-            seja valor_retorno = executar_expressao(mova(codigo), fonte, empreste(unidades), empreste(nomes), instrucao.valor_inicio, instrucao.valor_fim)
+            seja valor_retorno = executar_expressao(mova(codigo), fonte, unidades, empreste(nomes), instrucao.valor_inicio, instrucao.valor_fim)
             se valor_retorno.erro != 0 {
                 resposta.codigo_erro = 7
                 resposta.unidade_erro = valor_retorno.unidade
@@ -328,7 +328,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             }
             seja argumento = tamanho(inicios) - 1
             enquanto argumento >= 0 {
-                seja trecho = executar_expressao(mova(codigo), fonte, empreste(unidades), empreste(nomes), inicios[argumento], finais[argumento])
+                seja trecho = executar_expressao(mova(codigo), fonte, unidades, empreste(nomes), inicios[argumento], finais[argumento])
                 se trecho.erro != 0 {
                     resposta.codigo_erro = 7
                     resposta.unidade_erro = trecho.unidade
@@ -357,7 +357,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             }
             adicione_byte(codigo, 80)
         } senao {
-            seja expressao_principal = executar_expressao(mova(codigo), fonte, empreste(unidades), empreste(nomes), primeiro, ultimo)
+            seja expressao_principal = executar_expressao(mova(codigo), fonte, unidades, empreste(nomes), primeiro, ultimo)
             se expressao_principal.erro != 0 {
                 resposta.codigo_erro = 7
                 resposta.unidade_erro = expressao_principal.unidade
