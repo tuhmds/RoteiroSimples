@@ -106,7 +106,7 @@ privado funcao validar_funcoes(fonte: emprestimo[bytes], unidades: emprestimo[li
             }
             j = j + 1
         }
-        se atual.corpo_abertura + 3 >= atual.corpo_fechamento {
+        se atual.corpo_abertura + 2 >= atual.corpo_fechamento {
             retorne 3
         }
         seja token_retorne: lexico.UnidadeLexica = unidades[atual.corpo_abertura + 1]
