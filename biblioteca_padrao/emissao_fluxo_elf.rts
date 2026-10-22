@@ -349,7 +349,8 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoFluxoELF {
     seja repeticao: texto = "enquanto"
     seja abre: lexico.UnidadeLexica = unidades[1]
     seja fecha: lexico.UnidadeLexica = unidades[total - 1]
-    se nao igual(fonte, unidades[0], empreste(principal)) ou nao simbolo(fonte, abre, 123) ou nao simbolo(fonte, fecha, 125) {
+    seja primeira_unidade: lexico.UnidadeLexica = unidades[0]
+    se nao igual(fonte, primeira_unidade, empreste(principal)) ou nao simbolo(fonte, abre, 123) ou nao simbolo(fonte, fecha, 125) {
         resposta.codigo_erro = 2
         retorne mova(resposta)
     }
