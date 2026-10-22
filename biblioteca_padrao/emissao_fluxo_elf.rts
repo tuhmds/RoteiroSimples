@@ -355,6 +355,35 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoFluxoELF {
         retorne mova(resposta)
     }
 
+    // Exigir balanceamento integral, inclusive do bloco inicio.
+    // Um fechamento de enquanto nao pode servir como fechamento do inicio.
+    seja nivel_chaves = 0
+    seja posicao_chaves = 0
+    enquanto posicao_chaves < total {
+        seja unidade_chaves: lexico.UnidadeLexica = unidades[posicao_chaves]
+        se simbolo(fonte, unidade_chaves, 123) {
+            nivel_chaves = nivel_chaves + 1
+        }
+        se simbolo(fonte, unidade_chaves, 125) {
+            nivel_chaves = nivel_chaves - 1
+            se nivel_chaves < 0 {
+                resposta.codigo_erro = 2
+                resposta.unidade_erro = posicao_chaves
+                retorne mova(resposta)
+            }
+            se nivel_chaves == 0 e posicao_chaves != total - 1 {
+                resposta.codigo_erro = 2
+                resposta.unidade_erro = posicao_chaves
+                retorne mova(resposta)
+            }
+        }
+        posicao_chaves = posicao_chaves + 1
+    }
+    se nivel_chaves != 0 {
+        resposta.codigo_erro = 2
+        retorne mova(resposta)
+    }
+
     // Reservar previamente espaco para no maximo 128 locais do topo.
     seja quantidade = 0
     seja i = 2
