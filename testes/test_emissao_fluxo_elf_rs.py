@@ -161,7 +161,7 @@ class TestesEmissaoFluxoELFRS(unittest.TestCase):
             "inicio {\n seja a = 1\n se a + 1 < a + 2 > 0 {\n a = 2\n }\n}",
             "inicio {\n seja a = 1\n se a > 0 { a = 2 }\n senao { a = 3 }\n}",
             "inicio {\n seja a = 1\n escreva(a)\n}",
-            "inicio {\n seja a = 1\n a = a / 2\n}",
+            "inicio {\n seja a = 1\n a = a ** 2\n}",
             "inicio {\n seja a = 1000000001\n}",
             "inicio {\n seja a = 1\n enquanto a < 3 {\n a = a + 1\n}",
             "funcao n() -> inteiro { retorne 1 } inicio { seja a = 2 }",
