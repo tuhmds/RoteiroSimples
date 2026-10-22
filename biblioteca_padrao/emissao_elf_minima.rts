@@ -110,3 +110,140 @@ privado funcao cabecalho(codigo: emprestimo[bytes]) -> bytes {
     }
     retorne mova(imagem)
 }
+
+// Emite instrucoes executadas na propria CPU, nao avalia a expressao em RS.
+// Cada no ja vem apos seus filhos na lista; a pilha de indices confere o
+// empilhamento e impede gerar codigo para uma AST inconsistente.
+// Erros: 1 parser, 2 identificador, 3 operador, 4 literal, 5 pilha,
+// 6 formato de no, 7 expressao grande demais.
+publico funcao compilar(fonte: emprestimo[bytes]) -> EmissaoELF {
+    seja resposta: EmissaoELF
+    seja unidades = lexico.analisar(fonte)
+    seja arvore = expressoes.analisar(fonte, empreste(unidades), 0, tamanho(unidades))
+    se arvore.codigo_erro != 0 {
+        resposta.codigo_erro = 1
+        resposta.unidade_erro = arvore.unidade_erro
+        retorne mova(resposta)
+    }
+    se tamanho(arvore.nos) > 30000 {
+        resposta.codigo_erro = 7
+        resposta.unidade_erro = 0
+        retorne mova(resposta)
+    }
+    seja codigo: bytes
+    seja pilha: lista[inteiro]
+    seja indice = 0
+    enquanto indice < tamanho(arvore.nos) {
+        seja no: expressoes.NoExpressao = arvore.nos[indice]
+        resposta.unidade_erro = no.unidade
+        se no.categoria == 1 {
+            seja unidade: lexico.UnidadeLexica = unidades[no.unidade]
+            seja numero = literal(fonte, unidade)
+            se numero < 0 {
+                resposta.codigo_erro = 4
+                retorne mova(resposta)
+            }
+            // mov rax, imm64; push rax
+            adicione_byte(codigo, 72)
+            adicione_byte(codigo, 184)
+            seja proximo = anexar_inteiro(mova(codigo), numero, 8)
+            mova(codigo, proximo)
+            adicione_byte(codigo, 80)
+            adicione(pilha, indice)
+        } senao {
+            se no.categoria == 2 {
+                resposta.codigo_erro = 2
+                retorne mova(resposta)
+            }
+            se no.categoria == 3 {
+                se tamanho(pilha) < 1 {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                se pilha[tamanho(pilha) - 1] != no.direito {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                se no.operador != 300 e no.operador != 301 {
+                    resposta.codigo_erro = 3
+                    retorne mova(resposta)
+                }
+                // pop rax; neg rax (apenas operador -); push rax.
+                adicione_byte(codigo, 88)
+                se no.operador == 300 {
+                    adicione_byte(codigo, 72)
+                    adicione_byte(codigo, 247)
+                    adicione_byte(codigo, 216)
+                }
+                adicione_byte(codigo, 80)
+                pilha[tamanho(pilha) - 1] = indice
+            } senao {
+                se no.categoria != 4 {
+                    resposta.codigo_erro = 6
+                    retorne mova(resposta)
+                }
+                se no.operador != 43 e no.operador != 45 e no.operador != 42 {
+                    resposta.codigo_erro = 3
+                    retorne mova(resposta)
+                }
+                se tamanho(pilha) < 2 {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                se pilha[tamanho(pilha) - 1] != no.direito {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                se pilha[tamanho(pilha) - 2] != no.esquerdo {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                // pop rcx; pop rax; resultado sempre em rax.
+                adicione_byte(codigo, 89)
+                adicione_byte(codigo, 88)
+                adicione_byte(codigo, 72)
+                se no.operador == 43 {
+                    // add rax, rcx
+                    adicione_byte(codigo, 1)
+                    adicione_byte(codigo, 200)
+                }
+                se no.operador == 45 {
+                    // sub rax, rcx
+                    adicione_byte(codigo, 41)
+                    adicione_byte(codigo, 200)
+                }
+                se no.operador == 42 {
+                    // imul rax, rcx
+                    adicione_byte(codigo, 15)
+                    adicione_byte(codigo, 175)
+                    adicione_byte(codigo, 193)
+                }
+                adicione_byte(codigo, 80)
+                remova_ultimo(pilha)
+                remova_ultimo(pilha)
+                adicione(pilha, indice)
+            }
+        }
+        indice = indice + 1
+    }
+    se tamanho(pilha) != 1 {
+        resposta.codigo_erro = 5
+        retorne mova(resposta)
+    }
+    se pilha[0] != arvore.raiz {
+        resposta.codigo_erro = 5
+        retorne mova(resposta)
+    }
+    // pop rdi; mov eax, 60 (Linux SYS_exit); syscall.
+    adicione_byte(codigo, 95)
+    adicione_byte(codigo, 184)
+    adicione_byte(codigo, 60)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 5)
+    resposta.arquivo = cabecalho(empreste(codigo))
+    resposta.unidade_erro = tamanho(unidades)
+    retorne mova(resposta)
+}
