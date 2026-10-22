@@ -1,0 +1,250 @@
+// Emissor ELF64 Linux x86-64 inicial escrito em RoteiroSimples.
+// Contrato: uma expressao inteira; o executavel termina com seu resultado
+// como status do processo (somente os oito bits baixos sao observaveis).
+// Este modulo nao compila ainda um programa RS completo.
+importe "lexico.rts" como lexico
+importe "expressoes_compilador.rts" como expressoes
+
+publico tipo EmissaoELF {
+    arquivo: bytes
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+// Escreve 1, 2, 4 ou 8 bytes little-endian de um numero NAO negativo.
+privado funcao anexar_inteiro(destino: bytes, valor: inteiro, quantidade: inteiro) -> bytes {
+    seja restante = valor
+    seja indice = 0
+    enquanto indice < quantidade {
+        adicione_byte(destino, restante % 256)
+        restante = restante / 256
+        indice = indice + 1
+    }
+    retorne mova(destino)
+}
+
+// Valida limites antes de multiplicar; nunca confia em numero muito longo.
+// O teto inicial evita estouro de inteiro durante a conversao decimal.
+privado funcao literal(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica) -> inteiro {
+    seja valor = 0
+    seja indice = 0
+    enquanto indice < unidade.comprimento_byte {
+        seja digito = fonte[unidade.inicio_byte + indice] - 48
+        se digito < 0 ou digito > 9 {
+            retorne -1
+        }
+        se valor > 100000000 {
+            retorne -1
+        }
+        valor = valor * 10 + digito
+        se valor > 1000000000 {
+            retorne -1
+        }
+        indice = indice + 1
+    }
+    retorne valor
+}
+
+// ELF64 ET_EXEC, um segmento PT_LOAD RX, codigo em offset 120.
+// Sem bibliotecas, interpretador, relocacoes ou dependencia de runtime RS.
+privado funcao cabecalho(codigo: emprestimo[bytes]) -> bytes {
+    seja imagem: bytes
+    adicione_byte(imagem, 127)
+    adicione_byte(imagem, 69)
+    adicione_byte(imagem, 76)
+    adicione_byte(imagem, 70)
+    adicione_byte(imagem, 2)
+    adicione_byte(imagem, 1)
+    adicione_byte(imagem, 1)
+    seja indice = 7
+    enquanto indice < 16 {
+        adicione_byte(imagem, 0)
+        indice = indice + 1
+    }
+    seja etapa_0 = anexar_inteiro(mova(imagem), 2, 2)
+    mova(imagem, etapa_0)
+    seja etapa_1 = anexar_inteiro(mova(imagem), 62, 2)
+    mova(imagem, etapa_1)
+    seja etapa_2 = anexar_inteiro(mova(imagem), 1, 4)
+    mova(imagem, etapa_2)
+    seja etapa_3 = anexar_inteiro(mova(imagem), 4194424, 8)
+    mova(imagem, etapa_3)
+    seja etapa_4 = anexar_inteiro(mova(imagem), 64, 8)
+    mova(imagem, etapa_4)
+    seja etapa_5 = anexar_inteiro(mova(imagem), 0, 8)
+    mova(imagem, etapa_5)
+    seja etapa_6 = anexar_inteiro(mova(imagem), 0, 4)
+    mova(imagem, etapa_6)
+    seja etapa_7 = anexar_inteiro(mova(imagem), 64, 2)
+    mova(imagem, etapa_7)
+    seja etapa_8 = anexar_inteiro(mova(imagem), 56, 2)
+    mova(imagem, etapa_8)
+    seja etapa_9 = anexar_inteiro(mova(imagem), 1, 2)
+    mova(imagem, etapa_9)
+    indice = 0
+    enquanto indice < 6 {
+        adicione_byte(imagem, 0)
+        indice = indice + 1
+    }
+    // Cabecalho de programa ELF64: tipo, flags, offset, VA, PA, tamanho.
+    seja etapa_10 = anexar_inteiro(mova(imagem), 1, 4)
+    mova(imagem, etapa_10)
+    seja etapa_11 = anexar_inteiro(mova(imagem), 5, 4)
+    mova(imagem, etapa_11)
+    seja etapa_12 = anexar_inteiro(mova(imagem), 0, 8)
+    mova(imagem, etapa_12)
+    seja etapa_13 = anexar_inteiro(mova(imagem), 4194304, 8)
+    mova(imagem, etapa_13)
+    seja etapa_14 = anexar_inteiro(mova(imagem), 4194304, 8)
+    mova(imagem, etapa_14)
+    seja etapa_15 = anexar_inteiro(mova(imagem), 120 + tamanho(codigo), 8)
+    mova(imagem, etapa_15)
+    seja etapa_16 = anexar_inteiro(mova(imagem), 120 + tamanho(codigo), 8)
+    mova(imagem, etapa_16)
+    seja etapa_17 = anexar_inteiro(mova(imagem), 4096, 8)
+    mova(imagem, etapa_17)
+    indice = 0
+    enquanto indice < tamanho(codigo) {
+        adicione_byte(imagem, codigo[indice])
+        indice = indice + 1
+    }
+    retorne mova(imagem)
+}
+
+// Emite instrucoes executadas na propria CPU, nao avalia a expressao em RS.
+// Cada no ja vem apos seus filhos na lista; a pilha de indices confere o
+// empilhamento e impede gerar codigo para uma AST inconsistente.
+// Erros: 1 parser, 2 identificador, 3 operador, 4 literal, 5 pilha,
+// 6 formato de no, 7 expressao grande demais.
+publico funcao compilar(fonte: emprestimo[bytes]) -> EmissaoELF {
+    seja resposta: EmissaoELF
+    seja unidades = lexico.analisar(fonte)
+    seja arvore = expressoes.analisar(fonte, empreste(unidades), 0, tamanho(unidades))
+    se arvore.codigo_erro != 0 {
+        resposta.codigo_erro = 1
+        resposta.unidade_erro = arvore.unidade_erro
+        retorne mova(resposta)
+    }
+    se tamanho(arvore.nos) > 30000 {
+        resposta.codigo_erro = 7
+        resposta.unidade_erro = 0
+        retorne mova(resposta)
+    }
+    seja codigo: bytes
+    seja pilha: lista[inteiro]
+    seja indice = 0
+    enquanto indice < tamanho(arvore.nos) {
+        seja no: expressoes.NoExpressao = arvore.nos[indice]
+        resposta.unidade_erro = no.unidade
+        se no.categoria == 1 {
+            seja unidade: lexico.UnidadeLexica = unidades[no.unidade]
+            seja numero = literal(fonte, unidade)
+            se numero < 0 {
+                resposta.codigo_erro = 4
+                retorne mova(resposta)
+            }
+            // mov rax, imm64; push rax
+            adicione_byte(codigo, 72)
+            adicione_byte(codigo, 184)
+            seja proximo = anexar_inteiro(mova(codigo), numero, 8)
+            mova(codigo, proximo)
+            adicione_byte(codigo, 80)
+            adicione(pilha, indice)
+        } senao {
+            se no.categoria == 2 {
+                resposta.codigo_erro = 2
+                retorne mova(resposta)
+            }
+            se no.categoria == 3 {
+                se tamanho(pilha) < 1 {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                se pilha[tamanho(pilha) - 1] != no.direito {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                se no.operador != 300 e no.operador != 301 {
+                    resposta.codigo_erro = 3
+                    retorne mova(resposta)
+                }
+                // pop rax; neg rax (apenas operador -); push rax.
+                adicione_byte(codigo, 88)
+                se no.operador == 300 {
+                    adicione_byte(codigo, 72)
+                    adicione_byte(codigo, 247)
+                    adicione_byte(codigo, 216)
+                }
+                adicione_byte(codigo, 80)
+                pilha[tamanho(pilha) - 1] = indice
+            } senao {
+                se no.categoria != 4 {
+                    resposta.codigo_erro = 6
+                    retorne mova(resposta)
+                }
+                se no.operador != 43 e no.operador != 45 e no.operador != 42 {
+                    resposta.codigo_erro = 3
+                    retorne mova(resposta)
+                }
+                se tamanho(pilha) < 2 {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                se pilha[tamanho(pilha) - 1] != no.direito {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                se pilha[tamanho(pilha) - 2] != no.esquerdo {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                // pop rcx; pop rax; resultado sempre em rax.
+                adicione_byte(codigo, 89)
+                adicione_byte(codigo, 88)
+                adicione_byte(codigo, 72)
+                se no.operador == 43 {
+                    // add rax, rcx
+                    adicione_byte(codigo, 1)
+                    adicione_byte(codigo, 200)
+                }
+                se no.operador == 45 {
+                    // sub rax, rcx
+                    adicione_byte(codigo, 41)
+                    adicione_byte(codigo, 200)
+                }
+                se no.operador == 42 {
+                    // imul rax, rcx
+                    adicione_byte(codigo, 15)
+                    adicione_byte(codigo, 175)
+                    adicione_byte(codigo, 193)
+                }
+                adicione_byte(codigo, 80)
+                remova_ultimo(pilha)
+                remova_ultimo(pilha)
+                adicione(pilha, indice)
+            }
+        }
+        indice = indice + 1
+    }
+    se tamanho(pilha) != 1 {
+        resposta.codigo_erro = 5
+        retorne mova(resposta)
+    }
+    se pilha[0] != arvore.raiz {
+        resposta.codigo_erro = 5
+        retorne mova(resposta)
+    }
+    // pop rdi; mov eax, 60 (Linux SYS_exit); syscall.
+    adicione_byte(codigo, 95)
+    adicione_byte(codigo, 184)
+    adicione_byte(codigo, 60)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 5)
+    seja imagem_final = cabecalho(empreste(codigo))
+    mova(resposta.arquivo, imagem_final)
+    resposta.unidade_erro = tamanho(unidades)
+    retorne mova(resposta)
+}
