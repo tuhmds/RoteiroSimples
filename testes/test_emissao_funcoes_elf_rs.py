@@ -133,6 +133,7 @@ class TestesEmissaoFuncoesELFRS(unittest.TestCase):
             "funcao f(a: inteiro, a: inteiro) -> inteiro {\n retorne a\n}\ninicio {\n seja x = f(1, 2)\n}",
             "funcao f() -> inteiro {\n retorne 1\n}\nfuncao f() -> inteiro {\n retorne 2\n}\ninicio {\n seja x = f()\n}",
             "funcao f(a: inteiro) -> inteiro {\n retorne a\n}\ninicio {\n seja x = f()\n}",
+            "funcao f(a: inteiro) -> inteiro {\n retorne a\n}\ninicio {\n seja x = f(1,)\n}",
             "funcao f(a: inteiro) -> inteiro {\n retorne a\n}\ninicio {\n seja x = f(1, 2)\n}",
             "funcao f() -> inteiro {\n retorne 1\n}\ninicio {\n seja x = g()\n}",
             "funcao f() -> inteiro {\n retorne 1\n}\ninicio {\n seja x = f()\n escreva(x)\n}",
