@@ -182,6 +182,60 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                     self.assertIsNone(dados)
                     self.assertIsNone(status)
 
+    def test_chamadas_aninhadas_nos_argumentos(self):
+        casos = (
+            ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "funcao soma(a: inteiro, b: inteiro) -> inteiro {\n retorne a + b\n}\n"
+             "funcao calcular(n: inteiro) -> inteiro {\n"
+             " retorne soma(dobro(n), soma(2, 3))\n}\n"
+             "inicio {\n seja r = calcular(5)\n}", 15),
+            ("funcao base() -> inteiro {\n retorne 7\n}\n"
+             "funcao soma(a: inteiro, b: inteiro) -> inteiro {\n retorne a + b\n}\n"
+             "inicio {\n seja r = soma(base(), base())\n}", 14),
+            ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "funcao soma(a: inteiro, b: inteiro) -> inteiro {\n retorne a + b\n}\n"
+             "inicio {\n seja r = soma(dobro(2 + 3), dobro(4))\n}", 18),
+            ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "funcao soma(a: inteiro, b: inteiro) -> inteiro {\n retorne a + b\n}\n"
+             "funcao calcular(x: inteiro) -> inteiro {\n"
+             " se x > 1 {\n retorne soma(dobro(x), 6)\n }\n"
+             " retorne soma(1, 2)\n}\n"
+             "inicio {\n seja r = calcular(4)\n}", 14),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertGreaterEqual(dados[127:].count(bytes((232,))), 2)
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
+    def test_chamadas_aninhadas_invalidas(self):
+        fontes = (
+            "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+            "inicio {\n seja r = f(f(2), 3)\n}",
+            "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+            "inicio {\n seja r = f(f(2),)\n}",
+            "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+            "inicio {\n seja r = f(nao_existe(2))\n}",
+            "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+            "inicio {\n seja r = f(f(2)) + 1\n}",
+            "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+            "inicio {\n seja r = f(f(2)) (3)\n}",
+        )
+        fontes += (
+            "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+            "inicio {\n seja r = " + "f(" * 10 + "1" + ")" * 10 + "\n}",
+        )
+        for nivel in (0, 8):
+            for fonte in fontes:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertNotEqual(codigo, 0)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
     def test_programas_diferenciais_sem_recursao(self):
         rng = random.Random(42061)
         for _ in range(10):
