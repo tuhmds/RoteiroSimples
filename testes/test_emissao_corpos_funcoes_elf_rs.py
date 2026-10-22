@@ -139,6 +139,49 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                     if status is not None:
                         self.assertEqual(status, esperado % 256)
 
+    def test_retorno_direto_de_chamada(self):
+        casos = (
+            ("funcao aumentar(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+             "funcao encaminhar(x: inteiro) -> inteiro {\n retorne aumentar(x)\n}\n"
+             "inicio {\n seja resultado = encaminhar(11)\n}", 12),
+            ("funcao base() -> inteiro {\n retorne 7\n}\n"
+             "funcao encaminhar() -> inteiro {\n retorne base()\n}\n"
+             "inicio {\n seja resultado = encaminhar()\n}", 7),
+            ("funcao soma(a: inteiro, b: inteiro) -> inteiro {\n retorne a + b\n}\n"
+             "funcao responder(x: inteiro) -> inteiro {\n retorne soma(x, 5)\n}\n"
+             "inicio {\n seja resultado = responder(10)\n}", 15),
+            ("funcao negativo(n: inteiro) -> inteiro {\n retorne 0 - n\n}\n"
+             "funcao decidir(n: inteiro) -> inteiro {\n"
+             " se n > 0 {\n retorne negativo(n)\n }\n"
+             " retorne n\n}\n"
+             "inicio {\n seja resultado = decidir(3)\n}", 253),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIn(bytes((232,)), dados[127:])  # call rel32
+                    self.assertIn(bytes((201, 195)), dados[127:])  # leave; ret
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
+    def test_retorno_direto_invalido(self):
+        fontes = (
+            "funcao f(n: inteiro) -> inteiro {\n retorne inexistente(n)\n}\n"
+            "inicio { seja r = f(2) }",
+            "funcao base(n: inteiro) -> inteiro {\n retorne n\n}\n"
+            "funcao f() -> inteiro {\n retorne base()\n}\n"
+            "inicio { seja r = f() }",
+        )
+        for nivel in (0, 8):
+            for fonte in fontes:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertNotEqual(codigo, 0)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
     def test_programas_diferenciais_sem_recursao(self):
         rng = random.Random(42061)
         for _ in range(10):
