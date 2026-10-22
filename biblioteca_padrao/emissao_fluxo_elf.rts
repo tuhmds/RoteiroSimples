@@ -437,7 +437,8 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoFluxoELF {
                 seja anterior = corrigir(mova(codigo), retorno, quadro.inicio_condicao)
                 mova(codigo, anterior)
             }
-            seja proximo = corrigir(mova(codigo), quadro.posicao_deslocamento, tamanho(codigo))
+            seja destino_desvio = tamanho(codigo)
+            seja proximo = corrigir(mova(codigo), quadro.posicao_deslocamento, destino_desvio)
             mova(codigo, proximo)
             i = i + 1
             continue
