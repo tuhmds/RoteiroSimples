@@ -1,0 +1,582 @@
+// Fluxo de controle ELF64 x86-64 escrito em RS.
+// Subconjunto: inicio, declaracoes inteiras de topo, atribuicoes,
+// se sem senao e enquanto com comparacoes inteiras.
+// Nao e ainda um compilador RS autonomo.
+importe "lexico.rts" como lexico
+importe "expressoes_compilador.rts" como expressoes
+importe "emissao_elf_minima.rts" como elf
+
+publico tipo ResultadoFluxoELF {
+    arquivo: bytes
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+privado tipo Trecho {
+    codigo: bytes
+    erro: inteiro
+    unidade: inteiro
+}
+
+privado tipo Controle {
+    // 1 se; 2 enquanto
+    classe: inteiro
+    inicio_condicao: inteiro
+    posicao_deslocamento: inteiro
+}
+
+privado funcao igual(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, nome: emprestimo[texto]) -> logico {
+    se unidade.classe != 1 ou unidade.comprimento_byte != tamanho(nome) {
+        retorne falso
+    }
+    seja i = 0
+    enquanto i < tamanho(nome) {
+        se fonte[unidade.inicio_byte + i] != byte_em(nome, i) {
+            retorne falso
+        }
+        i = i + 1
+    }
+    retorne verdadeiro
+}
+
+privado funcao simbolo(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, valor: inteiro) -> logico {
+    se unidade.classe != 4 ou unidade.comprimento_byte != 1 {
+        retorne falso
+    }
+    retorne fonte[unidade.inicio_byte] == valor
+}
+
+privado funcao mesmo_nome(fonte: emprestimo[bytes], a: lexico.UnidadeLexica, b: lexico.UnidadeLexica) -> logico {
+    se a.classe != 1 ou b.classe != 1 ou a.comprimento_byte != b.comprimento_byte {
+        retorne falso
+    }
+    seja i = 0
+    enquanto i < a.comprimento_byte {
+        se fonte[a.inicio_byte + i] != fonte[b.inicio_byte + i] {
+            retorne falso
+        }
+        i = i + 1
+    }
+    retorne verdadeiro
+}
+
+privado funcao resolver(fonte: emprestimo[bytes], nomes: emprestimo[lista[lexico.UnidadeLexica]], nome: lexico.UnidadeLexica) -> inteiro {
+    seja i = 0
+    enquanto i < tamanho(nomes) {
+        seja candidato: lexico.UnidadeLexica = nomes[i]
+        se mesmo_nome(fonte, candidato, nome) {
+            retorne i
+        }
+        i = i + 1
+    }
+    retorne -1
+}
+
+// Posições de [rbp-8*(indice+1)] em deslocamento little endian signed32.
+privado funcao endereco(codigo: bytes, indice: inteiro) -> bytes {
+    retorne elf.anexar_inteiro(mova(codigo), 4294967296 - (indice + 1) * 8, 4)
+}
+
+// Modifica somente o campo rel32 previamente reservado e validado.
+privado funcao corrigir(codigo: bytes, posicao: inteiro, destino: inteiro) -> bytes {
+    seja deslocamento = destino - (posicao + 4)
+    se deslocamento < 0 {
+        deslocamento = deslocamento + 4294967296
+    }
+    seja i = 0
+    enquanto i < 4 {
+        codigo[posicao + i] = deslocamento % 256
+        deslocamento = deslocamento / 256
+        i = i + 1
+    }
+    retorne mova(codigo)
+}
+
+// Uma expressao aritmetica por vez, usando AST da biblioteca RS.
+// Erro 4: parser/literal; 5: nome indefinido; 6: AST/operador.
+privado funcao emitir_expressao(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], primeiro: inteiro, ultimo: inteiro) -> Trecho {
+    seja resposta: Trecho
+    se primeiro >= ultimo {
+        resposta.erro = 4
+        resposta.unidade = primeiro
+        retorne mova(resposta)
+    }
+    seja arvore = expressoes.analisar(fonte, unidades, primeiro, ultimo)
+    se arvore.codigo_erro != 0 ou tamanho(arvore.nos) > 2048 {
+        resposta.erro = 4
+        resposta.unidade = arvore.unidade_erro
+        retorne mova(resposta)
+    }
+    seja pilha: lista[inteiro]
+    seja i = 0
+    enquanto i < tamanho(arvore.nos) {
+        seja no: expressoes.NoExpressao = arvore.nos[i]
+        resposta.unidade = no.unidade
+        se no.categoria == 1 {
+            seja token: lexico.UnidadeLexica = unidades[no.unidade]
+            seja numero = elf.literal(fonte, token)
+            se numero < 0 {
+                resposta.erro = 4
+                retorne mova(resposta)
+            }
+            adicione_byte(codigo, 72)
+            adicione_byte(codigo, 184)
+            seja literal_bytes = elf.anexar_inteiro(mova(codigo), numero, 8)
+            mova(codigo, literal_bytes)
+            adicione_byte(codigo, 80)
+            adicione(pilha, i)
+        } senao {
+            se no.categoria == 2 {
+                seja token: lexico.UnidadeLexica = unidades[no.unidade]
+                seja indice = resolver(fonte, nomes, token)
+                se indice < 0 {
+                    resposta.erro = 5
+                    retorne mova(resposta)
+                }
+                adicione_byte(codigo, 72)
+                adicione_byte(codigo, 139)
+                adicione_byte(codigo, 133)
+                seja carregado = endereco(mova(codigo), indice)
+                mova(codigo, carregado)
+                adicione_byte(codigo, 80)
+                adicione(pilha, i)
+            } senao {
+                se no.categoria == 3 {
+                    se tamanho(pilha) < 1 {
+                        resposta.erro = 6
+                        retorne mova(resposta)
+                    }
+                    se pilha[tamanho(pilha) - 1] != no.direito {
+                        resposta.erro = 6
+                        retorne mova(resposta)
+                    }
+                    se no.operador != 300 e no.operador != 301 {
+                        resposta.erro = 6
+                        retorne mova(resposta)
+                    }
+                    adicione_byte(codigo, 88)
+                    se no.operador == 300 {
+                        adicione_byte(codigo, 72)
+                        adicione_byte(codigo, 247)
+                        adicione_byte(codigo, 216)
+                    }
+                    adicione_byte(codigo, 80)
+                    pilha[tamanho(pilha) - 1] = i
+                } senao {
+                    se no.categoria != 4 {
+                        resposta.erro = 6
+                        retorne mova(resposta)
+                    }
+                    se no.operador != 43 e no.operador != 45 e no.operador != 42 {
+                        resposta.erro = 6
+                        retorne mova(resposta)
+                    }
+                    se tamanho(pilha) < 2 {
+                        resposta.erro = 6
+                        retorne mova(resposta)
+                    }
+                    se pilha[tamanho(pilha) - 1] != no.direito ou pilha[tamanho(pilha) - 2] != no.esquerdo {
+                        resposta.erro = 6
+                        retorne mova(resposta)
+                    }
+                    adicione_byte(codigo, 89)
+                    adicione_byte(codigo, 88)
+                    adicione_byte(codigo, 72)
+                    se no.operador == 43 {
+                        adicione_byte(codigo, 1)
+                        adicione_byte(codigo, 200)
+                    }
+                    se no.operador == 45 {
+                        adicione_byte(codigo, 41)
+                        adicione_byte(codigo, 200)
+                    }
+                    se no.operador == 42 {
+                        adicione_byte(codigo, 15)
+                        adicione_byte(codigo, 175)
+                        adicione_byte(codigo, 193)
+                    }
+                    adicione_byte(codigo, 80)
+                    remova_ultimo(pilha)
+                    remova_ultimo(pilha)
+                    adicione(pilha, i)
+                }
+            }
+        }
+        i = i + 1
+    }
+    se tamanho(pilha) != 1 ou pilha[0] != arvore.raiz {
+        resposta.erro = 6
+        resposta.unidade = primeiro
+        retorne mova(resposta)
+    }
+    mova(resposta.codigo, codigo)
+    retorne mova(resposta)
+}
+
+// Retorna o jcc que salta quando a comparacao signed64 e falsa.
+privado funcao salto_falso(fonte: emprestimo[bytes], operador: lexico.UnidadeLexica) -> inteiro {
+    seja primeiro = fonte[operador.inicio_byte]
+    se operador.comprimento_byte == 1 {
+        se primeiro == 60 {
+            retorne 141 // >=
+        }
+        se primeiro == 62 {
+            retorne 142 // <=
+        }
+    }
+    se operador.comprimento_byte == 2 {
+        seja segundo = fonte[operador.inicio_byte + 1]
+        se primeiro == 60 e segundo == 61 {
+            retorne 143 // >
+        }
+        se primeiro == 62 e segundo == 61 {
+            retorne 140 // <
+        }
+        se primeiro == 61 e segundo == 61 {
+            retorne 133 // !=
+        }
+        se primeiro == 33 e segundo == 61 {
+            retorne 132 // ==
+        }
+    }
+    retorne -1
+}
+
+// Compila o predicado formado por: expressao COMPARADOR expressao.
+// O operador relacional externo nao faz parte do parser aritmetico.
+privado funcao emitir_condicao(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], primeiro: inteiro, ultimo: inteiro) -> Trecho {
+    seja resposta: Trecho
+    seja posicao = -1
+    seja opcode = -1
+    seja nivel = 0
+    seja i = primeiro
+    enquanto i < ultimo {
+        seja token: lexico.UnidadeLexica = unidades[i]
+        se simbolo(fonte, token, 40) {
+            nivel = nivel + 1
+        }
+        se simbolo(fonte, token, 41) {
+            nivel = nivel - 1
+        }
+        se nivel < 0 {
+            resposta.erro = 7
+            resposta.unidade = i
+            retorne mova(resposta)
+        }
+        se nivel == 0 {
+            seja encontrado = salto_falso(fonte, token)
+            se encontrado >= 0 {
+                se posicao >= 0 {
+                    resposta.erro = 7
+                    resposta.unidade = i
+                    retorne mova(resposta)
+                }
+                posicao = i
+                opcode = encontrado
+            }
+        }
+        i = i + 1
+    }
+    se nivel != 0 ou posicao <= primeiro ou posicao >= ultimo - 1 {
+        resposta.erro = 7
+        resposta.unidade = primeiro
+        retorne mova(resposta)
+    }
+    seja esquerda = emitir_expressao(mova(codigo), fonte, unidades, nomes, primeiro, posicao)
+    se esquerda.erro != 0 {
+        resposta.erro = esquerda.erro
+        resposta.unidade = esquerda.unidade
+        retorne mova(resposta)
+    }
+    mova(codigo, esquerda.codigo)
+    seja direita = emitir_expressao(mova(codigo), fonte, unidades, nomes, posicao + 1, ultimo)
+    se direita.erro != 0 {
+        resposta.erro = direita.erro
+        resposta.unidade = direita.unidade
+        retorne mova(resposta)
+    }
+    mova(codigo, direita.codigo)
+    // pop rcx; pop rax; cmp rax, rcx; jcc falso rel32.
+    adicione_byte(codigo, 89)
+    adicione_byte(codigo, 88)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 57)
+    adicione_byte(codigo, 200)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, opcode)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 0)
+    mova(resposta.codigo, codigo)
+    retorne mova(resposta)
+}
+
+// Calcula o fim da expressao de atribuicao na mesma linha.
+privado funcao fim_expressao(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], primeiro_token: inteiro, linha: inteiro) -> inteiro {
+    seja i = primeiro_token
+    enquanto i < tamanho(unidades) {
+        seja token: lexico.UnidadeLexica = unidades[i]
+        se token.linha != linha {
+            pare
+        }
+        se simbolo(fonte, token, 59) ou simbolo(fonte, token, 125) {
+            pare
+        }
+        i = i + 1
+    }
+    retorne i
+}
+
+// Codigos de erro: 1 lexico; 2 estrutura; 3 instrucao nao aceita;
+// 4 expressao; 5 nome nao definido; 6 AST/operador; 7 predicado;
+// 8 limite de tamanho/profundidade.
+publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoFluxoELF {
+    seja resposta: ResultadoFluxoELF
+    seja unidades = lexico.analisar(fonte)
+    se lexico.primeiro_erro(empreste(unidades)) >= 0 {
+        resposta.codigo_erro = 1
+        retorne mova(resposta)
+    }
+    seja total = tamanho(unidades)
+    se total < 6 {
+        resposta.codigo_erro = 2
+        retorne mova(resposta)
+    }
+    seja principal: texto = "inicio"
+    seja declaracao: texto = "seja"
+    seja condicional: texto = "se"
+    seja repeticao: texto = "enquanto"
+    seja abre: lexico.UnidadeLexica = unidades[1]
+    seja fecha: lexico.UnidadeLexica = unidades[total - 1]
+    seja primeira_unidade: lexico.UnidadeLexica = unidades[0]
+    se nao igual(fonte, primeira_unidade, empreste(principal)) ou nao simbolo(fonte, abre, 123) ou nao simbolo(fonte, fecha, 125) {
+        resposta.codigo_erro = 2
+        retorne mova(resposta)
+    }
+
+    // Exigir balanceamento integral, inclusive do bloco inicio.
+    // Um fechamento de enquanto nao pode servir como fechamento do inicio.
+    seja nivel_chaves = 0
+    seja posicao_chaves = 0
+    enquanto posicao_chaves < total {
+        seja unidade_chaves: lexico.UnidadeLexica = unidades[posicao_chaves]
+        se simbolo(fonte, unidade_chaves, 123) {
+            nivel_chaves = nivel_chaves + 1
+        }
+        se simbolo(fonte, unidade_chaves, 125) {
+            nivel_chaves = nivel_chaves - 1
+            se nivel_chaves < 0 {
+                resposta.codigo_erro = 2
+                resposta.unidade_erro = posicao_chaves
+                retorne mova(resposta)
+            }
+            se nivel_chaves == 0 e posicao_chaves != total - 1 {
+                resposta.codigo_erro = 2
+                resposta.unidade_erro = posicao_chaves
+                retorne mova(resposta)
+            }
+        }
+        posicao_chaves = posicao_chaves + 1
+    }
+    se nivel_chaves != 0 {
+        resposta.codigo_erro = 2
+        retorne mova(resposta)
+    }
+
+    // Reservar previamente espaco para no maximo 128 locais do topo.
+    seja quantidade = 0
+    seja i = 2
+    enquanto i < total - 1 {
+        seja token: lexico.UnidadeLexica = unidades[i]
+        se igual(fonte, token, empreste(declaracao)) {
+            quantidade = quantidade + 1
+        }
+        i = i + 1
+    }
+    se quantidade < 1 ou quantidade > 128 ou total > 12000 {
+        resposta.codigo_erro = 8
+        retorne mova(resposta)
+    }
+    seja codigo: bytes
+    adicione_byte(codigo, 85)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 229)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 129)
+    adicione_byte(codigo, 236)
+    seja reserva = elf.anexar_inteiro(mova(codigo), quantidade * 8, 4)
+    mova(codigo, reserva)
+
+    seja nomes: lista[lexico.UnidadeLexica]
+    seja controles: lista[Controle]
+    i = 2
+    enquanto i < total {
+        resposta.unidade_erro = i
+        seja token: lexico.UnidadeLexica = unidades[i]
+        se simbolo(fonte, token, 125) {
+            se tamanho(controles) == 0 {
+                se i != total - 1 {
+                    resposta.codigo_erro = 2
+                    retorne mova(resposta)
+                }
+                i = i + 1
+                pare
+            }
+            seja quadro: Controle = controles[tamanho(controles) - 1]
+            remova_ultimo(controles)
+            se quadro.classe == 2 {
+                // jmp rel32 para o inicio da condicao do enquanto.
+                adicione_byte(codigo, 233)
+                seja retorno = tamanho(codigo)
+                adicione_byte(codigo, 0)
+                adicione_byte(codigo, 0)
+                adicione_byte(codigo, 0)
+                adicione_byte(codigo, 0)
+                seja anterior = corrigir(mova(codigo), retorno, quadro.inicio_condicao)
+                mova(codigo, anterior)
+            }
+            seja destino_desvio = tamanho(codigo)
+            seja proximo = corrigir(mova(codigo), quadro.posicao_deslocamento, destino_desvio)
+            mova(codigo, proximo)
+            i = i + 1
+            continue
+        }
+        se igual(fonte, token, empreste(condicional)) ou igual(fonte, token, empreste(repeticao)) {
+            se tamanho(controles) >= 32 {
+                resposta.codigo_erro = 8
+                retorne mova(resposta)
+            }
+            seja classe = 1
+            se igual(fonte, token, empreste(repeticao)) {
+                classe = 2
+            }
+            seja inicio_condicao = tamanho(codigo)
+            seja cursor = i + 1
+            seja nivel = 0
+            enquanto cursor < total {
+                seja atual: lexico.UnidadeLexica = unidades[cursor]
+                se simbolo(fonte, atual, 40) {
+                    nivel = nivel + 1
+                }
+                se simbolo(fonte, atual, 41) {
+                    nivel = nivel - 1
+                }
+                se nivel < 0 {
+                    pare
+                }
+                se nivel == 0 {
+                    se simbolo(fonte, atual, 123) {
+                        pare
+                    }
+                }
+                cursor = cursor + 1
+            }
+            se cursor >= total ou cursor == i + 1 ou nivel != 0 {
+                resposta.codigo_erro = 7
+                retorne mova(resposta)
+            }
+            seja abertura: lexico.UnidadeLexica = unidades[cursor]
+            se nao simbolo(fonte, abertura, 123) {
+                resposta.codigo_erro = 7
+                retorne mova(resposta)
+            }
+            seja condicao = emitir_condicao(mova(codigo), fonte, empreste(unidades), empreste(nomes), i + 1, cursor)
+            se condicao.erro != 0 {
+                resposta.codigo_erro = condicao.erro
+                resposta.unidade_erro = condicao.unidade
+                retorne mova(resposta)
+            }
+            mova(codigo, condicao.codigo)
+            seja quadro: Controle
+            quadro.classe = classe
+            quadro.inicio_condicao = inicio_condicao
+            quadro.posicao_deslocamento = tamanho(codigo) - 4
+            adicione(controles, quadro)
+            i = cursor + 1
+            continue
+        }
+        se simbolo(fonte, token, 123) {
+            resposta.codigo_erro = 3
+            retorne mova(resposta)
+        }
+
+        seja eh_declaracao = igual(fonte, token, empreste(declaracao))
+        seja posicao_nome = i
+        se eh_declaracao {
+            se tamanho(controles) != 0 {
+                resposta.codigo_erro = 3
+                retorne mova(resposta)
+            }
+            posicao_nome = i + 1
+        }
+        se posicao_nome + 2 >= total {
+            resposta.codigo_erro = 3
+            retorne mova(resposta)
+        }
+        seja nome: lexico.UnidadeLexica = unidades[posicao_nome]
+        seja atribuicao: lexico.UnidadeLexica = unidades[posicao_nome + 1]
+        se nome.classe != 1 ou nao simbolo(fonte, atribuicao, 61) {
+            resposta.codigo_erro = 3
+            retorne mova(resposta)
+        }
+        seja indice_nome = resolver(fonte, empreste(nomes), nome)
+        se eh_declaracao {
+            se indice_nome >= 0 {
+                resposta.codigo_erro = 3
+                retorne mova(resposta)
+            }
+            indice_nome = tamanho(nomes)
+        } senao {
+            se indice_nome < 0 {
+                resposta.codigo_erro = 5
+                retorne mova(resposta)
+            }
+        }
+        seja valor_inicio = posicao_nome + 2
+        seja valor_fim = fim_expressao(fonte, empreste(unidades), valor_inicio, nome.linha)
+        seja trecho = emitir_expressao(mova(codigo), fonte, empreste(unidades), empreste(nomes), valor_inicio, valor_fim)
+        se trecho.erro != 0 {
+            resposta.codigo_erro = trecho.erro
+            resposta.unidade_erro = trecho.unidade
+            retorne mova(resposta)
+        }
+        mova(codigo, trecho.codigo)
+        // pop rax; mov [rbp - deslocamento], rax; mov rdi, rax
+        adicione_byte(codigo, 88)
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 137)
+        adicione_byte(codigo, 133)
+        seja gravado = endereco(mova(codigo), indice_nome)
+        mova(codigo, gravado)
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 137)
+        adicione_byte(codigo, 199)
+        se eh_declaracao {
+            adicione(nomes, nome)
+        }
+        i = valor_fim
+        se i < total {
+            seja separador: lexico.UnidadeLexica = unidades[i]
+            se simbolo(fonte, separador, 59) {
+                i = i + 1
+            }
+        }
+    }
+    se i != total ou tamanho(controles) != 0 ou tamanho(nomes) != quantidade {
+        resposta.codigo_erro = 2
+        retorne mova(resposta)
+    }
+    adicione_byte(codigo, 184)
+    adicione_byte(codigo, 60)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 5)
+    seja imagem_final = elf.cabecalho(empreste(codigo))
+    mova(resposta.arquivo, imagem_final)
+    resposta.unidade_erro = total
+    retorne mova(resposta)
+}

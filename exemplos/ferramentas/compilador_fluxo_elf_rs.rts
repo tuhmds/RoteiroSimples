@@ -1,0 +1,17 @@
+// Compila fluxo inteiro restrito de codigo_fonte.rts em ELF64 Linux.
+// O executavel gerado devolve a ultima atribuicao em exit(status).
+importe "padrao/emissao_fluxo_elf.rts" como fluxo
+
+inicio {
+    seja fonte: bytes
+    carregue_arquivo("codigo_fonte.rts", fonte)
+    seja resultado = fluxo.compilar(empreste(fonte))
+    escreva(resultado.codigo_erro)
+    escreva(resultado.unidade_erro)
+    se resultado.codigo_erro == 0 {
+        seja imagem: bytes
+        mova(imagem, resultado.arquivo)
+        grave_arquivo("resultado_fluxo_elf", imagem)
+        escreva(tamanho(imagem))
+    }
+}
