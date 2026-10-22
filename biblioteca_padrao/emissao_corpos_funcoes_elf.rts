@@ -165,6 +165,163 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         retorne mova(resposta)
     }
     seja primeiro_valor: lexico.UnidadeLexica = unidades[primeiro]
+    // Preservar o parser aritmetico original quando nao houver chamada.
+    // Somente expressoes com uma chamada entram na decomposicao abaixo.
+    seja contem_chamada = falso
+    seja indice_busca = primeiro
+    enquanto indice_busca + 1 < ultimo {
+        seja atual_busca: lexico.UnidadeLexica = unidades[indice_busca]
+        seja seguinte_busca: lexico.UnidadeLexica = unidades[indice_busca + 1]
+        se atual_busca.classe == 1 e fluxo.simbolo(fonte, seguinte_busca, 40) {
+            contem_chamada = verdadeiro
+        }
+        indice_busca = indice_busca + 1
+    }
+    se contem_chamada {
+        // Encontrar o operador binario externo de menor precedencia.
+        // Empates escolhem o ultimo operador, preservando associatividade.
+        seja profundidade = 0
+        seja corte = -1
+        seja prioridade_corte = 3
+        seja operador_corte = 0
+        seja i = primeiro
+        enquanto i < ultimo {
+            seja atual: lexico.UnidadeLexica = unidades[i]
+            se fluxo.simbolo(fonte, atual, 40) {
+                profundidade = profundidade + 1
+            }
+            se fluxo.simbolo(fonte, atual, 41) {
+                profundidade = profundidade - 1
+                se profundidade < 0 {
+                    resposta.codigo_erro = 6
+                    resposta.unidade_erro = i
+                    retorne mova(resposta)
+                }
+            }
+            se profundidade == 0 e i > primeiro e atual.classe == 4 e atual.comprimento_byte == 1 {
+                seja anterior: lexico.UnidadeLexica = unidades[i - 1]
+                seja anterior_valor = anterior.classe == 1 ou anterior.classe == 2 ou fluxo.simbolo(fonte, anterior, 41)
+                se anterior_valor {
+                    seja sinal = fonte[atual.inicio_byte]
+                    seja prioridade = 0
+                    se sinal == 43 ou sinal == 45 {
+                        prioridade = 1
+                    }
+                    se sinal == 42 {
+                        prioridade = 2
+                    }
+                    se prioridade > 0 e prioridade <= prioridade_corte {
+                        corte = i
+                        prioridade_corte = prioridade
+                        operador_corte = sinal
+                    }
+                }
+            }
+            i = i + 1
+        }
+        se profundidade != 0 {
+            resposta.codigo_erro = 6
+            retorne mova(resposta)
+        }
+        se corte >= 0 {
+            // Cada operando deixa um inteiro na pilha, como o backend original.
+            seja esquerda = emitir_valor(mova(codigo), fonte, unidades, nomes, assinadas, primeiro, corte, funcao_atual, nivel + 1)
+            se esquerda.codigo_erro != 0 {
+                resposta.codigo_erro = esquerda.codigo_erro
+                resposta.unidade_erro = esquerda.unidade_erro
+                retorne mova(resposta)
+            }
+            mova(codigo, esquerda.codigo)
+            seja j = 0
+            enquanto j < tamanho(esquerda.ligacoes) {
+                seja ligacao_esquerda: Ligacao = esquerda.ligacoes[j]
+                adicione(resposta.ligacoes, ligacao_esquerda)
+                j = j + 1
+            }
+            seja direita = emitir_valor(mova(codigo), fonte, unidades, nomes, assinadas, corte + 1, ultimo, funcao_atual, nivel + 1)
+            se direita.codigo_erro != 0 {
+                resposta.codigo_erro = direita.codigo_erro
+                resposta.unidade_erro = direita.unidade_erro
+                retorne mova(resposta)
+            }
+            mova(codigo, direita.codigo)
+            j = 0
+            enquanto j < tamanho(direita.ligacoes) {
+                seja ligacao_direita: Ligacao = direita.ligacoes[j]
+                adicione(resposta.ligacoes, ligacao_direita)
+                j = j + 1
+            }
+            adicione_byte(codigo, 89) // pop rcx: direita
+            adicione_byte(codigo, 88) // pop rax: esquerda
+            adicione_byte(codigo, 72)
+            se operador_corte == 43 {
+                adicione_byte(codigo, 1)
+                adicione_byte(codigo, 200) // add rax, rcx
+            }
+            se operador_corte == 45 {
+                adicione_byte(codigo, 41)
+                adicione_byte(codigo, 200) // sub rax, rcx
+            }
+            se operador_corte == 42 {
+                adicione_byte(codigo, 15)
+                adicione_byte(codigo, 175)
+                adicione_byte(codigo, 193) // imul rax, rcx
+            }
+            adicione_byte(codigo, 80) // push rax
+            mova(resposta.codigo, codigo)
+            retorne mova(resposta)
+        }
+        // Um par externo de parenteses precisa envolver todo o trecho.
+        se fluxo.simbolo(fonte, primeiro_valor, 40) {
+            seja profundidade_externa = 0
+            seja externa = verdadeiro
+            i = primeiro
+            enquanto i < ultimo {
+                seja token_externo: lexico.UnidadeLexica = unidades[i]
+                se fluxo.simbolo(fonte, token_externo, 40) {
+                    profundidade_externa = profundidade_externa + 1
+                }
+                se fluxo.simbolo(fonte, token_externo, 41) {
+                    profundidade_externa = profundidade_externa - 1
+                    se profundidade_externa == 0 e i != ultimo - 1 {
+                        externa = falso
+                    }
+                }
+                i = i + 1
+            }
+            se externa e profundidade_externa == 0 {
+                retorne emitir_valor(mova(codigo), fonte, unidades, nomes, assinadas, primeiro + 1, ultimo - 1, funcao_atual, nivel + 1)
+            }
+        }
+        // Sinais unarios na frente de chamadas e subexpressoes.
+        se primeiro_valor.classe == 4 e primeiro_valor.comprimento_byte == 1 {
+            seja sinal_inicial = fonte[primeiro_valor.inicio_byte]
+            se sinal_inicial == 43 ou sinal_inicial == 45 {
+                seja interior = emitir_valor(mova(codigo), fonte, unidades, nomes, assinadas, primeiro + 1, ultimo, funcao_atual, nivel + 1)
+                se interior.codigo_erro != 0 {
+                    resposta.codigo_erro = interior.codigo_erro
+                    resposta.unidade_erro = interior.unidade_erro
+                    retorne mova(resposta)
+                }
+                mova(codigo, interior.codigo)
+                seja j = 0
+                enquanto j < tamanho(interior.ligacoes) {
+                    seja ligacao_interior: Ligacao = interior.ligacoes[j]
+                    adicione(resposta.ligacoes, ligacao_interior)
+                    j = j + 1
+                }
+                se sinal_inicial == 45 {
+                    adicione_byte(codigo, 88) // pop rax
+                    adicione_byte(codigo, 72)
+                    adicione_byte(codigo, 247)
+                    adicione_byte(codigo, 216) // neg rax
+                    adicione_byte(codigo, 80) // push rax
+                }
+                mova(resposta.codigo, codigo)
+                retorne mova(resposta)
+            }
+        }
+    }
     seja chamada = falso
     se primeiro + 1 < ultimo {
         seja segundo_valor: lexico.UnidadeLexica = unidades[primeiro + 1]
