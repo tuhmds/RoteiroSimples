@@ -273,7 +273,7 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
     def test_chamadas_com_operadores_invalidas(self):
         fontes = (
             "funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
-            "inicio {\n seja r = dobro(3) / 0 / 0 / 0 /**/\n}",
+            "inicio {\n seja r = dobro(3) ** 2\n}",
             "funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
             "inicio {\n seja r = dobro(3) +\n}",
             "funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
