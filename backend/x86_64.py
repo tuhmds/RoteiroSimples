@@ -1,5 +1,5 @@
 """Emissão nativa de instruções AMD64, leitura/escrita e saltos."""
-from . import consulta_arquivo
+from . import consulta_arquivo, graficos_windows
 import struct
 from compilador.erros import ErroCompilacao
 from compilador.propriedade import eh_proprietario, eh_emprestimo, eh_texto, eh_bytes, TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO, TIPO_BYTES_DINAMICOS, TIPO_BYTES_EMPRESTADOS
@@ -1166,6 +1166,8 @@ def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes
             elif op[0] in ('atribua_byte', 'atribua_byte_dinamico'):
                 bytes_seguros.substituir(g, op[1], op[2], op[3], variaveis, tipos,
                     windows, expressao, deslocamento_variavel)
+            elif op[0] == 'janela_mensagem':
+                graficos_windows.emitir_dialogo(g, op[1], op[2], windows)
             elif op[0] == 'imprima_texto':
                 if tipos[op[1]] in (TIPO_TEXTO_DINAMICO, TIPO_TEXTO_EMPRESTADO):
                     textos_dinamicos.imprimir(g, op[1], variaveis, tipos, windows)
