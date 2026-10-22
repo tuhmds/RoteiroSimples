@@ -12,7 +12,7 @@ publico tipo ResultadoFluxoELF {
     unidade_erro: inteiro
 }
 
-privado tipo Trecho {
+publico tipo Trecho {
     codigo: bytes
     erro: inteiro
     unidade: inteiro
@@ -25,7 +25,7 @@ privado tipo Controle {
     posicao_deslocamento: inteiro
 }
 
-privado funcao igual(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, nome: emprestimo[texto]) -> logico {
+publico funcao igual(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, nome: emprestimo[texto]) -> logico {
     se unidade.classe != 1 ou unidade.comprimento_byte != tamanho(nome) {
         retorne falso
     }
@@ -39,14 +39,14 @@ privado funcao igual(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, no
     retorne verdadeiro
 }
 
-privado funcao simbolo(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, valor: inteiro) -> logico {
+publico funcao simbolo(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, valor: inteiro) -> logico {
     se unidade.classe != 4 ou unidade.comprimento_byte != 1 {
         retorne falso
     }
     retorne fonte[unidade.inicio_byte] == valor
 }
 
-privado funcao mesmo_nome(fonte: emprestimo[bytes], a: lexico.UnidadeLexica, b: lexico.UnidadeLexica) -> logico {
+publico funcao mesmo_nome(fonte: emprestimo[bytes], a: lexico.UnidadeLexica, b: lexico.UnidadeLexica) -> logico {
     se a.classe != 1 ou b.classe != 1 ou a.comprimento_byte != b.comprimento_byte {
         retorne falso
     }
@@ -60,7 +60,7 @@ privado funcao mesmo_nome(fonte: emprestimo[bytes], a: lexico.UnidadeLexica, b: 
     retorne verdadeiro
 }
 
-privado funcao resolver(fonte: emprestimo[bytes], nomes: emprestimo[lista[lexico.UnidadeLexica]], nome: lexico.UnidadeLexica) -> inteiro {
+publico funcao resolver(fonte: emprestimo[bytes], nomes: emprestimo[lista[lexico.UnidadeLexica]], nome: lexico.UnidadeLexica) -> inteiro {
     seja i = 0
     enquanto i < tamanho(nomes) {
         seja candidato: lexico.UnidadeLexica = nomes[i]
@@ -73,12 +73,12 @@ privado funcao resolver(fonte: emprestimo[bytes], nomes: emprestimo[lista[lexico
 }
 
 // Posições de [rbp-8*(indice+1)] em deslocamento little endian signed32.
-privado funcao endereco(codigo: bytes, indice: inteiro) -> bytes {
+publico funcao endereco(codigo: bytes, indice: inteiro) -> bytes {
     retorne elf.anexar_inteiro(mova(codigo), 4294967296 - (indice + 1) * 8, 4)
 }
 
 // Modifica somente o campo rel32 previamente reservado e validado.
-privado funcao corrigir(codigo: bytes, posicao: inteiro, destino: inteiro) -> bytes {
+publico funcao corrigir(codigo: bytes, posicao: inteiro, destino: inteiro) -> bytes {
     seja deslocamento = destino - (posicao + 4)
     se deslocamento < 0 {
         deslocamento = deslocamento + 4294967296
@@ -94,7 +94,7 @@ privado funcao corrigir(codigo: bytes, posicao: inteiro, destino: inteiro) -> by
 
 // Uma expressao aritmetica por vez, usando AST da biblioteca RS.
 // Erro 4: parser/literal; 5: nome indefinido; 6: AST/operador.
-privado funcao emitir_expressao(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], primeiro: inteiro, ultimo: inteiro) -> Trecho {
+publico funcao emitir_expressao(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], primeiro: inteiro, ultimo: inteiro) -> Trecho {
     seja resposta: Trecho
     se primeiro >= ultimo {
         resposta.erro = 4
@@ -313,7 +313,7 @@ privado funcao emitir_condicao(codigo: bytes, fonte: emprestimo[bytes], unidades
 }
 
 // Calcula o fim da expressao de atribuicao na mesma linha.
-privado funcao fim_expressao(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], primeiro_token: inteiro, linha: inteiro) -> inteiro {
+publico funcao fim_expressao(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], primeiro_token: inteiro, linha: inteiro) -> inteiro {
     seja i = primeiro_token
     enquanto i < tamanho(unidades) {
         seja token: lexico.UnidadeLexica = unidades[i]

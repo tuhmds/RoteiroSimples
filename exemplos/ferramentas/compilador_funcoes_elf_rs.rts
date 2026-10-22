@@ -1,0 +1,17 @@
+// Ferramenta escrita em RS: produz ELF Linux com chamadas e retornos reais.
+// Requer codigo_fonte.rts no diretorio atual. Grava resultado_funcoes_elf.
+importe "padrao/emissao_funcoes_elf.rts" como funcoes
+
+inicio {
+    seja fonte: bytes
+    carregue_arquivo("codigo_fonte.rts", fonte)
+    seja resultado = funcoes.compilar(empreste(fonte))
+    escreva(resultado.codigo_erro)
+    escreva(resultado.unidade_erro)
+    se resultado.codigo_erro == 0 {
+        seja imagem: bytes
+        mova(imagem, resultado.arquivo)
+        grave_arquivo("resultado_funcoes_elf", imagem)
+        escreva(tamanho(imagem))
+    }
+}
