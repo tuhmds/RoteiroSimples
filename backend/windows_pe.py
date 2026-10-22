@@ -32,6 +32,44 @@ def construir_importacoes(base_rva, nomes):
     enderecos['contador'] = base_rva + inicio_contador
     return conteudo, enderecos, inicio_iat, tabela
 
+def construir_importacoes_graficas(base_rva, nomes_kernel):
+    """Duas DLLs, ILTs e IATs válidos, sem alterar o emissor histórico de console."""
+    bibliotecas = [('KERNEL32.dll', nomes_kernel), ('USER32.dll', ['MessageBoxW'])]
+    tamanho_descritores = (len(bibliotecas) + 1) * 20
+    conteudo = bytearray(tamanho_descritores)
+    offsets_ilt = []
+    offsets_iat = []
+    for _, nomes in bibliotecas:
+        offsets_ilt.append(len(conteudo))
+        conteudo += bytes((len(nomes) + 1) * 8)
+    inicio_iat = len(conteudo)
+    for _, nomes in bibliotecas:
+        offsets_iat.append(len(conteudo))
+        conteudo += bytes((len(nomes) + 1) * 8)
+    fim_iat = len(conteudo)
+    enderecos = {}
+    for indice, (_, nomes) in enumerate(bibliotecas):
+        for numero, nome in enumerate(nomes):
+            if len(conteudo) % 2:
+                conteudo.append(0)
+            offset_nome = len(conteudo)
+            conteudo += b'\x00\x00' + nome.encode('ascii') + b'\x00'
+            for tabela in (offsets_ilt[indice], offsets_iat[indice]):
+                struct.pack_into('<Q', conteudo, tabela + numero * 8, base_rva + offset_nome)
+            enderecos[nome] = base_rva + offsets_iat[indice] + numero * 8
+    for indice, (dll, _) in enumerate(bibliotecas):
+        offset_dll = len(conteudo)
+        conteudo += dll.encode('ascii') + b'\x00'
+        struct.pack_into('<IIIII', conteudo, indice * 20,
+                         base_rva + offsets_ilt[indice], 0, 0,
+                         base_rva + offset_dll, base_rva + offsets_iat[indice])
+    while len(conteudo) % 4:
+        conteudo.append(0)
+    enderecos['contador'] = base_rva + len(conteudo)
+    conteudo += bytes(4)
+    return conteudo, enderecos, inicio_iat, fim_iat - inicio_iat, tamanho_descritores
+
+
 def montar_pe(g, mensagens):
     base_codigo = 0x1000
     base_preferida = 0x140000000
@@ -78,12 +116,26 @@ def montar_pe(g, mensagens):
         for nome in ('GetFileAttributesA', 'GetLastError'):
             if nome not in nomes:
                 nomes.append(nome)
-    importacoes, enderecos, inicio_iat, tamanho_iat = construir_importacoes(base_importacoes, nomes)
+    graficos = getattr(g, 'mensagens_graficas', None)
+    if graficos:
+        importacoes, enderecos, inicio_iat, tamanho_iat, tamanho_descritores = (
+            construir_importacoes_graficas(base_importacoes, nomes))
+    else:
+        importacoes, enderecos, inicio_iat, tamanho_iat = construir_importacoes(base_importacoes, nomes)
+        tamanho_descritores = 40
     base_dados = alinhar(base_importacoes + len(importacoes), 0x1000)
     dados = bytearray()
     for i, msg in mensagens.items():
         enderecos[f'mensagem_{i}'] = base_dados + len(dados)
         dados += msg.encode('utf-8')
+    # Dados Win32 são UTF-16LE com terminador, alinhados em duas unidades.
+    # Entram na .rdata e participam da resolução RIP-relativa habitual.
+    if graficos:
+        for nome, valor in graficos.items():
+            if len(dados) % 2:
+                dados.append(0)
+            enderecos[nome] = base_dados + len(dados)
+            dados += valor.encode('utf-16-le') + b'\x00\x00'
     g.finalizar(base_codigo, enderecos)
 
     # IMAGE_REL_BASED_DIR64 = 10; o endereço absoluto na entrada será
@@ -145,7 +197,7 @@ def montar_pe(g, mensagens):
     struct.pack_into('<HH', opt, 68, 3, 0x140)
     struct.pack_into('<QQQQ', opt, 72, 0x100000, 0x1000, 0x100000, 0x1000)
     struct.pack_into('<II', opt, 104, 0, 16)
-    struct.pack_into('<II', opt, 112 + 8, base_importacoes, 40)
+    struct.pack_into('<II', opt, 112 + 8, base_importacoes, tamanho_descritores)
     struct.pack_into('<II', opt, 112 + 8 * 5,
                      base_relocacoes, len(realocacoes))
     if tabela_funcoes:
