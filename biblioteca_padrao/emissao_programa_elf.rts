@@ -1,0 +1,300 @@
+// Geracao inicial ELF64 de programas RS com declaracoes locais inteiras.
+// Contrato estrito: inicio { seja nome = expressao; ... }, sem outras
+// construcoes. O resultado observavel e a ultima declaracao modulo 256.
+// Cada slot local fica em [rbp - 8 * (indice + 1)].
+importe "lexico.rts" como lexico
+importe "programa_compilador.rts" como programa
+importe "emissao_elf_minima.rts" como elf
+
+publico tipo EmissaoProgramaELF {
+    arquivo: bytes
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+privado funcao palavra(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, valor: emprestimo[texto]) -> logico {
+    se unidade.classe != 1 ou unidade.comprimento_byte != tamanho(valor) {
+        retorne falso
+    }
+    seja i = 0
+    enquanto i < tamanho(valor) {
+        se fonte[unidade.inicio_byte + i] != byte_em(valor, i) {
+            retorne falso
+        }
+        i = i + 1
+    }
+    retorne verdadeiro
+}
+
+privado funcao sinal(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, valor: inteiro) -> logico {
+    se unidade.classe != 4 ou unidade.comprimento_byte != 1 {
+        retorne falso
+    }
+    retorne fonte[unidade.inicio_byte] == valor
+}
+
+// Cada endereco relativo de pilha e codificado como deslocamento signed32.
+privado funcao deslocamento(codigo: bytes, simbolo: inteiro) -> bytes {
+    seja valor = 4294967296 - 8 * (simbolo + 1)
+    retorne elf.anexar_inteiro(mova(codigo), valor, 4)
+}
+
+// Checa a fonte integral. O analisador estrutural hoje extrai declaracoes,
+// mas pode ignorar comandos nao relacionados a "seja". Isso nao e aceitavel
+// em um emissor executavel. Uma expressao so pode ocupar uma linha.
+privado funcao validar_fonte(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], ast: emprestimo[programa.ProgramaInicial]) -> inteiro {
+    seja total = tamanho(unidades)
+    se total < 7 {
+        retorne 1
+    }
+    seja inicio_palavra: texto = "inicio"
+    seja seja_palavra: texto = "seja"
+    seja primeira: lexico.UnidadeLexica = unidades[0]
+    seja abre: lexico.UnidadeLexica = unidades[1]
+    seja fecha: lexico.UnidadeLexica = unidades[total - 1]
+    se nao palavra(fonte, primeira, empreste(inicio_palavra)) {
+        retorne 1
+    }
+    se nao sinal(fonte, abre, 123) ou nao sinal(fonte, fecha, 125) {
+        retorne 1
+    }
+    se tamanho(ast.instrucoes) == 0 ou tamanho(ast.instrucoes) > 128 {
+        retorne 1
+    }
+    se tamanho(ast.simbolos) != tamanho(ast.instrucoes) {
+        retorne 1
+    }
+    se tamanho(ast.nos) > 4096 {
+        retorne 1
+    }
+    seja cursor = 2
+    seja i = 0
+    enquanto i < tamanho(ast.instrucoes) {
+        seja instrucao: programa.InstrucaoPrograma = ast.instrucoes[i]
+        se instrucao.classe != 1 ou instrucao.indice_simbolo != i ou instrucao.raiz < 0 {
+            retorne 1
+        }
+        se cursor != instrucao.unidade_inicio ou cursor + 3 >= total {
+            retorne 1
+        }
+        seja chave: lexico.UnidadeLexica = unidades[cursor]
+        seja nome: lexico.UnidadeLexica = unidades[cursor + 1]
+        seja atribuicao: lexico.UnidadeLexica = unidades[cursor + 2]
+        se nao palavra(fonte, chave, empreste(seja_palavra)) {
+            retorne 1
+        }
+        se nome.classe != 1 ou nao sinal(fonte, atribuicao, 61) {
+            retorne 1
+        }
+        seja simbolo: programa.SimboloPrograma = ast.simbolos[i]
+        se simbolo.classe != 1 ou simbolo.unidade_nome != cursor + 1 {
+            retorne 1
+        }
+        // A expressao deve ocupar toda a faixa ate o fim da linha,
+        // um ponto e virgula, ou o fechamento do bloco principal.
+        cursor = cursor + 3
+        seja contagem = 0
+        enquanto cursor < total {
+            seja token: lexico.UnidadeLexica = unidades[cursor]
+            se token.linha != nome.linha {
+                pare
+            }
+            se sinal(fonte, token, 59) ou sinal(fonte, token, 125) {
+                pare
+            }
+            // Apenas operandos, aritmetica e parenteses; nao aceitar
+            // controles, atribuicoes ou pontuacao estranha.
+            se token.classe != 1 e token.classe != 2 {
+                se nao sinal(fonte, token, 40) e nao sinal(fonte, token, 41) e nao sinal(fonte, token, 43) e nao sinal(fonte, token, 45) e nao sinal(fonte, token, 42) {
+                    retorne 1
+                }
+            }
+            cursor = cursor + 1
+            contagem = contagem + 1
+        }
+        se contagem == 0 {
+            retorne 1
+        }
+        se cursor < total {
+            seja separador: lexico.UnidadeLexica = unidades[cursor]
+            se sinal(fonte, separador, 59) {
+                cursor = cursor + 1
+            }
+        }
+        i = i + 1
+    }
+    se cursor != total - 1 {
+        retorne 1
+    }
+    retorne 0
+}
+
+// A AST ja vem em pos-ordem por declaracao. Cada variavel so e lida
+// depois de sua inicializacao. Nada do programa e executado pelo emissor.
+publico funcao compilar(fonte: emprestimo[bytes]) -> EmissaoProgramaELF {
+    seja resposta: EmissaoProgramaELF
+    seja unidades = lexico.analisar(fonte)
+    seja falha_lexica = lexico.primeiro_erro(empreste(unidades))
+    se falha_lexica >= 0 {
+        resposta.codigo_erro = 1
+        resposta.unidade_erro = falha_lexica
+        retorne mova(resposta)
+    }
+    seja ast = programa.analisar(fonte, empreste(unidades))
+    se ast.codigo_erro != 0 {
+        resposta.codigo_erro = 2
+        resposta.unidade_erro = ast.unidade_erro
+        retorne mova(resposta)
+    }
+    se validar_fonte(fonte, empreste(unidades), empreste(ast)) != 0 {
+        resposta.codigo_erro = 3
+        resposta.unidade_erro = 0
+        retorne mova(resposta)
+    }
+    seja codigo: bytes
+    seja quantidade = tamanho(ast.instrucoes)
+    // push rbp; mov rbp, rsp; sub rsp, quantidade * 8 (imm32).
+    adicione_byte(codigo, 85)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 229)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 129)
+    adicione_byte(codigo, 236)
+    seja prologo = elf.anexar_inteiro(mova(codigo), quantidade * 8, 4)
+    mova(codigo, prologo)
+    seja inicio_no = 0
+    seja i = 0
+    enquanto i < quantidade {
+        seja instrucao: programa.InstrucaoPrograma = ast.instrucoes[i]
+        seja pilha: lista[inteiro]
+        seja indice = inicio_no
+        enquanto indice <= instrucao.raiz {
+            seja no: programa.NoPrograma = ast.nos[indice]
+            resposta.unidade_erro = no.unidade
+            se no.categoria == 1 {
+                seja unidade: lexico.UnidadeLexica = unidades[no.unidade]
+                seja numero = elf.literal(fonte, unidade)
+                se numero < 0 {
+                    resposta.codigo_erro = 4
+                    retorne mova(resposta)
+                }
+                adicione_byte(codigo, 72)
+                adicione_byte(codigo, 184)
+                seja literal_bytes = elf.anexar_inteiro(mova(codigo), numero, 8)
+                mova(codigo, literal_bytes)
+                adicione_byte(codigo, 80)
+                adicione(pilha, indice)
+            } senao {
+                se no.categoria == 2 {
+                    se no.indice_simbolo < 0 ou no.indice_simbolo >= i {
+                        resposta.codigo_erro = 5
+                        retorne mova(resposta)
+                    }
+                    // mov rax, [rbp - deslocamento]; push rax
+                    adicione_byte(codigo, 72)
+                    adicione_byte(codigo, 139)
+                    adicione_byte(codigo, 133)
+                    seja endereco = deslocamento(mova(codigo), no.indice_simbolo)
+                    mova(codigo, endereco)
+                    adicione_byte(codigo, 80)
+                    adicione(pilha, indice)
+                } senao {
+                    se no.categoria == 3 {
+                        se tamanho(pilha) < 1 {
+                            resposta.codigo_erro = 6
+                            retorne mova(resposta)
+                        }
+                        se pilha[tamanho(pilha) - 1] != no.direito {
+                            resposta.codigo_erro = 6
+                            retorne mova(resposta)
+                        }
+                        se no.operador != 300 e no.operador != 301 {
+                            resposta.codigo_erro = 7
+                            retorne mova(resposta)
+                        }
+                        adicione_byte(codigo, 88)
+                        se no.operador == 300 {
+                            adicione_byte(codigo, 72)
+                            adicione_byte(codigo, 247)
+                            adicione_byte(codigo, 216)
+                        }
+                        adicione_byte(codigo, 80)
+                        pilha[tamanho(pilha) - 1] = indice
+                    } senao {
+                        se no.categoria != 4 {
+                            resposta.codigo_erro = 7
+                            retorne mova(resposta)
+                        }
+                        se no.operador != 43 e no.operador != 45 e no.operador != 42 {
+                            resposta.codigo_erro = 7
+                            retorne mova(resposta)
+                        }
+                        se tamanho(pilha) < 2 {
+                            resposta.codigo_erro = 6
+                            retorne mova(resposta)
+                        }
+                        se pilha[tamanho(pilha) - 1] != no.direito ou pilha[tamanho(pilha) - 2] != no.esquerdo {
+                            resposta.codigo_erro = 6
+                            retorne mova(resposta)
+                        }
+                        // pop rcx; pop rax; aritmetica com resultado em rax.
+                        adicione_byte(codigo, 89)
+                        adicione_byte(codigo, 88)
+                        adicione_byte(codigo, 72)
+                        se no.operador == 43 {
+                            adicione_byte(codigo, 1)
+                            adicione_byte(codigo, 200)
+                        }
+                        se no.operador == 45 {
+                            adicione_byte(codigo, 41)
+                            adicione_byte(codigo, 200)
+                        }
+                        se no.operador == 42 {
+                            adicione_byte(codigo, 15)
+                            adicione_byte(codigo, 175)
+                            adicione_byte(codigo, 193)
+                        }
+                        adicione_byte(codigo, 80)
+                        remova_ultimo(pilha)
+                        remova_ultimo(pilha)
+                        adicione(pilha, indice)
+                    }
+                }
+            }
+            indice = indice + 1
+        }
+        se tamanho(pilha) != 1 ou pilha[0] != instrucao.raiz {
+            resposta.codigo_erro = 6
+            retorne mova(resposta)
+        }
+        // Pop rax; mov [rbp - 8*(i+1)], rax; mov rdi, rax.
+        adicione_byte(codigo, 88)
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 137)
+        adicione_byte(codigo, 133)
+        seja endereco_local = deslocamento(mova(codigo), i)
+        mova(codigo, endereco_local)
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 137)
+        adicione_byte(codigo, 199)
+        inicio_no = instrucao.raiz + 1
+        i = i + 1
+    }
+    se inicio_no != tamanho(ast.nos) {
+        resposta.codigo_erro = 6
+        retorne mova(resposta)
+    }
+    // Linux syscall exit(rdi), preservando apenas os 8 bits inferiores.
+    adicione_byte(codigo, 184)
+    adicione_byte(codigo, 60)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 5)
+    seja imagem = elf.cabecalho(empreste(codigo))
+    mova(resposta.arquivo, imagem)
+    resposta.unidade_erro = tamanho(unidades)
+    retorne mova(resposta)
+}
