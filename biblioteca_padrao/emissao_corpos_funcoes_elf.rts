@@ -1,0 +1,515 @@
+// Emissor unificado ELF64 para chamadas, declaracoes, atribuicoes,
+// condicionais e lacos, com plano intermediario de instrucoes escrito em RS.
+// Funcoes com parametros inteiros, locais, condicionais, lacos e retornos.
+// Chamadas permitidas apenas a funcoes declaradas anteriormente, sem recursao.
+// ABI interna privada; sem runtime System V externo.
+importe "lexico.rts" como lexico
+importe "assinaturas_compilador.rts" como assinaturas
+importe "emissao_elf_minima.rts" como elf
+importe "emissao_fluxo_elf.rts" como fluxo
+importe "instrucoes_integradas_elf.rts" como instrucoes
+
+publico tipo ResultadoCorposELF {
+    arquivo: bytes
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+publico tipo Ligacao {
+    indice_funcao: inteiro
+    posicao_deslocamento: inteiro
+}
+
+privado tipo ControleIntegrado {
+    classe: inteiro
+    inicio_condicao: inteiro
+    posicao_deslocamento: inteiro
+}
+
+// Emite um endereco local de 8 bytes relativo ao rbp.
+privado funcao guardar_local(codigo: bytes, indice: inteiro) -> bytes {
+    adicione_byte(codigo, 88)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 133)
+    seja gravado = fluxo.endereco(mova(codigo), indice)
+    mova(codigo, gravado)
+    retorne mova(codigo)
+}
+
+privado funcao prologo(codigo: bytes, quantidade: inteiro) -> bytes {
+    adicione_byte(codigo, 85)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 229)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 129)
+    adicione_byte(codigo, 236)
+    seja preparado = elf.anexar_inteiro(mova(codigo), quantidade * 8, 4)
+    mova(codigo, preparado)
+    retorne mova(codigo)
+}
+
+privado funcao executar_expressao(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], primeiro: inteiro, ultimo: inteiro) -> fluxo.Trecho {
+    retorne fluxo.emitir_expressao(mova(codigo), fonte, unidades, nomes, primeiro, ultimo)
+}
+
+// Verifica a assinatura e o corpo inteiro: retorne expressao.
+// Diagnostico: 2 assinatura, 3 corpo, 4 duplicidade.
+privado funcao validar_funcoes(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], grupo: emprestimo[assinaturas.Assinaturas]) -> inteiro {
+    seja retorno: texto = "inteiro"
+    seja palavra_funcao: texto = "funcao"
+    seja palavra_retorne: texto = "retorne"
+    seja posicao = 0
+    seja i = 0
+    enquanto i < tamanho(grupo.funcoes) {
+        seja atual: assinaturas.AssinaturaFuncao = grupo.funcoes[i]
+        se atual.unidade_nome != posicao + 1 {
+            retorne 2
+        }
+        seja inicio_token: lexico.UnidadeLexica = unidades[posicao]
+        se nao fluxo.igual(fonte, inicio_token, empreste(palavra_funcao)) {
+            retorne 2
+        }
+        se atual.quantidade_parametros < 0 ou atual.quantidade_parametros > 4 {
+            retorne 2
+        }
+        se atual.retorno_fim != atual.retorno_inicio + 1 {
+            retorne 2
+        }
+        seja tipo_retorno: lexico.UnidadeLexica = unidades[atual.retorno_inicio]
+        se nao fluxo.igual(fonte, tipo_retorno, empreste(retorno)) {
+            retorne 2
+        }
+        seja j = 0
+        enquanto j < i {
+            seja anterior: assinaturas.AssinaturaFuncao = grupo.funcoes[j]
+            seja nome_anterior: lexico.UnidadeLexica = unidades[anterior.unidade_nome]
+            seja nome_atual: lexico.UnidadeLexica = unidades[atual.unidade_nome]
+            se fluxo.mesmo_nome(fonte, nome_anterior, nome_atual) {
+                retorne 4
+            }
+            j = j + 1
+        }
+        j = 0
+        enquanto j < atual.quantidade_parametros {
+            seja p: assinaturas.ParametroFuncao = grupo.parametros[atual.primeiro_parametro + j]
+            se p.tipo_fim != p.tipo_inicio + 1 {
+                retorne 2
+            }
+            seja tipo_parametro: lexico.UnidadeLexica = unidades[p.tipo_inicio]
+            se nao fluxo.igual(fonte, tipo_parametro, empreste(retorno)) {
+                retorne 2
+            }
+            seja k = 0
+            enquanto k < j {
+                seja q: assinaturas.ParametroFuncao = grupo.parametros[atual.primeiro_parametro + k]
+                seja nome_p: lexico.UnidadeLexica = unidades[p.unidade_nome]
+                seja nome_q: lexico.UnidadeLexica = unidades[q.unidade_nome]
+                se fluxo.mesmo_nome(fonte, nome_p, nome_q) {
+                    retorne 4
+                }
+                k = k + 1
+            }
+            j = j + 1
+        }
+        se atual.corpo_abertura + 2 >= atual.corpo_fechamento {
+            retorne 3
+        }
+        // Corpos serao validados pela IR, inclusive retornos condicionais.
+        posicao = atual.corpo_fechamento + 1
+        i = i + 1
+    }
+    seja palavra_inicio: texto = "inicio"
+    se posicao + 3 >= tamanho(unidades) {
+        retorne 2
+    }
+    seja nome_inicio: lexico.UnidadeLexica = unidades[posicao]
+    seja abre: lexico.UnidadeLexica = unidades[posicao + 1]
+    seja fecha: lexico.UnidadeLexica = unidades[tamanho(unidades) - 1]
+    se nao fluxo.igual(fonte, nome_inicio, empreste(palavra_inicio)) {
+        retorne 2
+    }
+    se nao fluxo.simbolo(fonte, abre, 123) ou nao fluxo.simbolo(fonte, fecha, 125) {
+        retorne 2
+    }
+    // O plano intermediario validara os blocos e suas chaves.
+    retorne 0
+}
+
+
+privado tipo EstadoCorpo {
+    codigo: bytes
+    ligacoes: lista[Ligacao]
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+// Mesmo emissor de IR para o programa principal e para cada funcao.
+// Posicoes de call/jcc sao offsets absolutos no vetor 'codigo'.
+privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], assinadas: emprestimo[assinaturas.Assinaturas], plano_principal: emprestimo[instrucoes.Plano], parametros: emprestimo[lista[lexico.UnidadeLexica]], funcao_atual: inteiro) -> EstadoCorpo {
+    seja resposta: EstadoCorpo
+    seja numero_locais = plano_principal.quantidade_locais
+    seja nomes: lista[lexico.UnidadeLexica]
+    seja ligacoes: lista[Ligacao]
+    seja p = 0
+    enquanto p < tamanho(parametros) {
+        seja nome_parametro: lexico.UnidadeLexica = parametros[p]
+        adicione(nomes, nome_parametro)
+        p = p + 1
+    }
+    seja f = 0
+    seja controles: lista[ControleIntegrado]
+    seja posicao_ir = 0
+    enquanto posicao_ir < tamanho(plano_principal.instrucoes) {
+        seja instrucao: instrucoes.Instrucao = plano_principal.instrucoes[posicao_ir]
+        resposta.unidade_erro = instrucao.unidade_inicio
+        se instrucao.categoria == 5 ou instrucao.categoria == 6 {
+            se instrucao.categoria == 6 {
+                se tamanho(controles) != 0 {
+                    resposta.codigo_erro = 2
+                    retorne mova(resposta)
+                }
+                posicao_ir = posicao_ir + 1
+                continue
+            }
+            se tamanho(controles) == 0 {
+                resposta.codigo_erro = 2
+                retorne mova(resposta)
+            }
+            seja controle: ControleIntegrado = controles[tamanho(controles) - 1]
+            remova_ultimo(controles)
+            se controle.classe == 4 {
+                adicione_byte(codigo, 233)
+                seja volta = tamanho(codigo)
+                seja contador = 0
+                enquanto contador < 4 {
+                    adicione_byte(codigo, 0)
+                    contador = contador + 1
+                }
+                seja desvio_volta = fluxo.corrigir(mova(codigo), volta, controle.inicio_condicao)
+                mova(codigo, desvio_volta)
+            }
+            seja destino_desvio = tamanho(codigo)
+            seja desvio_saida = fluxo.corrigir(mova(codigo), controle.posicao_deslocamento, destino_desvio)
+            mova(codigo, desvio_saida)
+            posicao_ir = posicao_ir + 1
+            continue
+        }
+        se instrucao.categoria == 3 ou instrucao.categoria == 4 {
+            seja inicio_condicao = tamanho(codigo)
+            seja predicado = fluxo.emitir_condicao(mova(codigo), fonte, unidades, empreste(nomes), instrucao.valor_inicio, instrucao.valor_fim)
+            se predicado.erro != 0 {
+                resposta.codigo_erro = predicado.erro
+                resposta.unidade_erro = predicado.unidade
+                retorne mova(resposta)
+            }
+            mova(codigo, predicado.codigo)
+            seja controle: ControleIntegrado
+            controle.classe = instrucao.categoria
+            controle.inicio_condicao = inicio_condicao
+            controle.posicao_deslocamento = tamanho(codigo) - 4
+            adicione(controles, controle)
+            posicao_ir = posicao_ir + 1
+            continue
+        }
+        se instrucao.categoria == 7 {
+            se funcao_atual < 0 {
+                resposta.codigo_erro = 3
+                retorne mova(resposta)
+            }
+            // Retorne aceita expressao aritmetica; chamadas podem ser
+            // feitas em declaracoes/atribuicoes anteriores.
+            seja valor_retorno = executar_expressao(mova(codigo), fonte, unidades, empreste(nomes), instrucao.valor_inicio, instrucao.valor_fim)
+            se valor_retorno.erro != 0 {
+                resposta.codigo_erro = 7
+                resposta.unidade_erro = valor_retorno.unidade
+                retorne mova(resposta)
+            }
+            mova(codigo, valor_retorno.codigo)
+            adicione_byte(codigo, 88) // pop rax
+            adicione_byte(codigo, 201) // leave
+            adicione_byte(codigo, 195) // ret
+            posicao_ir = posicao_ir + 1
+            continue
+        }
+        se instrucao.categoria != 1 e instrucao.categoria != 2 {
+            resposta.codigo_erro = 3
+            retorne mova(resposta)
+        }
+        seja nome: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
+        seja indice_local = fluxo.resolver(fonte, empreste(nomes), nome)
+        se instrucao.categoria == 1 {
+            se indice_local >= 0 {
+                resposta.codigo_erro = 4
+                retorne mova(resposta)
+            }
+            indice_local = tamanho(nomes)
+        } senao {
+            se indice_local < 0 {
+                resposta.codigo_erro = 5
+                retorne mova(resposta)
+            }
+        }
+        seja primeiro = instrucao.valor_inicio
+        seja ultimo = instrucao.valor_fim
+        seja primeiro_valor: lexico.UnidadeLexica = unidades[primeiro]
+        seja chamada = falso
+        se primeiro + 1 < ultimo {
+            seja segundo_valor: lexico.UnidadeLexica = unidades[primeiro + 1]
+            se primeiro_valor.classe == 1 e fluxo.simbolo(fonte, segundo_valor, 40) {
+                chamada = verdadeiro
+            }
+        }
+        se chamada {
+            seja ultimo_token: lexico.UnidadeLexica = unidades[ultimo - 1]
+            se nao fluxo.simbolo(fonte, ultimo_token, 41) {
+                resposta.codigo_erro = 6
+                retorne mova(resposta)
+            }
+            seja indice_funcao = -1
+            f = 0
+            enquanto f < tamanho(assinadas.funcoes) {
+                seja candidata: assinaturas.AssinaturaFuncao = assinadas.funcoes[f]
+                seja nome_funcao: lexico.UnidadeLexica = unidades[candidata.unidade_nome]
+                se fluxo.mesmo_nome(fonte, primeiro_valor, nome_funcao) {
+                    indice_funcao = f
+                }
+                f = f + 1
+            }
+            se indice_funcao < 0 ou (funcao_atual >= 0 e indice_funcao >= funcao_atual) {
+                resposta.codigo_erro = 6
+                retorne mova(resposta)
+            }
+            seja funcao_alvo: assinaturas.AssinaturaFuncao = assinadas.funcoes[indice_funcao]
+            seja inicios: lista[inteiro]
+            seja finais: lista[inteiro]
+            seja abertura_nivel = 0
+            seja inicio_argumento = primeiro + 2
+            seja posicao = inicio_argumento
+            enquanto posicao < ultimo - 1 {
+                seja token_argumento: lexico.UnidadeLexica = unidades[posicao]
+                se fluxo.simbolo(fonte, token_argumento, 40) {
+                    abertura_nivel = abertura_nivel + 1
+                }
+                se fluxo.simbolo(fonte, token_argumento, 41) {
+                    abertura_nivel = abertura_nivel - 1
+                }
+                se abertura_nivel < 0 {
+                    resposta.codigo_erro = 6
+                    retorne mova(resposta)
+                }
+                se fluxo.simbolo(fonte, token_argumento, 44) e abertura_nivel == 0 {
+                    se posicao == inicio_argumento {
+                        resposta.codigo_erro = 6
+                        retorne mova(resposta)
+                    }
+                    adicione(inicios, inicio_argumento)
+                    adicione(finais, posicao)
+                    inicio_argumento = posicao + 1
+                }
+                posicao = posicao + 1
+            }
+            se abertura_nivel != 0 {
+                resposta.codigo_erro = 6
+                retorne mova(resposta)
+            }
+            se inicio_argumento == ultimo - 1 e inicio_argumento != primeiro + 2 {
+                resposta.codigo_erro = 6
+                retorne mova(resposta)
+            }
+            se inicio_argumento < ultimo - 1 {
+                adicione(inicios, inicio_argumento)
+                adicione(finais, ultimo - 1)
+            }
+            se tamanho(inicios) != funcao_alvo.quantidade_parametros {
+                resposta.codigo_erro = 6
+                retorne mova(resposta)
+            }
+            seja argumento = tamanho(inicios) - 1
+            enquanto argumento >= 0 {
+                seja trecho = executar_expressao(mova(codigo), fonte, unidades, empreste(nomes), inicios[argumento], finais[argumento])
+                se trecho.erro != 0 {
+                    resposta.codigo_erro = 7
+                    resposta.unidade_erro = trecho.unidade
+                    retorne mova(resposta)
+                }
+                mova(codigo, trecho.codigo)
+                argumento = argumento - 1
+            }
+            // call rel32, resultado em rax; limpa argumentos sem desalinhamento.
+            adicione_byte(codigo, 232)
+            seja ligacao: Ligacao
+            ligacao.indice_funcao = indice_funcao
+            ligacao.posicao_deslocamento = tamanho(codigo)
+            adicione(ligacoes, ligacao)
+            seja j = 0
+            enquanto j < 4 {
+                adicione_byte(codigo, 0)
+                j = j + 1
+            }
+            se tamanho(inicios) > 0 {
+                adicione_byte(codigo, 72)
+                adicione_byte(codigo, 129)
+                adicione_byte(codigo, 196)
+                seja limpeza = elf.anexar_inteiro(mova(codigo), tamanho(inicios) * 8, 4)
+                mova(codigo, limpeza)
+            }
+            adicione_byte(codigo, 80)
+        } senao {
+            seja expressao_principal = executar_expressao(mova(codigo), fonte, unidades, empreste(nomes), primeiro, ultimo)
+            se expressao_principal.erro != 0 {
+                resposta.codigo_erro = 7
+                resposta.unidade_erro = expressao_principal.unidade
+                retorne mova(resposta)
+            }
+            mova(codigo, expressao_principal.codigo)
+        }
+        seja local_guardado = guardar_local(mova(codigo), indice_local)
+        mova(codigo, local_guardado)
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 137)
+        adicione_byte(codigo, 199) // mov rdi, rax
+        se instrucao.categoria == 1 {
+            adicione(nomes, nome)
+        }
+        posicao_ir = posicao_ir + 1
+    }
+    se tamanho(nomes) != numero_locais + tamanho(parametros) ou tamanho(controles) != 0 {
+        resposta.codigo_erro = 2
+        retorne mova(resposta)
+    }
+    mova(resposta.codigo, codigo)
+    mova(resposta.ligacoes, ligacoes)
+    retorne mova(resposta)
+}
+
+// Gera entrada _start, funcoes mais tarde, remendando call rel32.
+publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoCorposELF {
+    seja resposta: ResultadoCorposELF
+    seja unidades = lexico.analisar(fonte)
+    se lexico.primeiro_erro(empreste(unidades)) >= 0 {
+        resposta.codigo_erro = 1
+        retorne mova(resposta)
+    }
+    se tamanho(unidades) > 10000 {
+        resposta.codigo_erro = 8
+        retorne mova(resposta)
+    }
+    seja assinadas = assinaturas.analisar(fonte, empreste(unidades))
+    se assinadas.codigo_erro != 0 {
+        resposta.codigo_erro = 2
+        resposta.unidade_erro = assinadas.unidade_erro
+        retorne mova(resposta)
+    }
+    se tamanho(assinadas.funcoes) < 1 ou tamanho(assinadas.funcoes) > 16 {
+        resposta.codigo_erro = 2
+        retorne mova(resposta)
+    }
+    seja validacao = validar_funcoes(fonte, empreste(unidades), empreste(assinadas))
+    se validacao != 0 {
+        resposta.codigo_erro = validacao
+        retorne mova(resposta)
+    }
+    seja inicio_principal = 0
+    seja f = 0
+    enquanto f < tamanho(assinadas.funcoes) {
+        seja assinatura: assinaturas.AssinaturaFuncao = assinadas.funcoes[f]
+        inicio_principal = assinatura.corpo_fechamento + 1
+        f = f + 1
+    }
+    seja plano_principal = instrucoes.analisar(fonte, empreste(unidades), inicio_principal)
+    se plano_principal.codigo_erro != 0 {
+        resposta.codigo_erro = plano_principal.codigo_erro
+        resposta.unidade_erro = plano_principal.unidade_erro
+        retorne mova(resposta)
+    }
+    seja codigo: bytes
+    seja preparado = prologo(mova(codigo), plano_principal.quantidade_locais)
+    mova(codigo, preparado)
+    seja sem_parametros: lista[lexico.UnidadeLexica]
+    seja corpo_principal = emitir_corpo(mova(codigo), fonte, empreste(unidades), empreste(assinadas), empreste(plano_principal), empreste(sem_parametros), -1)
+    se corpo_principal.codigo_erro != 0 {
+        resposta.codigo_erro = corpo_principal.codigo_erro
+        resposta.unidade_erro = corpo_principal.unidade_erro
+        retorne mova(resposta)
+    }
+    mova(codigo, corpo_principal.codigo)
+    seja ligacoes: lista[Ligacao]
+    seja indice_ligacao = 0
+    enquanto indice_ligacao < tamanho(corpo_principal.ligacoes) {
+        seja ligacao_principal: Ligacao = corpo_principal.ligacoes[indice_ligacao]
+        adicione(ligacoes, ligacao_principal)
+        indice_ligacao = indice_ligacao + 1
+    }
+    // Codigo de entrada termina antes das funcoes; somente _start usa exit.
+    adicione_byte(codigo, 184)
+    adicione_byte(codigo, 60)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 0)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 5)
+
+    // Gerar funcao separada, prologo, parametros copiados e epilogo.
+    seja enderecos: lista[inteiro]
+    f = 0
+    enquanto f < tamanho(assinadas.funcoes) {
+        seja assinatura: assinaturas.AssinaturaFuncao = assinadas.funcoes[f]
+        adicione(enderecos, tamanho(codigo))
+        seja plano_funcao = instrucoes.analisar_corpo(fonte, empreste(unidades), assinatura.corpo_abertura, assinatura.corpo_fechamento)
+        se plano_funcao.codigo_erro != 0 {
+            resposta.codigo_erro = plano_funcao.codigo_erro
+            resposta.unidade_erro = plano_funcao.unidade_erro
+            retorne mova(resposta)
+        }
+        seja total_funcao = assinatura.quantidade_parametros + plano_funcao.quantidade_locais
+        seja preparo_funcao = prologo(mova(codigo), total_funcao)
+        mova(codigo, preparo_funcao)
+        seja parametros: lista[lexico.UnidadeLexica]
+        seja j = 0
+        enquanto j < assinatura.quantidade_parametros {
+            seja parametro: assinaturas.ParametroFuncao = assinadas.parametros[assinatura.primeiro_parametro + j]
+            seja token_parametro: lexico.UnidadeLexica = unidades[parametro.unidade_nome]
+            adicione(parametros, token_parametro)
+            // mov rax, [rbp + 16+8*j], cdecl interno com pilha.
+            adicione_byte(codigo, 72)
+            adicione_byte(codigo, 139)
+            adicione_byte(codigo, 133)
+            seja entrada = elf.anexar_inteiro(mova(codigo), 16 + j * 8, 4)
+            mova(codigo, entrada)
+            adicione_byte(codigo, 80) // push rax
+            seja transferido = guardar_local(mova(codigo), j)
+            mova(codigo, transferido)
+            j = j + 1
+        }
+        seja corpo_funcao = emitir_corpo(mova(codigo), fonte, empreste(unidades), empreste(assinadas), empreste(plano_funcao), empreste(parametros), f)
+        se corpo_funcao.codigo_erro != 0 {
+            resposta.codigo_erro = corpo_funcao.codigo_erro
+            resposta.unidade_erro = corpo_funcao.unidade_erro
+            retorne mova(resposta)
+        }
+        mova(codigo, corpo_funcao.codigo)
+        seja indice_nova_ligacao = 0
+        enquanto indice_nova_ligacao < tamanho(corpo_funcao.ligacoes) {
+            seja nova_ligacao: Ligacao = corpo_funcao.ligacoes[indice_nova_ligacao]
+            adicione(ligacoes, nova_ligacao)
+            indice_nova_ligacao = indice_nova_ligacao + 1
+        }
+        f = f + 1
+    }
+
+    // Corrigir call rel32 apos conhecer todos os destinos.
+    seja i = 0
+    enquanto i < tamanho(ligacoes) {
+        seja ligacao: Ligacao = ligacoes[i]
+        seja posicao_final = enderecos[ligacao.indice_funcao]
+        seja corrigido = fluxo.corrigir(mova(codigo), ligacao.posicao_deslocamento, posicao_final)
+        mova(codigo, corrigido)
+        i = i + 1
+    }
+    seja imagem_final = elf.cabecalho(empreste(codigo))
+    mova(resposta.arquivo, imagem_final)
+    resposta.unidade_erro = tamanho(unidades)
+    retorne mova(resposta)
+}

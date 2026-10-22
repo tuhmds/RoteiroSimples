@@ -1,0 +1,16 @@
+// Emissor experimental RS de corpos de funcoes para ELF64 Linux.
+importe "padrao/emissao_corpos_funcoes_elf.rts" como corpos
+
+inicio {
+    seja fonte: bytes
+    carregue_arquivo("codigo_fonte.rts", fonte)
+    seja resultado = corpos.compilar(empreste(fonte))
+    escreva(resultado.codigo_erro)
+    escreva(resultado.unidade_erro)
+    se resultado.codigo_erro == 0 {
+        seja imagem: bytes
+        mova(imagem, resultado.arquivo)
+        grave_arquivo("resultado_corpos_elf", imagem)
+        escreva(tamanho(imagem))
+    }
+}
