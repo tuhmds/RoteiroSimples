@@ -1,0 +1,15 @@
+// Compilador ELF inicial: le expressao.rts e gera resultado_elf.
+// O codigo gerado opera na CPU Linux; o resultado vai ao status de saida.
+importe "padrao/emissao_elf_minima.rts" como elf
+
+inicio {
+    seja fonte: bytes
+    carregue_arquivo("expressao.rts", fonte)
+    seja resultado = elf.compilar(empreste(fonte))
+    escreva(resultado.codigo_erro)
+    escreva(resultado.unidade_erro)
+    se resultado.codigo_erro == 0 {
+        grave_arquivo("resultado_elf", resultado.arquivo)
+        escreva(tamanho(resultado.arquivo))
+    }
+}
