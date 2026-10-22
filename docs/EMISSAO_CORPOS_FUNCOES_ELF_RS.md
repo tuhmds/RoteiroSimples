@@ -42,7 +42,7 @@ na pilha e retorno em `rax`, com `leave; ret`.
 - Declaracoes `seja` somente no nivel exterior do corpo da funcao ou do
   `inicio`; variaveis de parametros e locais compartilham o mesmo escopo,
   sem nomes duplicados e sem sombra.
-- Atribuicoes, comparacoes inteiras, aritmetica `+ - *`, `se`,
+- Atribuicoes, comparacoes inteiras, aritmetica `+ - * / %`, `se`,
   `enquanto`, com ate 32 niveis de controle e retorno antecipado.
 - **Obrigatorio um `retorne expressao` final no nivel exterior de cada
   funcao**, garantindo que a execucao nao termine por um caminho sem
@@ -52,21 +52,27 @@ na pilha e retorno em `rax`, com `leave; ret`.
   integral: `retorne soma(dobro(n), soma(2, 3))`.
 - Cada argumento admite uma expressao aritmetica, uma chamada ou
   combinacoes como `soma(dobro(n) + 1, 4)` e `dobro(n) * 2 - 1`.
-  O emissor preserva precedencia entre `+`, `-` e `*`, parenteses
+  O emissor preserva precedencia entre `+`, `-`, `*`, `/` e `%`, parenteses
   de agrupamento e sinais unarios. Emissoes com chamadas e operadores
   sao separadas recursivamente; chamadas puramente aritmeticas mantem o
   analisador de expressoes existente.
 - Ate oito niveis de composicao recursiva (incluindo chamadas, grupos e
   operacoes). O emissor rejeita chamadas malformadas, recursivas ou
-  futuras. Divisao, resto, comparacoes em expressoes de valor e chamadas
-  em predicados `se`/`enquanto` ainda nao sao suportados.
+  futuras. Chamadas sao permitidas nos dois lados das comparacoes
+  dos predicados `se`/`enquanto`, incluindo aritmetica mista.
+  Expressoes de valor booleano e operadores logicos compostos ainda
+  nao sao suportados.
 - Para impedir recursao nesta etapa, uma funcao somente pode chamar
   funcoes **declaradas anteriormente**; chamadas futuras, recursivas e
   ciclos entre funcoes sao rejeitados.
 - Nao implementa `senao`, booleanos compostos, tipos nao inteiros,
   `pare`, `continue`, ABI System V, funcoes aninhadas, chamadas
   externas, protecao de overflow aritmetico ou otimizacao especifica
-  deste emissor. `inicio` continua expondo a ultima atribuicao
+  deste emissor. A divisao signed64 trunca para zero e o resto conserva
+  o sinal do dividendo. Divisao por zero ou o caso minimo signed64 / -1
+  provoca a excecao nativa de divisao (SIGFPE no Linux); ainda nao ha
+  diagnostico de alto nivel para essa falha em execucao. `inicio` continua
+  expondo a ultima atribuicao
   executada como status de saida do processo (modulo 256).
 
 ## Arquitetura
@@ -91,7 +97,7 @@ falhar sem gerar arquivo. A CI geral e obrigatoria antes da integracao.
 
 ## Proximo passo
 
-Expandir a representacao intermediaria para chamadas em predicados,
-divisao e resto com verificacoes de erro, e fortalecer analise semantica
-de saidas e tipos. Depois estudar recursao controlada, ABI publica e
-etapas de bootstrap completo do compilador.
+Fortalecer verificacao semantica de caminhos de retorno, divisao por
+zero e tipos; avaliar tratamento controlado de falhas em execucao.
+Depois estudar recursao controlada, ABI publica e etapas do bootstrap
+completo do compilador.
