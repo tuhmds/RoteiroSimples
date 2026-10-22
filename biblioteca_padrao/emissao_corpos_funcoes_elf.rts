@@ -213,42 +213,32 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             posicao_ir = posicao_ir + 1
             continue
         }
+        se instrucao.categoria != 1 e instrucao.categoria != 2 e instrucao.categoria != 7 {
+            resposta.codigo_erro = 3
+            retorne mova(resposta)
+        }
+        // O retorno usa a mesma emissao de chamada das atribuicoes.
+        // Assim, retorne f(x) nao precisa criar uma variavel temporaria.
+        seja indice_local = -1
         se instrucao.categoria == 7 {
             se funcao_atual < 0 {
                 resposta.codigo_erro = 3
                 retorne mova(resposta)
             }
-            // Retorne aceita expressao aritmetica; chamadas podem ser
-            // feitas em declaracoes/atribuicoes anteriores.
-            seja valor_retorno = executar_expressao(mova(codigo), fonte, unidades, empreste(nomes), instrucao.valor_inicio, instrucao.valor_fim)
-            se valor_retorno.erro != 0 {
-                resposta.codigo_erro = 7
-                resposta.unidade_erro = valor_retorno.unidade
-                retorne mova(resposta)
-            }
-            mova(codigo, valor_retorno.codigo)
-            adicione_byte(codigo, 88) // pop rax
-            adicione_byte(codigo, 201) // leave
-            adicione_byte(codigo, 195) // ret
-            posicao_ir = posicao_ir + 1
-            continue
-        }
-        se instrucao.categoria != 1 e instrucao.categoria != 2 {
-            resposta.codigo_erro = 3
-            retorne mova(resposta)
-        }
-        seja nome: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
-        seja indice_local = fluxo.resolver(fonte, empreste(nomes), nome)
-        se instrucao.categoria == 1 {
-            se indice_local >= 0 {
-                resposta.codigo_erro = 4
-                retorne mova(resposta)
-            }
-            indice_local = tamanho(nomes)
         } senao {
-            se indice_local < 0 {
-                resposta.codigo_erro = 5
-                retorne mova(resposta)
+            seja nome: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
+            indice_local = fluxo.resolver(fonte, empreste(nomes), nome)
+            se instrucao.categoria == 1 {
+                se indice_local >= 0 {
+                    resposta.codigo_erro = 4
+                    retorne mova(resposta)
+                }
+                indice_local = tamanho(nomes)
+            } senao {
+                se indice_local < 0 {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
             }
         }
         seja primeiro = instrucao.valor_inicio
@@ -365,13 +355,22 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             }
             mova(codigo, expressao_principal.codigo)
         }
+        se instrucao.categoria == 7 {
+            // Tanto a expressao quanto a chamada deixam o valor na pilha.
+            adicione_byte(codigo, 88) // pop rax
+            adicione_byte(codigo, 201) // leave
+            adicione_byte(codigo, 195) // ret
+            posicao_ir = posicao_ir + 1
+            continue
+        }
         seja local_guardado = guardar_local(mova(codigo), indice_local)
         mova(codigo, local_guardado)
         adicione_byte(codigo, 72)
         adicione_byte(codigo, 137)
         adicione_byte(codigo, 199) // mov rdi, rax
         se instrucao.categoria == 1 {
-            adicione(nomes, nome)
+            seja nome_novo: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
+            adicione(nomes, nome_novo)
         }
         posicao_ir = posicao_ir + 1
     }
