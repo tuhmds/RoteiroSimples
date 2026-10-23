@@ -343,3 +343,36 @@ publico funcao emitir_liberacao(codigo: bytes, indice_local: inteiro) -> bytes {
     adicione_byte(codigo, 95) // pop rdi
     retorne mova(codigo)
 }
+
+// Encerramento de escopo: libera apenas o buffer ainda pertencente a
+// esta variavel. A liberacao explicita anterior zera o ponteiro e sera
+// ignorada aqui, sem alterar a regra de erro para duas liberacoes
+// explicitas. Preserva rax (inclusive o valor de retorno da funcao)
+// e rdi (valor de saida da entrada principal).
+publico funcao emitir_liberacao_automatica(codigo: bytes, indice_local: inteiro) -> bytes {
+    adicione_byte(codigo, 80) // push rax
+    // 48 8B 85 disp32: mov rax, [rbp - ponteiro]
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 133)
+    seja endereco = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    mova(codigo, endereco)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 133)
+    adicione_byte(codigo, 192) // test rax, rax
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 132) // jz rel32, pula munmap se ja liberado
+    seja pular = tamanho(codigo)
+    seja i = 0
+    enquanto i < 4 {
+        adicione_byte(codigo, 0)
+        i = i + 1
+    }
+    seja liberado = emitir_liberacao(mova(codigo), indice_local)
+    mova(codigo, liberado)
+    seja depois = tamanho(codigo)
+    seja corrigido = fluxo.corrigir(mova(codigo), pular, depois)
+    mova(codigo, corrigido)
+    adicione_byte(codigo, 88) // pop rax
+    retorne mova(codigo)
+}

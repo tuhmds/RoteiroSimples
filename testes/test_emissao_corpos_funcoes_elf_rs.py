@@ -49,7 +49,7 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
         if hasattr(cls, "pasta"):
             cls.pasta.cleanup()
 
-    def gerar(self, fonte, nivel):
+    def gerar(self, fonte, nivel, limite_memoria=None):
         with tempfile.TemporaryDirectory(prefix="rs_codigo_corpos_") as pasta:
             raiz = Path(pasta)
             (raiz / "codigo_fonte.rts").write_text(fonte, encoding="utf-8")
@@ -83,7 +83,19 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
             status = None
             if self.alvo == "linux":
                 arquivo.chmod(0o700)
-                status = subprocess.run([str(arquivo)], cwd=raiz, timeout=4).returncode
+                opcoes = {}
+                if limite_memoria is not None:
+                    import resource
+
+                    def limitar_memoria():
+                        resource.setrlimit(
+                            resource.RLIMIT_AS, (limite_memoria, limite_memoria)
+                        )
+
+                    opcoes["preexec_fn"] = limitar_memoria
+                status = subprocess.run(
+                    [str(arquivo)], cwd=raiz, timeout=4, **opcoes
+                ).returncode
             return 0, dados, status
 
     def test_corpos_de_funcao_com_locais_se_e_retorno_antecipado(self):
@@ -1554,6 +1566,186 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                     self.assertEqual(codigo, esperado)
                     self.assertIsNone(dados)
                     self.assertIsNone(status)
+
+
+    def test_limpeza_automatica_em_retorne_e_escopos_o0_o8(self):
+        casos = (
+            ("funcao f() -> inteiro {\n"
+             " seja dados: bytes = criar_bytes(3)\n"
+             " dados[1] = 137\n"
+             " retorne dados[1]\n"
+             "}\n inicio { seja r = f() }", 137),
+            ("funcao f() -> inteiro {\n"
+             " seja a: bytes = criar_bytes(3)\n"
+             " seja b: bytes = criar_bytes(4)\n"
+             " a[0] = 70\n b[0] = 55\n"
+             " retorne a[0] + b[0]\n"
+             "}\n inicio { seja r = f() }", 125),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja a: bytes = criar_bytes(3)\n"
+             " a[0] = 9\n"
+             " se n > 0 {\n"
+             " seja b: bytes = criar_bytes(7)\n"
+             " b[0] = 31\n"
+             " retorne a[0] + b[0]\n"
+             " }\n retorne a[0]\n"
+             "}\n inicio { seja r = f(1) }", 40),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja resultado = 3\n"
+             " se n > 0 {\n"
+             " seja a: bytes = criar_bytes(4)\n"
+             " a[0] = 61\n"
+             " resultado = resultado + a[0]\n"
+             " } senao {\n"
+             " seja b: bytes = criar_bytes(5)\n"
+             " b[0] = 20\n"
+             " resultado = resultado + b[0]\n"
+             " }\n retorne resultado\n"
+             "}\n inicio { seja r = f(1) }", 64),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja resultado = 3\n"
+             " se n > 0 {\n"
+             " seja a: bytes = criar_bytes(4)\n"
+             " a[0] = 61\n"
+             " resultado = resultado + a[0]\n"
+             " } senao {\n"
+             " seja b: bytes = criar_bytes(5)\n"
+             " b[0] = 20\n"
+             " resultado = resultado + b[0]\n"
+             " }\n retorne resultado\n"
+             "}\n inicio { seja r = f(-1) }", 23),
+            ("funcao f() -> inteiro {\n"
+             " seja a: bytes = criar_bytes(3)\n"
+             " a[0] = 42\n"
+             " liberar_bytes(a)\n"
+             " retorne 27\n"
+             "}\n inicio { seja r = f() }", 27),
+            ("funcao f() -> inteiro {\n"
+             " seja a: bytes = criar_bytes(3)\n"
+             " a[0] = 42\n"
+             " liberar_bytes(a)\n"
+             " seja b: bytes = criar_bytes(4)\n"
+             " b[0] = 80\n"
+             " retorne b[0]\n"
+             "}\n inicio { seja r = f() }", 80),
+            ("funcao f() -> inteiro {\n retorne 1\n}\n"
+             "inicio {\n seja a: bytes = criar_bytes(3)\n"
+             " a[0] = 14\n"
+             " seja r = f()\n"
+             " r = r + a[0]\n"
+             "}", 15),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, esperado=esperado, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
+    def test_liberdade_explica_continua_detectando_liberacao_dupla(self):
+        fonte = (
+            "funcao f() -> inteiro {\n"
+            " seja dados: bytes = criar_bytes(10)\n"
+            " liberar_bytes(dados)\n"
+            " liberar_bytes(dados)\n"
+            " retorne 0\n"
+            "}\n inicio { seja r = f() }"
+        )
+        for nivel in (0, 8):
+            with self.subTest(nivel=nivel):
+                codigo, dados, status = self.gerar(fonte, nivel)
+                self.assertEqual(codigo, 0)
+                if status is not None:
+                    self.assertEqual(status, 25)
+
+    def test_liberdade_automatica_sem_vazamento_de_memoria(self):
+        # Cada repeticao aloca 1 MiB: sem limpeza, RLIMIT_AS=96 MiB
+        # esgota a memoria virtual. A limpeza automatica permite rodar
+        # centenas de iteracoes mantendo apenas a alocacao ativa.
+        limite = 96 * 1024 * 1024
+        casos = (
+            (
+                "funcao f() -> inteiro {\n"
+                " seja i = 0\n seja total = 0\n"
+                " enquanto i < 300 {\n"
+                " seja dados: bytes = criar_bytes(1048576)\n"
+                " dados[0] = i % 256\n"
+                " total = total + dados[0]\n"
+                " i = i + 1\n"
+                " }\n retorne total\n"
+                "}\n inicio { seja r = f() }",
+                sum(range(300)) % 256,
+            ),
+            (
+                "funcao f() -> inteiro {\n"
+                " seja i = 0\n seja total = 0\n"
+                " enquanto i < 300 {\n"
+                " seja dados: bytes = criar_bytes(1048576)\n"
+                " i = i + 1\n"
+                " se i < 240 {\n continue\n }\n"
+                " total = total + 1\n"
+                " }\n retorne total\n"
+                "}\n inicio { seja r = f() }",
+                61,
+            ),
+            (
+                "funcao f() -> inteiro {\n"
+                " seja i = 0\n"
+                " enquanto i < 300 {\n"
+                " seja dados: bytes = criar_bytes(1048576)\n"
+                " i = i + 1\n pare\n"
+                " }\n retorne i\n"
+                "}\n inicio {\n seja total = 0\n"
+                " seja j = 0\n"
+                " enquanto j < 300 {\n"
+                " total = total + f()\n"
+                " j = j + 1\n"
+                " }\n }",
+                300 % 256,
+            ),
+            (
+                "funcao f() -> inteiro {\n"
+                " seja dados: bytes = criar_bytes(1048576)\n"
+                " dados[0] = 73\n"
+                " retorne dados[0]\n"
+                "}\n inicio {\n"
+                " seja i = 0\n seja total = 0\n"
+                " enquanto i < 300 {\n"
+                " total = total + f()\n"
+                " i = i + 1\n"
+                " }\n total = total\n }",
+                (73 * 300) % 256,
+            ),
+            (
+                "funcao f() -> inteiro {\n"
+                " seja i = 0\n seja total = 0\n"
+                " enquanto i < 300 {\n"
+                " se i % 2 == 0 {\n"
+                " seja a: bytes = criar_bytes(1048576)\n"
+                " a[0] = 2\n"
+                " total = total + a[0]\n"
+                " } senao {\n"
+                " seja b: bytes = criar_bytes(1048576)\n"
+                " b[0] = 1\n"
+                " total = total + b[0]\n"
+                " }\n i = i + 1\n"
+                " }\n retorne total\n"
+                "}\n inicio { seja r = f() }",
+                450 % 256,
+            ),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, esperado=esperado):
+                    codigo, dados, status = self.gerar(
+                        fonte, nivel, limite_memoria=limite
+                    )
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado)
 
 
 if __name__ == "__main__":

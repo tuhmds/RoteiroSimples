@@ -657,6 +657,23 @@ privado funcao emitir_predicado(codigo: bytes, fonte: emprestimo[bytes], unidade
     retorne mova(resposta)
 }
 
+// Desalocar somente os donos dinamicos visiveis a partir do marcador.
+// Os nomes desativados de ramos anteriores nao podem ser desalocados.
+privado funcao emitir_limpeza_escopo(codigo: bytes, nomes: emprestimo[lista[lexico.UnidadeLexica]], tipos: emprestimo[lista[inteiro]], marcador: inteiro) -> bytes {
+    seja i = tamanho(nomes) - 1
+    enquanto i >= marcador {
+        se tipos[i] == 3 {
+            seja nome: lexico.UnidadeLexica = nomes[i]
+            se nome.classe != 0 {
+                seja liberado = emisbytes.emitir_liberacao_automatica(mova(codigo), i)
+                mova(codigo, liberado)
+            }
+        }
+        i = i - 1
+    }
+    retorne mova(codigo)
+}
+
 // Mesmo emissor de IR para o programa principal e para cada funcao.
 // Posicoes de call/jcc sao offsets absolutos no vetor 'codigo'.
 privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], assinadas: emprestimo[assinaturas.Assinaturas], plano_principal: emprestimo[instrucoes.Plano], parametros: emprestimo[lista[lexico.UnidadeLexica]], funcao_atual: inteiro) -> EstadoCorpo {
@@ -685,6 +702,9 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                     resposta.codigo_erro = 2
                     retorne mova(resposta)
                 }
+                // O fim do programa tambem encerra o escopo principal.
+                seja final_limpo = emitir_limpeza_escopo(mova(codigo), empreste(nomes), empreste(tipos), 0)
+                mova(codigo, final_limpo)
                 posicao_ir = posicao_ir + 1
                 continue
             }
@@ -694,6 +714,10 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             }
             seja controle: ControleIntegrado = controles[tamanho(controles) - 1]
             remova_ultimo(controles)
+            // Fechamento normal libera seus donos antes de voltar ao
+            // predicado de enquanto ou de seguir o fluxo de execucao.
+            seja fechamento_limpo = emitir_limpeza_escopo(mova(codigo), empreste(nomes), empreste(tipos), controle.marcador_locais)
+            mova(codigo, fechamento_limpo)
             se controle.classe == 4 {
                 adicione_byte(codigo, 233)
                 seja volta = tamanho(codigo)
@@ -742,10 +766,12 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             // aninhados. Erro 16 protege de um desvio sem destino.
             seja mais_proximo = tamanho(controles) - 1
             seja identificador = -1
+            seja marcador_laco = -1
             enquanto mais_proximo >= 0 {
                 seja aberto: ControleIntegrado = controles[mais_proximo]
                 se aberto.classe == 4 {
                     identificador = aberto.identificador_laco
+                    marcador_laco = aberto.marcador_locais
                     pare
                 }
                 mais_proximo = mais_proximo - 1
@@ -754,6 +780,10 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 resposta.codigo_erro = 16
                 retorne mova(resposta)
             }
+            // Pare/continue ignoram o fechamento do laco e dos blocos
+            // aninhados: desalocar todos os donos pertencentes ao laco.
+            seja saida_laco = emitir_limpeza_escopo(mova(codigo), empreste(nomes), empreste(tipos), marcador_laco)
+            mova(codigo, saida_laco)
             adicione_byte(codigo, 233) // jmp rel32
             seja desvio: DesvioLaco
             desvio.identificador_laco = identificador
@@ -780,6 +810,10 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 resposta.codigo_erro = 7
                 retorne mova(resposta)
             }
+            // Antes de saltar senao, o ramo verdadeiro libera seus donos.
+            // O salto falso evita executar esta limpeza.
+            seja saida_verdadeira = emitir_limpeza_escopo(mova(codigo), empreste(nomes), empreste(tipos), controle_senao.marcador_locais)
+            mova(codigo, saida_verdadeira)
             adicione_byte(codigo, 233) // jmp rel32 para depois do senao
             seja deslocamento_fim = tamanho(codigo)
             seja contador_senao = 0
@@ -999,8 +1033,11 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             indice_ligacao_valor = indice_ligacao_valor + 1
         }
         se instrucao.categoria == 7 {
-            // Tanto a expressao quanto a chamada deixam o valor na pilha.
+            // A expressao foi avaliada antes da limpeza. O resultado em
+            // rax deve sobreviver a cada chamada de munmap.
             adicione_byte(codigo, 88) // pop rax
+            seja retorno_limpo = emitir_limpeza_escopo(mova(codigo), empreste(nomes), empreste(tipos), 0)
+            mova(codigo, retorno_limpo)
             adicione_byte(codigo, 201) // leave
             adicione_byte(codigo, 195) // ret
             posicao_ir = posicao_ir + 1

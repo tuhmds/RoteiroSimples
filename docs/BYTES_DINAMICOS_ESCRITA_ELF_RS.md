@@ -36,9 +36,11 @@ O erro de compilacao **18** rejeita atribuicao ao buffer inteiro, atribuicao ind
 
 ## Gerenciamento de memoria
 
-A liberacao e **explicita, nao automatica**. O programa deve executar `liberar_bytes` exatamente uma vez para cada buffer dinamico alocado com sucesso, inclusive antes de `retorne`, `pare`, `continue` e saidas de escopo. Omitir liberacao em loops ou funcoes de longa duracao causa vazamento ate o fim do processo.
+**Atualizacao — limpeza automatica de escopos (PR #68):** no emissor `emissao_corpos_funcoes_elf.rts`, todo buffer dinamico ainda ativo e liberado automaticamente ao fim do seu escopo, em `retorne`, em `pare`, em `continue` e no encerramento de `inicio`. O fechamento normal de `se/senao` e `enquanto` tambem libera os buffers pertencentes a seus respectivos blocos. A limpeza preserva o valor retornado.
 
-Nao ha ainda passagem ou retorno de buffers dinamicos entre funcoes, atribuicao de buffers inteiros, ownership estatico completo, coletor de lixo ou desalocacao automatica de valores esquecidos. Nao representa a autocompilacao integral.
+`liberar_bytes(dados)` permanece disponivel e invalida o descritor imediatamente. A limpeza automatica ignora um descritor ja liberado; duas liberacoes **explicitas** continuam resultando no codigo 25.
+
+A liberacao automatica se restringe a **variaveis dinamicas locais**: ainda nao ha passagem/retorno de buffers entre funcoes, ownership estatico integral, desalocacao em encerramentos anormais por `exit(23/24/25)`, nem coletor de lixo. O processo Linux recupera seus mapeamentos apos saida anormal. Nao representa a autocompilacao integral. Veja `docs/BYTES_LIMPEZA_AUTOMATICA_ELF_RS.md`.
 
 ## Validacao
 
