@@ -134,9 +134,42 @@ class TestesEmissaoFluxoELFRS(unittest.TestCase):
                 with self.subTest(nivel=nivel, fonte=fonte):
                     codigo, dados, status = self.gerar(fonte, nivel)
                     self.assertEqual(codigo, 0)
-                    self.assertIn(bytes((72, 133, 201, 117, 12)), dados)
+                    self.assertIn(bytes((72, 133, 201, 15, 133)), dados)
                     if status is not None:
                         self.assertEqual(status, esperado)
+
+    def test_diagnostico_de_divisao_no_stderr(self):
+        if self.alvo != "linux":
+            return
+        casos = (
+            ("inicio {\n seja a = 7\n a = a / 0\n}", 240, "RS: divisao por zero\n"),
+            ("inicio {\n seja a = 0\n a = a % a\n}", 240, "RS: divisao por zero\n"),
+            ("inicio {\n seja a = -8 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024\n"
+             " a = a / -1\n}", 241, "RS: estouro na divisao\n"),
+            ("inicio {\n seja a = 240\n}", 240, ""),
+            ("inicio {\n seja a = 241\n}", 241, ""),
+        )
+        for nivel in (0, 8):
+            for fonte, status_esperado, erro_esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    with tempfile.TemporaryDirectory(prefix="rs_fluxo_erro_") as pasta:
+                        raiz = Path(pasta)
+                        (raiz / "codigo_fonte.rts").write_text(fonte, encoding="utf-8")
+                        gerador = subprocess.run(
+                            [str(self.ferramentas[nivel])], cwd=raiz, timeout=30,
+                            capture_output=True, text=True, encoding="utf-8", errors="replace",
+                        )
+                        self.assertEqual(gerador.returncode, 0, gerador.stderr)
+                        self.assertEqual(int(gerador.stdout.splitlines()[0]), 0)
+                        arquivo = raiz / "resultado_fluxo_elf"
+                        arquivo.chmod(0o700)
+                        processo = subprocess.run(
+                            [str(arquivo)], cwd=raiz, timeout=4,
+                            capture_output=True, text=True, encoding="utf-8", errors="replace",
+                        )
+                        self.assertEqual(processo.returncode, status_esperado)
+                        self.assertEqual(processo.stderr, erro_esperado)
+                        self.assertEqual(processo.stdout, "")
 
     def test_lacos_e_aninhamentos(self):
         casos = (

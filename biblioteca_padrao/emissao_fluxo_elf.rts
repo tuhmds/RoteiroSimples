@@ -92,41 +92,91 @@ publico funcao corrigir(codigo: bytes, posicao: inteiro, destino: inteiro) -> by
     retorne mova(codigo)
 }
 
-// Emissao compartilhada de divisao signed64 com falhas previsiveis.
-// Entrada: rax = dividendo; rcx = divisor. Saida: rax = quociente/resto.
-// O processo ELF encerra com 240 em zero e 241 em overflow de IDIV.
+// Emite erro legivel no stderr do ELF Linux, distinguindo falhas de
+// saidas normais que coincidam com os codigos 240 e 241.
+// O syscall write usa uma mensagem ASCII situada depois do exit.
+// O codigo gerado executa somente o trecho de instrucoes.
+privado funcao falha_divisao(codigo: bytes, codigo_saida: inteiro, mensagem: emprestimo[texto]) -> bytes {
+    // write(2, mensagem, tamanho)
+    adicione_byte(codigo, 184)
+    seja syscall_escrita = elf.anexar_inteiro(mova(codigo), 1, 4)
+    mova(codigo, syscall_escrita)
+    adicione_byte(codigo, 191)
+    seja destino_erro = elf.anexar_inteiro(mova(codigo), 2, 4)
+    mova(codigo, destino_erro)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 141)
+    adicione_byte(codigo, 53)
+    seja deslocamento_texto = tamanho(codigo)
+    seja i = 0
+    enquanto i < 4 {
+        adicione_byte(codigo, 0)
+        i = i + 1
+    }
+    adicione_byte(codigo, 186)
+    seja comprimento = elf.anexar_inteiro(mova(codigo), tamanho(mensagem), 4)
+    mova(codigo, comprimento)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 5)
+    // exit(codigo_saida)
+    adicione_byte(codigo, 191)
+    seja status = elf.anexar_inteiro(mova(codigo), codigo_saida, 4)
+    mova(codigo, status)
+    adicione_byte(codigo, 184)
+    seja syscall_saida = elf.anexar_inteiro(mova(codigo), 60, 4)
+    mova(codigo, syscall_saida)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 5)
+    // Bytes finais: dados ASCII fora do caminho de execucao.
+    seja posicao_texto = tamanho(codigo)
+    i = 0
+    enquanto i < tamanho(mensagem) {
+        adicione_byte(codigo, byte_em(mensagem, i))
+        i = i + 1
+    }
+    seja corrigido = corrigir(mova(codigo), deslocamento_texto, posicao_texto)
+    retorne mova(corrigido)
+}
+
+// Divisao assinada de 64 bits sem falha de hardware por zero/overflow.
+// Entrada: rax dividendo, rcx divisor; saida rax quociente/resto.
+// Erro 240: escreve "RS: divisao por zero" em stderr.
+// Erro 241: escreve "RS: estouro na divisao" em stderr.
+// Ambos os erros terminam o programa; ainda nao sao recuperaveis.
 publico funcao emitir_divisao_protegida(codigo: bytes, resto: logico) -> bytes {
-    // test rcx, rcx; jne +12; exit(240)
+    // test rcx,rcx; jne rel32 (pula falha).
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 133)
     adicione_byte(codigo, 201)
-    adicione_byte(codigo, 117)
-    adicione_byte(codigo, 12)
-    adicione_byte(codigo, 191)
-    adicione_byte(codigo, 240)
-    seja i = 0
-    enquanto i < 3 {
-        adicione_byte(codigo, 0)
-        i = i + 1
-    }
-    adicione_byte(codigo, 184)
-    adicione_byte(codigo, 60)
-    i = 0
-    enquanto i < 3 {
-        adicione_byte(codigo, 0)
-        i = i + 1
-    }
     adicione_byte(codigo, 15)
-    adicione_byte(codigo, 5)
+    adicione_byte(codigo, 133)
+    seja deslocamento_zero = tamanho(codigo)
+    seja i = 0
+    enquanto i < 4 {
+        adicione_byte(codigo, 0)
+        i = i + 1
+    }
+    seja mensagem_zero: texto = "RS: divisao por zero\n"
+    seja falha_zero = falha_divisao(mova(codigo), 240, empreste(mensagem_zero))
+    mova(codigo, falha_zero)
+    seja destino_continuacao_zero = tamanho(codigo)
+    seja continuacao_zero = corrigir(mova(codigo), deslocamento_zero, destino_continuacao_zero)
+    mova(codigo, continuacao_zero)
 
-    // cmp rcx,-1; jne +27; movabs rdx,minimo signed64
-    // cmp rax,rdx; jne +12; exit(241)
+    // cmp rcx,-1; jne rel32. Nao ha overflow com divisor diferente.
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 131)
     adicione_byte(codigo, 249)
     adicione_byte(codigo, 255)
-    adicione_byte(codigo, 117)
-    adicione_byte(codigo, 27)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 133)
+    seja deslocamento_divisor = tamanho(codigo)
+    i = 0
+    enquanto i < 4 {
+        adicione_byte(codigo, 0)
+        i = i + 1
+    }
+    // movabs rdx, 0x8000000000000000
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 186)
     i = 0
@@ -135,27 +185,27 @@ publico funcao emitir_divisao_protegida(codigo: bytes, resto: logico) -> bytes {
         i = i + 1
     }
     adicione_byte(codigo, 128)
+    // cmp rax,rdx; jne rel32.
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 57)
     adicione_byte(codigo, 208)
-    adicione_byte(codigo, 117)
-    adicione_byte(codigo, 12)
-    adicione_byte(codigo, 191)
-    adicione_byte(codigo, 241)
-    i = 0
-    enquanto i < 3 {
-        adicione_byte(codigo, 0)
-        i = i + 1
-    }
-    adicione_byte(codigo, 184)
-    adicione_byte(codigo, 60)
-    i = 0
-    enquanto i < 3 {
-        adicione_byte(codigo, 0)
-        i = i + 1
-    }
     adicione_byte(codigo, 15)
-    adicione_byte(codigo, 5)
+    adicione_byte(codigo, 133)
+    seja deslocamento_dividendo = tamanho(codigo)
+    i = 0
+    enquanto i < 4 {
+        adicione_byte(codigo, 0)
+        i = i + 1
+    }
+    seja mensagem_estouro: texto = "RS: estouro na divisao\n"
+    seja falha_estouro = falha_divisao(mova(codigo), 241, empreste(mensagem_estouro))
+    mova(codigo, falha_estouro)
+    seja destino_continuacao_dividendo = tamanho(codigo)
+    seja continuacao_dividendo = corrigir(mova(codigo), deslocamento_dividendo, destino_continuacao_dividendo)
+    mova(codigo, continuacao_dividendo)
+    seja destino_continuacao_divisor = tamanho(codigo)
+    seja continuacao_divisor = corrigir(mova(codigo), deslocamento_divisor, destino_continuacao_divisor)
+    mova(codigo, continuacao_divisor)
 
     // cqo; idiv rcx. O resto signed64 fica em rdx.
     adicione_byte(codigo, 72)
