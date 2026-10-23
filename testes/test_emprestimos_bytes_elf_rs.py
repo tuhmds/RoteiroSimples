@@ -1,17 +1,17 @@
 """Testes O0/O8 do emprestimo read-only de buffers dinamicos ELF64."""
 import unittest
-from testes.test_emissao_corpos_funcoes_elf_rs import TestesCorposFuncoesELFRS
+from testes import test_emissao_corpos_funcoes_elf_rs as base_corpos
 
 
 class TestesEmprestimoBytesELF(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        TestesCorposFuncoesELFRS.setUpClass()
-        cls.gerador = TestesCorposFuncoesELFRS()
+        base_corpos.TestesCorposFuncoesELFRS.setUpClass()
+        cls.gerador = base_corpos.TestesCorposFuncoesELFRS("test_buffers_bytes_nativos_e_leituras_o0_o8")
 
     @classmethod
     def tearDownClass(cls):
-        TestesCorposFuncoesELFRS.tearDownClass()
+        base_corpos.TestesCorposFuncoesELFRS.tearDownClass()
 
     def gerar(self, fonte, nivel, limite_memoria=None):
         return self.gerador.gerar(fonte, nivel, limite_memoria=limite_memoria)
