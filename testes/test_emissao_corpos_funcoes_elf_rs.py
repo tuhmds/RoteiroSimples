@@ -991,5 +991,107 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                     self.assertFalse((raiz / "resultado_corpos_elf").exists())
 
 
+    def test_pare_continue_em_lacos_elf_o0_o8(self):
+        casos = (
+            ("funcao somar(n: inteiro) -> inteiro {\n"
+             " seja i = 0\n seja total = 0\n"
+             " enquanto i < n {\n"
+             " i = i + 1\n"
+             " se i % 2 == 0 {\n continue\n }\n"
+             " total = total + i\n"
+             " }\n retorne total\n}\n"
+             "inicio { seja resultado = somar(6) }", 9),
+            ("funcao interromper(n: inteiro) -> inteiro {\n"
+             " seja i = 0\n"
+             " enquanto i < n {\n"
+             " se i == 4 {\n pare\n }\n"
+             " i = i + 1\n }\n retorne i\n}\n"
+             "inicio { seja resultado = interromper(10) }", 4),
+            ("funcao contar() -> inteiro {\n"
+             " seja i = 0\n seja total = 0\n"
+             " enquanto i < 3 {\n"
+             " seja t = 1\n"
+             " i = i + 1\n }\n retorne total\n}\n"
+             "inicio { seja resultado = contar() }", None),
+            ("funcao contar(n: inteiro) -> inteiro {\n"
+             " seja i = 0\n seja j = 0\n seja total = 0\n"
+             " enquanto i < n {\n"
+             " j = 0\n"
+             " enquanto j < 4 {\n"
+             " j = j + 1\n"
+             " se j == 2 {\n pare\n }\n"
+             " total = total + 1\n"
+             " }\n i = i + 1\n"
+             " }\n retorne total\n}\n"
+             "inicio { seja resultado = contar(3) }", 3),
+            ("funcao contar(n: inteiro) -> inteiro {\n"
+             " seja i = 0\n seja j = 0\n seja total = 0\n"
+             " enquanto i < n {\n"
+             " j = 0\n i = i + 1\n"
+             " enquanto j < 3 {\n"
+             " j = j + 1\n"
+             " se j == 2 {\n continue\n }\n"
+             " total = total + 1\n"
+             " }\n"
+             " }\n retorne total\n}\n"
+             "inicio { seja resultado = contar(3) }", 6),
+            ("funcao identidade(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n"
+             " seja i = 0\n seja resultado = 0\n"
+             " enquanto i < identidade(6) {\n"
+             " i = i + 1\n"
+             " se i % 2 == 0 {\n continue\n } senao {\n"
+             " resultado = resultado + i\n }\n"
+             " }\n}", 9),
+            ("funcao identidade(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja resultado = 0\n"
+             " enquanto resultado < 9 {\n"
+             " resultado = resultado + 1\n"
+             " se resultado == 5 {\n pare\n }\n"
+             " }\n}", 5),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                if esperado is None:
+                    continue  # exemplo fora do subconjunto (declaracao dentro de laco)
+                with self.subTest(nivel=nivel, esperado=esperado, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIn(bytes((233,)), dados[127:])
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
+    def test_pare_continue_invalidos_e_inalcancaveis(self):
+        casos = (
+            (16, "funcao f() -> inteiro {\n retorne 1\n}\n"
+             "inicio {\n seja r = 0\n pare\n}"),
+            (16, "funcao f() -> inteiro {\n retorne 1\n}\n"
+             "inicio {\n seja r = 0\n continue\n}"),
+            (16, "funcao f(n: inteiro) -> inteiro {\n"
+             " pare\n retorne n\n}\n"
+             "inicio { seja r = f(1) }"),
+            (16, "funcao f(n: inteiro) -> inteiro {\n"
+             " se n > 0 {\n continue\n }\n retorne n\n}\n"
+             "inicio { seja r = f(1) }"),
+            (16, "funcao f() -> inteiro {\n retorne 1\n}\n"
+             "inicio { seja r = 0\n enquanto r < 3 {\n pare 2\n }\n}"),
+            (16, "funcao f() -> inteiro {\n retorne 1\n}\n"
+             "inicio { seja r = 0\n enquanto r < 3 {\n continue 1\n }\n}"),
+            (10, "funcao f(n: inteiro) -> inteiro {\n"
+             " enquanto n > 0 {\n pare\n n = n - 1\n }\n"
+             " retorne n\n}\n inicio { seja r = f(3) }"),
+            (10, "funcao f(n: inteiro) -> inteiro {\n"
+             " enquanto n > 0 {\n continue\n n = n - 1\n }\n"
+             " retorne n\n}\n inicio { seja r = f(3) }"),
+        )
+        for nivel in (0, 8):
+            for esperado, fonte in casos:
+                with self.subTest(nivel=nivel, esperado=esperado, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, esperado)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
+
 if __name__ == "__main__":
     unittest.main()
