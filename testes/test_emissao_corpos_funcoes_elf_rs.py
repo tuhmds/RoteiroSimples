@@ -1256,7 +1256,7 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
             (2, "funcao f() -> inteiro {\n"
              " seja x: lista[inteiro] = 2\n retorne x\n}\n"
              "inicio { seja r = f() }"),
-            (2, "funcao f() -> inteiro {\n retorne 1\n}\n"
+            (17, "funcao f() -> inteiro {\n retorne 1\n}\n"
              "inicio { seja r: bytes = f() }"),
             (3, "funcao f() -> inteiro {\n"
              " seja x: inteiro 2\n retorne x\n}\n"
