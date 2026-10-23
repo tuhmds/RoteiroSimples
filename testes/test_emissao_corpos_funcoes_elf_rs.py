@@ -1007,12 +1007,6 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
              " se i == 4 {\n pare\n }\n"
              " i = i + 1\n }\n retorne i\n}\n"
              "inicio { seja resultado = interromper(10) }", 4),
-            ("funcao contar() -> inteiro {\n"
-             " seja i = 0\n seja total = 0\n"
-             " enquanto i < 3 {\n"
-             " seja t = 1\n"
-             " i = i + 1\n }\n retorne total\n}\n"
-             "inicio { seja resultado = contar() }", None),
             ("funcao contar(n: inteiro) -> inteiro {\n"
              " seja i = 0\n seja j = 0\n seja total = 0\n"
              " enquanto i < n {\n"
@@ -1052,8 +1046,6 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
         )
         for nivel in (0, 8):
             for fonte, esperado in casos:
-                if esperado is None:
-                    continue  # exemplo fora do subconjunto (declaracao dentro de laco)
                 with self.subTest(nivel=nivel, esperado=esperado, fonte=fonte):
                     codigo, dados, status = self.gerar(fonte, nivel)
                     self.assertEqual(codigo, 0)
