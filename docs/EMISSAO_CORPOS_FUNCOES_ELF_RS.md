@@ -69,11 +69,15 @@ na pilha e retorno em `rax`, com `leave; ret`.
   `pare`, `continue`, ABI System V, funcoes aninhadas, chamadas
   externas, protecao de overflow aritmetico ou otimizacao especifica
   deste emissor. A divisao signed64 trunca para zero e o resto conserva
-  o sinal do dividendo. Divisao por zero ou o caso minimo signed64 / -1
-  provoca a excecao nativa de divisao (SIGFPE no Linux); ainda nao ha
-  diagnostico de alto nivel para essa falha em execucao. `inicio` continua
-  expondo a ultima atribuicao
-  executada como status de saida do processo (modulo 256).
+  o sinal do dividendo. Antes de `idiv`, o emissor faz verificacoes
+  nativas de dois erros aritmeticos: divisor zero encerra o processo
+  com status **240**; dividendo minimo signed64 com divisor -1 encerra
+  com status **241**. Sao sentinelas do processo gerado, nao codigos
+  de diagnostico do compilador nem excecoes recuperaveis. Ainda nao
+  existe mensagem no terminal, rastreamento de origem ou um resultado
+  tipado para esses erros; alem disso, valores validos de `inicio`
+  tambem podem terminar com os mesmos status. `inicio` continua
+  expondo a ultima atribuicao como status de saida (modulo 256).
 
 ## Arquitetura
 
@@ -97,7 +101,7 @@ falhar sem gerar arquivo. A CI geral e obrigatoria antes da integracao.
 
 ## Proximo passo
 
-Fortalecer verificacao semantica de caminhos de retorno, divisao por
-zero e tipos; avaliar tratamento controlado de falhas em execucao.
-Depois estudar recursao controlada, ABI publica e etapas do bootstrap
-completo do compilador.
+Tornar erros aritmeticos recuperaveis e diagnosticados com origem
+e tipo (em vez de depender apenas de codigos de saida), fortalecer
+verificacao semantica dos caminhos de retorno e tipos. Depois estudar
+recursao controlada, ABI publica e etapas do bootstrap completo.
