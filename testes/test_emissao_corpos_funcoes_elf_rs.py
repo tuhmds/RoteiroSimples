@@ -1715,7 +1715,7 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                 " enquanto i < 300 {\n"
                 " total = total + f()\n"
                 " i = i + 1\n"
-                " }\n }",
+                " }\n total = total\n }",
                 (73 * 300) % 256,
             ),
             (
