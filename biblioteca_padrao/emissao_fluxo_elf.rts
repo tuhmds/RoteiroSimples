@@ -188,7 +188,7 @@ privado funcao falha_divisao(codigo: bytes, codigo_saida: inteiro, mensagem: emp
     }
     i = 0
     enquanto i < tamanho(separador) {
-        adicione_byte(codigo, byte_em(empreste(separador), i))
+        adicione_byte(codigo, byte_em(separador, i))
         i = i + 1
     }
     i = tamanho(digitos_coluna) - 1
