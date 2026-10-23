@@ -1,7 +1,8 @@
 // Plano intermediario de instrucoes para emissao ELF em RS.
 // Uma representacao tipada ordenada (sem codigo de maquina) para o bloco inicio.
 // Categoria: 1 declaracao, 2 atribuicao, 3 se, 4 enquanto,
-// 5 fechamento de controle, 6 fechamento de inicio, 8 transicao senao.
+// 5 fechamento de controle, 6 fechamento de inicio, 8 transicao senao,
+// 9 pare, 10 continue. Erro 16: desvio de laco invalido.
 importe "lexico.rts" como lexico
 importe "emissao_fluxo_elf.rts" como fluxo
 
@@ -36,6 +37,8 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
     seja texto_se: texto = "se"
     seja texto_enquanto: texto = "enquanto"
     seja texto_senao: texto = "senao"
+    seja texto_pare: texto = "pare"
+    seja texto_continue: texto = "continue"
     seja principal: lexico.UnidadeLexica = unidades[unidade_inicio]
     seja abertura: lexico.UnidadeLexica = unidades[unidade_inicio + 1]
     se nao fluxo.igual(fonte, principal, empreste(texto_inicio)) ou nao fluxo.simbolo(fonte, abertura, 123) {
@@ -45,6 +48,8 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
     }
     seja profundidade = 0
     seja pilha_controles: lista[inteiro]
+    seja quantidade_lacos = 0
+    seja desvio_bloqueante = -1
     seja i = unidade_inicio + 2
     enquanto i < total {
         plano.unidade_erro = i
@@ -55,6 +60,16 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
         instrucao.valor_inicio = -1
         instrucao.valor_fim = -1
         instrucao.profundidade = profundidade
+        // Depois de pare/continue, so o fechamento do bloco alcancado
+        // por esse desvio permanece analisavel neste nivel.
+        se desvio_bloqueante >= 0 {
+            se fluxo.simbolo(fonte, token, 125) e profundidade == desvio_bloqueante {
+                desvio_bloqueante = -1
+            } senao {
+                plano.codigo_erro = 10
+                retorne mova(plano)
+            }
+        }
         se fluxo.simbolo(fonte, token, 125) {
             se profundidade == 0 {
                 se i != total - 1 {
@@ -90,6 +105,9 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
             }
             instrucao.categoria = 5
             adicione(plano.instrucoes, instrucao)
+            se pilha_controles[tamanho(pilha_controles) - 1] == 4 {
+                quantidade_lacos = quantidade_lacos - 1
+            }
             remova_ultimo(pilha_controles)
             profundidade = profundidade - 1
             i = i + 1
@@ -137,8 +155,39 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
             instrucao.valor_fim = cursor
             adicione(plano.instrucoes, instrucao)
             adicione(pilha_controles, instrucao.categoria)
+            se instrucao.categoria == 4 {
+                quantidade_lacos = quantidade_lacos + 1
+            }
             profundidade = profundidade + 1
             i = cursor + 1
+            continue
+        }
+        seja comando_pare = fluxo.igual(fonte, token, empreste(texto_pare))
+        seja comando_continue = fluxo.igual(fonte, token, empreste(texto_continue))
+        se comando_pare ou comando_continue {
+            se quantidade_lacos == 0 {
+                plano.codigo_erro = 16
+                retorne mova(plano)
+            }
+            instrucao.categoria = 9
+            se comando_continue {
+                instrucao.categoria = 10
+            }
+            adicione(plano.instrucoes, instrucao)
+            desvio_bloqueante = profundidade
+            i = i + 1
+            se i < total {
+                seja seguinte: lexico.UnidadeLexica = unidades[i]
+                se fluxo.simbolo(fonte, seguinte, 59) {
+                    i = i + 1
+                } senao {
+                    se seguinte.linha == token.linha e nao fluxo.simbolo(fonte, seguinte, 125) {
+                        plano.codigo_erro = 16
+                        plano.unidade_erro = i
+                        retorne mova(plano)
+                    }
+                }
+            }
             continue
         }
         se fluxo.simbolo(fonte, token, 123) {
@@ -189,7 +238,7 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
             }
         }
     }
-    se i != total ou profundidade != 0 ou tamanho(pilha_controles) != 0 ou plano.quantidade_locais < 1 {
+    se i != total ou profundidade != 0 ou quantidade_lacos != 0 ou tamanho(pilha_controles) != 0 ou plano.quantidade_locais < 1 {
         plano.codigo_erro = 2
         retorne mova(plano)
     }
@@ -316,6 +365,8 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
     seja texto_se: texto = "se"
     seja texto_enquanto: texto = "enquanto"
     seja texto_senao: texto = "senao"
+    seja texto_pare: texto = "pare"
+    seja texto_continue: texto = "continue"
     seja abertura: lexico.UnidadeLexica = unidades[abertura_corpo]
     seja fechamento: lexico.UnidadeLexica = unidades[fechamento_corpo]
     se nao fluxo.simbolo(fonte, abertura, 123) ou nao fluxo.simbolo(fonte, fechamento, 125) {
@@ -325,6 +376,7 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
     seja texto_retorne: texto = "retorne"
     seja profundidade = 0
     seja pilha_controles: lista[inteiro]
+    seja quantidade_lacos = 0
     seja i = abertura_corpo + 1
     seja retorno_bloqueante = -1
     enquanto i <= fechamento_corpo {
@@ -382,6 +434,9 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
             }
             instrucao.categoria = 5
             adicione(plano.instrucoes, instrucao)
+            se pilha_controles[tamanho(pilha_controles) - 1] == 4 {
+                quantidade_lacos = quantidade_lacos - 1
+            }
             remova_ultimo(pilha_controles)
             profundidade = profundidade - 1
             i = i + 1
@@ -429,6 +484,9 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
             instrucao.valor_fim = cursor
             adicione(plano.instrucoes, instrucao)
             adicione(pilha_controles, instrucao.categoria)
+            se instrucao.categoria == 4 {
+                quantidade_lacos = quantidade_lacos + 1
+            }
             profundidade = profundidade + 1
             i = cursor + 1
             continue
@@ -448,6 +506,34 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
                 seja separador_retorno: lexico.UnidadeLexica = unidades[i]
                 se fluxo.simbolo(fonte, separador_retorno, 59) {
                     i = i + 1
+                }
+            }
+            continue
+        }
+        seja comando_pare = fluxo.igual(fonte, token, empreste(texto_pare))
+        seja comando_continue = fluxo.igual(fonte, token, empreste(texto_continue))
+        se comando_pare ou comando_continue {
+            se quantidade_lacos == 0 {
+                plano.codigo_erro = 16
+                retorne mova(plano)
+            }
+            instrucao.categoria = 9
+            se comando_continue {
+                instrucao.categoria = 10
+            }
+            adicione(plano.instrucoes, instrucao)
+            retorno_bloqueante = profundidade
+            i = i + 1
+            se i < fechamento_corpo {
+                seja seguinte: lexico.UnidadeLexica = unidades[i]
+                se fluxo.simbolo(fonte, seguinte, 59) {
+                    i = i + 1
+                } senao {
+                    se seguinte.linha == token.linha e nao fluxo.simbolo(fonte, seguinte, 125) {
+                        plano.codigo_erro = 16
+                        plano.unidade_erro = i
+                        retorne mova(plano)
+                    }
                 }
             }
             continue
@@ -500,7 +586,7 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
             }
         }
     }
-    se i != fechamento_corpo + 1 ou profundidade != 0 ou tamanho(pilha_controles) != 0 {
+    se i != fechamento_corpo + 1 ou profundidade != 0 ou quantidade_lacos != 0 ou tamanho(pilha_controles) != 0 {
         plano.codigo_erro = 2
         retorne mova(plano)
     }
