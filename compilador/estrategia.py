@@ -103,12 +103,17 @@ def decidir_estrategia(programa, nivel=1, otimizar=True):
                     'grave_trecho', 'carregue_trecho') for i in instrucoes):
         motivos.append('arquivos nativos')
 
+    # A interface grafica exige emissao conservadora, inclusive em programas com funcoes.
+    if any(i[0] == 'janela_mensagem' for i in instrucoes):
+        motivos.append('interface grafica Win32')
+
     # Uma operação nova nunca deve entrar silenciosamente na IR antiga.
     # O relatório percorre expressões e blocos aninhados e cobre funções.
     motivos.extend(motivos_de_cobertura(analisar_cobertura(programa)))
     if motivos:
         funcoes = estrategias_funcoes(programa, nivel, otimizar)
-        misto = otimizar and nivel > 0 and any(f.elegivel for f in funcoes)
+        misto = (otimizar and nivel > 0 and any(f.elegivel for f in funcoes)
+                 and not any(i[0] == 'janela_mensagem' for i in instrucoes))
         return Estrategia('misto' if misto else 'conservador', nivel, 0,
                           tuple(dict.fromkeys(motivos)), bool(misto), funcoes)
 

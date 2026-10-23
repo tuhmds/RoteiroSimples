@@ -1,0 +1,6 @@
+// Primeiro diálogo gráfico nativo em RoteiroSimples (Windows).
+// O executável exibe um diálogo modal com botão OK.
+inicio {
+    janela_mensagem("RoteiroSimples", "Ola! Esta janela foi criada por um programa RS.")
+    janela_mensagem("RS Graficos", "Segundo dialogo: acentos e Unicode - Ação 🌱")
+}
