@@ -900,5 +900,96 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                     self.assertIsNone(status)
 
 
+    def test_chamadas_futuras_sem_ciclo(self):
+        casos = (
+            ("funcao a() -> inteiro {\n retorne b()\n}\n"
+             "funcao b() -> inteiro {\n retorne 7\n}\n"
+             "inicio { seja r = a() }", 7),
+            ("funcao a(n: inteiro) -> inteiro {\n retorne b(n + 2)\n}\n"
+             "funcao b(x: inteiro) -> inteiro {\n retorne x * 3\n}\n"
+             "inicio { seja r = a(4) }", 18),
+            ("funcao a(n: inteiro) -> inteiro {\n retorne b(n)\n}\n"
+             "funcao b(n: inteiro) -> inteiro {\n retorne c(n) + 1\n}\n"
+             "funcao c(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "inicio { seja r = a(8) }", 17),
+            ("funcao base(n: inteiro) -> inteiro {\n retorne n - 1\n}\n"
+             "funcao primeira(n: inteiro) -> inteiro {\n retorne ultima(n) + 1\n}\n"
+             "funcao ultima(n: inteiro) -> inteiro {\n retorne base(n) * 2\n}\n"
+             "inicio { seja r = primeira(5) }", 9),
+            ("funcao selecionar(n: inteiro) -> inteiro {\n"
+             " se depois(n) > 5 {\n retorne 11\n } senao {\n retorne 22\n }\n"
+             "}\n"
+             "funcao depois(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+             "inicio { seja r = selecionar(5) }", 11),
+            ("funcao soma(n: inteiro) -> inteiro {\n"
+             " seja i = 0\n enquanto i < proximo(n) {\n i = i + 1\n }\n"
+             " retorne i\n}\n"
+             "funcao proximo(n: inteiro) -> inteiro {\n retorne n + 2\n}\n"
+             "inicio { seja r = soma(3) }", 5),
+            ("funcao calcular(n: inteiro) -> inteiro {\n"
+             " retorne juntar(dobro(n), n + 1)\n}\n"
+             "funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "funcao juntar(a: inteiro, b: inteiro) -> inteiro {\n retorne a + b\n}\n"
+             "inicio { seja r = calcular(5) }", 16),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
+    def test_ciclos_indiretos_e_chamadas_futuras_invalidas(self):
+        casos = (
+            (14, "funcao a() -> inteiro {\n retorne b()\n}\n"
+             "funcao b() -> inteiro {\n retorne a()\n}\n"
+             "inicio { seja r = a() }"),
+            (14, "funcao a(n: inteiro) -> inteiro {\n retorne b(n)\n}\n"
+             "funcao b(n: inteiro) -> inteiro {\n retorne c(n)\n}\n"
+             "funcao c(n: inteiro) -> inteiro {\n retorne a(n)\n}\n"
+             "inicio { seja r = a(1) }"),
+            (14, "funcao a(n: inteiro) -> inteiro {\n"
+             " se n > 0 {\n retorne b(n)\n }\n retorne 0\n}\n"
+             "funcao b(n: inteiro) -> inteiro {\n"
+             " se n > 0 {\n retorne a(n)\n }\n retorne 1\n}\n"
+             "inicio { seja r = a(0) }"),
+            (13, "funcao a() -> inteiro {\n retorne b(1)\n}\n"
+             "funcao b() -> inteiro {\n retorne 3\n}\n"
+             "inicio { seja r = a() }"),
+            (12, "funcao a() -> inteiro {\n retorne inexistente()\n}\n"
+             "funcao b() -> inteiro {\n retorne 3\n}\n"
+             "inicio { seja r = a() }"),
+        )
+        for nivel in (0, 8):
+            for esperado, fonte in casos:
+                with self.subTest(nivel=nivel, esperado=esperado, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, esperado)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
+    def test_indice_token_ciclo_indireto(self):
+        fonte = ("funcao alfa() -> inteiro {\n retorne beta()\n}\n"
+                 "funcao beta() -> inteiro {\n retorne alfa()\n}\n"
+                 "inicio { seja r = alfa() }")
+        for nivel in (0, 8):
+            with self.subTest(nivel=nivel):
+                with tempfile.TemporaryDirectory(prefix="rs_ciclo_elf_") as pasta:
+                    raiz = Path(pasta)
+                    (raiz / "codigo_fonte.rts").write_text(fonte, encoding="utf-8")
+                    processo = subprocess.run(
+                        [str(self.ferramentas[nivel])], cwd=raiz, timeout=30,
+                        capture_output=True, text=True, encoding="utf-8", errors="replace",
+                    )
+                    self.assertEqual(processo.returncode, 0, processo.stderr)
+                    valores = [int(v) for v in processo.stdout.splitlines()]
+                    self.assertEqual(len(valores), 2)
+                    self.assertEqual(valores[0], 14)
+                    self.assertGreater(valores[1], 0)
+                    self.assertFalse((raiz / "resultado_corpos_elf").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
