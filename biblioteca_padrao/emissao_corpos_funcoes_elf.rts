@@ -253,7 +253,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             adicione_byte(codigo, 89) // pop rcx: direita
             adicione_byte(codigo, 88) // pop rax: esquerda
             se operador_corte == 43 {
-                adicione_byte(codigo, 72) {
+                adicione_byte(codigo, 72)
                 adicione_byte(codigo, 1)
                 adicione_byte(codigo, 200) // add rax, rcx
             }
