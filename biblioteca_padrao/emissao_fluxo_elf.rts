@@ -300,6 +300,14 @@ publico funcao emitir_expressao(codigo: bytes, fonte: emprestimo[bytes], unidade
         resposta.unidade = arvore.unidade_erro
         retorne mova(resposta)
     }
+    // Diagnostico de compilacao 9: divisor constante provadamente zero.
+    // A verificacao antecede a emissao dos bytes do programa alvo.
+    seja constantes = expressoes.verificar_constantes(fonte, unidades, empreste(arvore))
+    se constantes.codigo_erro != 0 {
+        resposta.erro = constantes.codigo_erro
+        resposta.unidade = constantes.unidade_erro
+        retorne mova(resposta)
+    }
     seja pilha: lista[inteiro]
     seja i = 0
     enquanto i < tamanho(arvore.nos) {
