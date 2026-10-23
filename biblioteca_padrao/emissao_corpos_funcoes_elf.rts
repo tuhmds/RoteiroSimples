@@ -199,7 +199,20 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             }
         }
         se fluxo.simbolo(fonte, segundo_bytes, 91) e fluxo.simbolo(fonte, ultimo_bytes, 93) {
-            seja indice_buffer = fluxo.resolver(fonte, nomes, primeiro_valor)
+            // O primeiro fechamento deve coincidir com o fim da expressao.
+            // Dados[0] + dados[2] nao e uma indexacao unica.
+            seja primeiro_fecho = ultimo - 1
+            seja cursor_indice = primeiro + 2
+            enquanto cursor_indice < ultimo - 1 {
+                seja token_indice: lexico.UnidadeLexica = unidades[cursor_indice]
+                se fluxo.simbolo(fonte, token_indice, 93) {
+                    primeiro_fecho = cursor_indice
+                    pare
+                }
+                cursor_indice = cursor_indice + 1
+            }
+            se primeiro_fecho == ultimo - 1 {
+                seja indice_buffer = fluxo.resolver(fonte, nomes, primeiro_valor)
             se indice_buffer >= 0 {
                 se tipos[indice_buffer] == 2 {
                     seja parte_indice = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 2, ultimo - 1, funcao_atual, nivel + 1)
@@ -219,6 +232,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                     mova(resposta.codigo, leitura)
                     retorne mova(resposta)
                 }
+            }
             }
         }
     }
