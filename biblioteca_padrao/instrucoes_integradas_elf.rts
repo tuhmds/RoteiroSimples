@@ -1,7 +1,7 @@
 // Plano intermediario de instrucoes para emissao ELF em RS.
 // Uma representacao tipada ordenada (sem codigo de maquina) para o bloco inicio.
 // Categoria: 1 declaracao, 2 atribuicao, 3 se, 4 enquanto,
-// 5 fechamento de controle, 6 fechamento de inicio.
+// 5 fechamento de controle, 6 fechamento de inicio, 8 transicao senao.
 importe "lexico.rts" como lexico
 importe "emissao_fluxo_elf.rts" como fluxo
 
@@ -35,6 +35,7 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
     seja texto_seja: texto = "seja"
     seja texto_se: texto = "se"
     seja texto_enquanto: texto = "enquanto"
+    seja texto_senao: texto = "senao"
     seja principal: lexico.UnidadeLexica = unidades[unidade_inicio]
     seja abertura: lexico.UnidadeLexica = unidades[unidade_inicio + 1]
     se nao fluxo.igual(fonte, principal, empreste(texto_inicio)) ou nao fluxo.simbolo(fonte, abertura, 123) {
@@ -43,6 +44,7 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
         retorne mova(plano)
     }
     seja profundidade = 0
+    seja pilha_controles: lista[inteiro]
     seja i = unidade_inicio + 2
     enquanto i < total {
         plano.unidade_erro = i
@@ -64,8 +66,31 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
                 i = i + 1
                 pare
             }
+            // "senao" reutiliza o nivel do "se": a transicao fecha
+            // o bloco verdadeiro e abre o falso sem encerrar o controle.
+            se i + 1 < total {
+                seja palavra_senao: lexico.UnidadeLexica = unidades[i + 1]
+                se fluxo.igual(fonte, palavra_senao, empreste(texto_senao)) {
+                    plano.unidade_erro = i + 1
+                    se tamanho(pilha_controles) == 0 ou pilha_controles[tamanho(pilha_controles) - 1] != 3 ou i + 2 >= total {
+                        plano.codigo_erro = 7
+                        retorne mova(plano)
+                    }
+                    seja abre_senao: lexico.UnidadeLexica = unidades[i + 2]
+                    se nao fluxo.simbolo(fonte, abre_senao, 123) {
+                        plano.codigo_erro = 7
+                        retorne mova(plano)
+                    }
+                    instrucao.categoria = 8
+                    adicione(plano.instrucoes, instrucao)
+                    pilha_controles[tamanho(pilha_controles) - 1] = 8
+                    i = i + 3
+                    continue
+                }
+            }
             instrucao.categoria = 5
             adicione(plano.instrucoes, instrucao)
+            remova_ultimo(pilha_controles)
             profundidade = profundidade - 1
             i = i + 1
             continue
@@ -111,6 +136,7 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
             instrucao.valor_inicio = i + 1
             instrucao.valor_fim = cursor
             adicione(plano.instrucoes, instrucao)
+            adicione(pilha_controles, instrucao.categoria)
             profundidade = profundidade + 1
             i = cursor + 1
             continue
@@ -163,7 +189,7 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
             }
         }
     }
-    se i != total ou profundidade != 0 ou plano.quantidade_locais < 1 {
+    se i != total ou profundidade != 0 ou tamanho(pilha_controles) != 0 ou plano.quantidade_locais < 1 {
         plano.codigo_erro = 2
         retorne mova(plano)
     }
@@ -194,6 +220,7 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
     seja texto_seja: texto = "seja"
     seja texto_se: texto = "se"
     seja texto_enquanto: texto = "enquanto"
+    seja texto_senao: texto = "senao"
     seja abertura: lexico.UnidadeLexica = unidades[abertura_corpo]
     seja fechamento: lexico.UnidadeLexica = unidades[fechamento_corpo]
     se nao fluxo.simbolo(fonte, abertura, 123) ou nao fluxo.simbolo(fonte, fechamento, 125) {
@@ -202,6 +229,7 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
     }
     seja texto_retorne: texto = "retorne"
     seja profundidade = 0
+    seja pilha_controles: lista[inteiro]
     seja i = abertura_corpo + 1
     seja houve_retorno_final = falso
     seja retorno_bloqueante = -1
@@ -236,8 +264,31 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
                 i = i + 1
                 pare
             }
+            // "senao" reutiliza o nivel do "se": a transicao fecha
+            // o bloco verdadeiro e abre o falso sem encerrar o controle.
+            se i + 1 < total {
+                seja palavra_senao: lexico.UnidadeLexica = unidades[i + 1]
+                se fluxo.igual(fonte, palavra_senao, empreste(texto_senao)) {
+                    plano.unidade_erro = i + 1
+                    se tamanho(pilha_controles) == 0 ou pilha_controles[tamanho(pilha_controles) - 1] != 3 ou i + 2 >= total {
+                        plano.codigo_erro = 7
+                        retorne mova(plano)
+                    }
+                    seja abre_senao: lexico.UnidadeLexica = unidades[i + 2]
+                    se nao fluxo.simbolo(fonte, abre_senao, 123) {
+                        plano.codigo_erro = 7
+                        retorne mova(plano)
+                    }
+                    instrucao.categoria = 8
+                    adicione(plano.instrucoes, instrucao)
+                    pilha_controles[tamanho(pilha_controles) - 1] = 8
+                    i = i + 3
+                    continue
+                }
+            }
             instrucao.categoria = 5
             adicione(plano.instrucoes, instrucao)
+            remova_ultimo(pilha_controles)
             profundidade = profundidade - 1
             i = i + 1
             continue
@@ -283,6 +334,7 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
             instrucao.valor_inicio = i + 1
             instrucao.valor_fim = cursor
             adicione(plano.instrucoes, instrucao)
+            adicione(pilha_controles, instrucao.categoria)
             profundidade = profundidade + 1
             i = cursor + 1
             continue
@@ -357,7 +409,7 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
             }
         }
     }
-    se i != fechamento_corpo + 1 ou profundidade != 0 {
+    se i != fechamento_corpo + 1 ou profundidade != 0 ou tamanho(pilha_controles) != 0 {
         plano.codigo_erro = 2
         retorne mova(plano)
     }

@@ -745,5 +745,84 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                     self.assertIsNone(retorno)
 
 
+    def test_senao_em_funcoes_e_inicio(self):
+        # Ambos os niveis geram o mesmo ELF funcional para os dois ramos.
+        casos = (
+            ("funcao escolha(n: inteiro) -> inteiro {\n"
+             " seja r = 0\n"
+             " se n > 0 {\n r = 17\n } senao {\n r = 9\n }\n"
+             " retorne r\n}\n"
+             "inicio {\n seja r = escolha(3)\n}", 17),
+            ("funcao escolha(n: inteiro) -> inteiro {\n"
+             " seja r = 0\n"
+             " se n > 0 {\n r = 17\n } senao {\n r = 9\n }\n"
+             " retorne r\n}\n"
+             "inicio {\n seja r = escolha(-3)\n}", 9),
+            ("funcao escolha(n: inteiro) -> inteiro {\n"
+             " se n < 0 {\n retorne 41\n } senao {\n retorne 42\n }\n"
+             " retorne 43\n}\n"
+             "inicio {\n seja r = escolha(-2)\n}", 41),
+            ("funcao escolha(n: inteiro) -> inteiro {\n"
+             " se n < 0 {\n retorne 41\n } senao {\n retorne 42\n }\n"
+             " retorne 43\n}\n"
+             "inicio {\n seja r = escolha(2)\n}", 42),
+            ("funcao soma(n: inteiro) -> inteiro {\n"
+             " seja i = 0\n seja r = 0\n"
+             " enquanto i < n {\n"
+             " se i % 2 == 0 {\n r = r + 3\n"
+             " } senao {\n r = r + 5\n }\n"
+             " i = i + 1\n }\n"
+             " retorne r\n}\n"
+             "inicio {\n seja r = soma(4)\n}", 16),
+            ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "inicio {\n seja r = 0\n"
+             " se dobro(3) >= 6 {\n r = 7\n"
+             " } senao {\n r = 13\n }\n}", 7),
+            ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "inicio {\n seja r = 0\n"
+             " se dobro(2) >= 6 {\n r = 7\n"
+             " } senao {\n r = 13\n }\n}", 13),
+            ("funcao ramo(n: inteiro) -> inteiro {\n"
+             " seja r = 0\n"
+             " se n > 0 {\n"
+             " se n > 9 {\n r = 6\n } senao {\n r = 4\n }\n"
+             " } senao {\n r = 2\n }\n retorne r\n}\n"
+             "inicio {\n seja r = ramo(6)\n}", 4),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, esperado=esperado, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIn(bytes((233,)), dados[127:])
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
+    def test_senao_invalido_nao_gera_elf(self):
+        invalidos = (
+            "funcao f(n: inteiro) -> inteiro {\n"
+            " seja r = 0\n enquanto n > 0 {\n n = n - 1\n"
+            " } senao {\n r = 4\n }\n retorne r\n}\n"
+            "inicio { seja x = f(2) }",
+            "funcao f(n: inteiro) -> inteiro {\n"
+            " seja r = 0\n se n > 0 {\n r = 1\n"
+            " } senao {\n r = 2\n } senao {\n r = 3\n }\n"
+            " retorne r\n}\n inicio { seja x = f(2) }",
+            "funcao f(n: inteiro) -> inteiro {\n"
+            " seja r = 0\n se n > 0 {\n r = 1\n"
+            " } senao r = 2\n retorne r\n}\n inicio { seja x = f(2) }",
+            "funcao f(n: inteiro) -> inteiro {\n"
+            " seja r = 0\n senao {\n r = 1\n }\n"
+            " retorne r\n}\n inicio { seja x = f(2) }",
+        )
+        for nivel in (0, 8):
+            for fonte in invalidos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertNotEqual(codigo, 0)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
+
 if __name__ == "__main__":
     unittest.main()
