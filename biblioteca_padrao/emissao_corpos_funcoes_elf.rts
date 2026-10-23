@@ -267,16 +267,8 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 adicione_byte(codigo, 193) // imul rax, rcx
             }
             se operador_corte == 47 ou operador_corte == 37 {
-                // cqo; idiv rcx -> quociente rax, resto rdx (signed64).
-                adicione_byte(codigo, 153)
-                adicione_byte(codigo, 72)
-                adicione_byte(codigo, 247)
-                adicione_byte(codigo, 249)
-                se operador_corte == 37 {
-                    adicione_byte(codigo, 72)
-                    adicione_byte(codigo, 137)
-                    adicione_byte(codigo, 208) // mov rax, rdx
-                }
+                seja protegido = fluxo.emitir_divisao_protegida(mova(codigo), operador_corte == 37)
+                mova(codigo, protegido)
             }
             adicione_byte(codigo, 80) // push rax
             mova(resposta.codigo, codigo)
