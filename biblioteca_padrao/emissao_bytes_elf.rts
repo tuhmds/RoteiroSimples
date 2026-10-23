@@ -129,9 +129,9 @@ publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro) -> bytes {
     seja depois = tamanho(codigo)
     seja corrigido = fluxo.corrigir(mova(codigo), salto_negativo, destino_erro)
     mova(codigo, corrigido)
-    corrigido = fluxo.corrigir(mova(codigo), salto_excesso, destino_erro)
-    mova(codigo, corrigido)
-    corrigido = fluxo.corrigir(mova(codigo), salto_fim, depois)
-    mova(codigo, corrigido)
+    seja corrigido_excesso = fluxo.corrigir(mova(codigo), salto_excesso, destino_erro)
+    mova(codigo, corrigido_excesso)
+    seja corrigido_fim = fluxo.corrigir(mova(codigo), salto_fim, depois)
+    mova(codigo, corrigido_fim)
     retorne mova(codigo)
 }
