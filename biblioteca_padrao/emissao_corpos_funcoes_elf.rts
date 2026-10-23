@@ -7,6 +7,7 @@ importe "lexico.rts" como lexico
 importe "assinaturas_compilador.rts" como assinaturas
 importe "emissao_elf_minima.rts" como elf
 importe "emissao_fluxo_elf.rts" como fluxo
+importe "expressoes_compilador.rts" como expressoes
 importe "instrucoes_integradas_elf.rts" como instrucoes
 
 publico tipo ResultadoCorposELF {
@@ -223,6 +224,31 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             retorne mova(resposta)
         }
         se corte >= 0 {
+            // Verifica a parte direita de / e % quando nao contem chamada.
+            // Chamadas e variaveis permanecem sujeitas ao teste em execucao.
+            se operador_corte == 47 ou operador_corte == 37 {
+                seja divisor_tem_chamada = falso
+                seja indice_divisor = corte + 1
+                enquanto indice_divisor + 1 < ultimo {
+                    seja atual_divisor: lexico.UnidadeLexica = unidades[indice_divisor]
+                    seja seguinte_divisor: lexico.UnidadeLexica = unidades[indice_divisor + 1]
+                    se atual_divisor.classe == 1 e fluxo.simbolo(fonte, seguinte_divisor, 40) {
+                        divisor_tem_chamada = verdadeiro
+                    }
+                    indice_divisor = indice_divisor + 1
+                }
+                se nao divisor_tem_chamada {
+                    seja arvore_divisor = expressoes.analisar(fonte, unidades, corte + 1, ultimo)
+                    se arvore_divisor.codigo_erro == 0 {
+                        seja divisor = expressoes.verificar_constantes(fonte, unidades, empreste(arvore_divisor))
+                        se divisor.codigo_erro == 9 ou (divisor.constante e divisor.valor == 0) {
+                            resposta.codigo_erro = 9
+                            resposta.unidade_erro = corte
+                            retorne mova(resposta)
+                        }
+                    }
+                }
+            }
             // Cada operando deixa um inteiro na pilha, como o backend original.
             seja esquerda = emitir_valor(mova(codigo), fonte, unidades, nomes, assinadas, primeiro, corte, funcao_atual, nivel + 1)
             se esquerda.codigo_erro != 0 {
@@ -340,6 +366,9 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         seja simples = executar_expressao(mova(codigo), fonte, unidades, nomes, primeiro, ultimo)
         se simples.erro != 0 {
             resposta.codigo_erro = 7
+            se simples.erro == 9 {
+                resposta.codigo_erro = 9
+            }
             resposta.unidade_erro = simples.unidade
             retorne mova(resposta)
         }
