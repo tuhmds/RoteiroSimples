@@ -18,6 +18,35 @@ publico tipo Trecho {
     unidade: inteiro
 }
 
+// Localizacao de um operador no codigo fonte (indices baseados em 1).
+publico tipo PosicaoFonte {
+    linha: inteiro
+    coluna: inteiro
+}
+
+// Conta bytes ate o operador; LF inicia uma nova linha.
+// Nao usa o deslocamento no executavel, que e diferente do fonte.
+publico funcao localizar(fonte: emprestimo[bytes], inicio_byte: inteiro) -> PosicaoFonte {
+    seja resultado: PosicaoFonte
+    resultado.linha = 1
+    resultado.coluna = 1
+    seja limite = inicio_byte
+    se limite > tamanho(fonte) {
+        limite = tamanho(fonte)
+    }
+    seja indice = 0
+    enquanto indice < limite {
+        se fonte[indice] == 10 {
+            resultado.linha = resultado.linha + 1
+            resultado.coluna = 1
+        } senao {
+            resultado.coluna = resultado.coluna + 1
+        }
+        indice = indice + 1
+    }
+    retorne resultado
+}
+
 privado tipo Controle {
     // 1 se; 2 enquanto
     classe: inteiro
@@ -92,12 +121,29 @@ publico funcao corrigir(codigo: bytes, posicao: inteiro, destino: inteiro) -> by
     retorne mova(codigo)
 }
 
-// Emite erro legivel no stderr do ELF Linux, distinguindo falhas de
-// saidas normais que coincidam com os codigos 240 e 241.
-// O syscall write usa uma mensagem ASCII situada depois do exit.
-// O codigo gerado executa somente o trecho de instrucoes.
-privado funcao falha_divisao(codigo: bytes, codigo_saida: inteiro, mensagem: emprestimo[texto]) -> bytes {
-    // write(2, mensagem, tamanho)
+// Texto legivel no stderr, com linha e coluna do operador no fonte.
+// Os inteiros sao escritos em ASCII sem dependencia de libc ou runtime.
+privado funcao falha_divisao(codigo: bytes, codigo_saida: inteiro, mensagem: emprestimo[texto], linha: inteiro, coluna: inteiro) -> bytes {
+    seja digitos_linha: lista[inteiro]
+    seja digitos_coluna: lista[inteiro]
+    seja numero_linha = linha
+    seja numero_coluna = coluna
+    se numero_linha < 1 {
+        numero_linha = 1
+    }
+    se numero_coluna < 1 {
+        numero_coluna = 1
+    }
+    enquanto numero_linha > 0 {
+        adicione(digitos_linha, numero_linha % 10)
+        numero_linha = numero_linha / 10
+    }
+    enquanto numero_coluna > 0 {
+        adicione(digitos_coluna, numero_coluna % 10)
+        numero_coluna = numero_coluna / 10
+    }
+    seja separador: texto = ", coluna "
+    // write(2, mensagem com posicao, comprimento)
     adicione_byte(codigo, 184)
     seja syscall_escrita = elf.anexar_inteiro(mova(codigo), 1, 4)
     mova(codigo, syscall_escrita)
@@ -114,7 +160,8 @@ privado funcao falha_divisao(codigo: bytes, codigo_saida: inteiro, mensagem: emp
         i = i + 1
     }
     adicione_byte(codigo, 186)
-    seja comprimento = elf.anexar_inteiro(mova(codigo), tamanho(mensagem), 4)
+    seja total = tamanho(mensagem) + tamanho(digitos_linha) + tamanho(separador) + tamanho(digitos_coluna) + 2
+    seja comprimento = elf.anexar_inteiro(mova(codigo), total, 4)
     mova(codigo, comprimento)
     adicione_byte(codigo, 15)
     adicione_byte(codigo, 5)
@@ -127,13 +174,30 @@ privado funcao falha_divisao(codigo: bytes, codigo_saida: inteiro, mensagem: emp
     mova(codigo, syscall_saida)
     adicione_byte(codigo, 15)
     adicione_byte(codigo, 5)
-    // Bytes finais: dados ASCII fora do caminho de execucao.
+    // Dados de mensagem apos exit; saltos nunca entram aqui.
     seja posicao_texto = tamanho(codigo)
     i = 0
     enquanto i < tamanho(mensagem) {
         adicione_byte(codigo, byte_em(mensagem, i))
         i = i + 1
     }
+    i = tamanho(digitos_linha) - 1
+    enquanto i >= 0 {
+        adicione_byte(codigo, 48 + digitos_linha[i])
+        i = i - 1
+    }
+    i = 0
+    enquanto i < tamanho(separador) {
+        adicione_byte(codigo, byte_em(empreste(separador), i))
+        i = i + 1
+    }
+    i = tamanho(digitos_coluna) - 1
+    enquanto i >= 0 {
+        adicione_byte(codigo, 48 + digitos_coluna[i])
+        i = i - 1
+    }
+    adicione_byte(codigo, 41) // )
+    adicione_byte(codigo, 10) // nova linha
     seja corrigido = corrigir(mova(codigo), deslocamento_texto, posicao_texto)
     retorne mova(corrigido)
 }
@@ -143,7 +207,7 @@ privado funcao falha_divisao(codigo: bytes, codigo_saida: inteiro, mensagem: emp
 // Erro 240: escreve "RS: divisao por zero" em stderr.
 // Erro 241: escreve "RS: estouro na divisao" em stderr.
 // Ambos os erros terminam o programa; ainda nao sao recuperaveis.
-publico funcao emitir_divisao_protegida(codigo: bytes, resto: logico) -> bytes {
+publico funcao emitir_divisao_protegida(codigo: bytes, resto: logico, linha: inteiro, coluna: inteiro) -> bytes {
     // test rcx,rcx; jne rel32 (pula falha).
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 133)
@@ -156,8 +220,8 @@ publico funcao emitir_divisao_protegida(codigo: bytes, resto: logico) -> bytes {
         adicione_byte(codigo, 0)
         i = i + 1
     }
-    seja mensagem_zero: texto = "RS: divisao por zero\n"
-    seja falha_zero = falha_divisao(mova(codigo), 240, empreste(mensagem_zero))
+    seja mensagem_zero: texto = "RS: divisao por zero (linha "
+    seja falha_zero = falha_divisao(mova(codigo), 240, empreste(mensagem_zero), linha, coluna)
     mova(codigo, falha_zero)
     seja destino_continuacao_zero = tamanho(codigo)
     seja continuacao_zero = corrigir(mova(codigo), deslocamento_zero, destino_continuacao_zero)
@@ -197,8 +261,8 @@ publico funcao emitir_divisao_protegida(codigo: bytes, resto: logico) -> bytes {
         adicione_byte(codigo, 0)
         i = i + 1
     }
-    seja mensagem_estouro: texto = "RS: estouro na divisao\n"
-    seja falha_estouro = falha_divisao(mova(codigo), 241, empreste(mensagem_estouro))
+    seja mensagem_estouro: texto = "RS: estouro na divisao (linha "
+    seja falha_estouro = falha_divisao(mova(codigo), 241, empreste(mensagem_estouro), linha, coluna)
     mova(codigo, falha_estouro)
     seja destino_continuacao_dividendo = tamanho(codigo)
     seja continuacao_dividendo = corrigir(mova(codigo), deslocamento_dividendo, destino_continuacao_dividendo)
@@ -327,7 +391,9 @@ publico funcao emitir_expressao(codigo: bytes, fonte: emprestimo[bytes], unidade
                         adicione_byte(codigo, 193)
                     }
                     se no.operador == 47 ou no.operador == 37 {
-                        seja protegido = emitir_divisao_protegida(mova(codigo), no.operador == 37)
+                        seja unidade_operador: lexico.UnidadeLexica = unidades[no.unidade]
+                        seja posicao_operador = localizar(fonte, unidade_operador.inicio_byte)
+                        seja protegido = emitir_divisao_protegida(mova(codigo), no.operador == 37, posicao_operador.linha, posicao_operador.coluna)
                         mova(codigo, protegido)
                     }
                     adicione_byte(codigo, 80)
