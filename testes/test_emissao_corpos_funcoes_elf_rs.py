@@ -1036,13 +1036,13 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
              " i = i + 1\n"
              " se i % 2 == 0 {\n continue\n } senao {\n"
              " resultado = resultado + i\n }\n"
-             " }\n}", 9),
+             " }\n resultado = identidade(resultado)\n}", 9),
             ("funcao identidade(n: inteiro) -> inteiro {\n retorne n\n}\n"
              "inicio {\n seja resultado = 0\n"
              " enquanto resultado < 9 {\n"
              " resultado = resultado + 1\n"
              " se resultado == 5 {\n pare\n }\n"
-             " }\n}", 5),
+             " }\n resultado = identidade(resultado)\n}", 5),
         )
         for nivel in (0, 8):
             for fonte, esperado in casos:
