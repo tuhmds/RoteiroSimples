@@ -2,7 +2,7 @@
 // A fatia guarda apenas offsets: o chamador preserva a vida da fonte.
 // Todos os acessos verificam limites antes de indexar o buffer.
 publico tipo FatiaBytes {
-    inicio: inteiro
+    deslocamento: inteiro
     comprimento: inteiro
     codigo_erro: inteiro
 }
@@ -18,44 +18,44 @@ publico tipo DiagnosticoUTF8 {
     codigo_erro: inteiro
 }
 
-// Verifica [inicio, inicio + comprimento) sem somar indices potencialmente
+// Verifica [deslocamento, deslocamento + comprimento) sem somar indices potencialmente
 // grandes. Uso de subtracao somente apos validar os operandos.
-publico funcao contida(total: inteiro, inicio: inteiro, comprimento: inteiro) -> logico {
-    se total < 0 ou inicio < 0 ou comprimento < 0 {
+publico funcao contida(total: inteiro, deslocamento: inteiro, comprimento: inteiro) -> logico {
+    se total < 0 ou deslocamento < 0 ou comprimento < 0 {
         retorne falso
     }
-    se inicio > total {
+    se deslocamento > total {
         retorne falso
     }
-    se comprimento > total - inicio {
+    se comprimento > total - deslocamento {
         retorne falso
     }
     retorne verdadeiro
 }
 
-publico funcao recortar(fonte: emprestimo[bytes], inicio: inteiro, comprimento: inteiro) -> FatiaBytes {
+publico funcao recortar(fonte: emprestimo[bytes], deslocamento: inteiro, comprimento: inteiro) -> FatiaBytes {
     seja resposta: FatiaBytes
-    se nao contida(tamanho(fonte), inicio, comprimento) {
+    se nao contida(tamanho(fonte), deslocamento, comprimento) {
         resposta.codigo_erro = 1
         retorne resposta
     }
-    resposta.inicio = inicio
+    resposta.deslocamento = deslocamento
     resposta.comprimento = comprimento
     retorne resposta
 }
 
 // Origem e tamanho da subfatia sao relativos a uma fatia ja validada.
-publico funcao subfatia(fonte: emprestimo[bytes], origem: FatiaBytes, inicio: inteiro, comprimento: inteiro) -> FatiaBytes {
+publico funcao subfatia(fonte: emprestimo[bytes], origem: FatiaBytes, deslocamento: inteiro, comprimento: inteiro) -> FatiaBytes {
     seja resposta: FatiaBytes
-    se origem.codigo_erro != 0 ou nao contida(tamanho(fonte), origem.inicio, origem.comprimento) {
+    se origem.codigo_erro != 0 ou nao contida(tamanho(fonte), origem.deslocamento, origem.comprimento) {
         resposta.codigo_erro = 1
         retorne resposta
     }
-    se nao contida(origem.comprimento, inicio, comprimento) {
+    se nao contida(origem.comprimento, deslocamento, comprimento) {
         resposta.codigo_erro = 1
         retorne resposta
     }
-    resposta.inicio = origem.inicio + inicio
+    resposta.deslocamento = origem.deslocamento + deslocamento
     resposta.comprimento = comprimento
     retorne resposta
 }
@@ -63,7 +63,7 @@ publico funcao subfatia(fonte: emprestimo[bytes], origem: FatiaBytes, inicio: in
 // Erro 1: fatia invalida, erro 2: indice fora da fatia.
 publico funcao ler(fonte: emprestimo[bytes], fatia: FatiaBytes, indice: inteiro) -> ResultadoByte {
     seja resposta: ResultadoByte
-    se fatia.codigo_erro != 0 ou nao contida(tamanho(fonte), fatia.inicio, fatia.comprimento) {
+    se fatia.codigo_erro != 0 ou nao contida(tamanho(fonte), fatia.deslocamento, fatia.comprimento) {
         resposta.codigo_erro = 1
         retorne resposta
     }
@@ -71,7 +71,7 @@ publico funcao ler(fonte: emprestimo[bytes], fatia: FatiaBytes, indice: inteiro)
         resposta.codigo_erro = 2
         retorne resposta
     }
-    resposta.valor = fonte[fatia.inicio + indice]
+    resposta.valor = fonte[fatia.deslocamento + indice]
     retorne resposta
 }
 
@@ -81,10 +81,10 @@ publico funcao iguais(primeira: emprestimo[bytes], a: FatiaBytes, segunda: empre
     se a.codigo_erro != 0 ou b.codigo_erro != 0 {
         retorne falso
     }
-    se nao contida(tamanho(primeira), a.inicio, a.comprimento) {
+    se nao contida(tamanho(primeira), a.deslocamento, a.comprimento) {
         retorne falso
     }
-    se nao contida(tamanho(segunda), b.inicio, b.comprimento) {
+    se nao contida(tamanho(segunda), b.deslocamento, b.comprimento) {
         retorne falso
     }
     se a.comprimento != b.comprimento {
@@ -92,7 +92,7 @@ publico funcao iguais(primeira: emprestimo[bytes], a: FatiaBytes, segunda: empre
     }
     seja indice = 0
     enquanto indice < a.comprimento {
-        se primeira[a.inicio + indice] != segunda[b.inicio + indice] {
+        se primeira[a.deslocamento + indice] != segunda[b.deslocamento + indice] {
             retorne falso
         }
         indice = indice + 1
