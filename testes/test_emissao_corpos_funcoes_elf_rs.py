@@ -317,6 +317,35 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                     if status is not None:
                         self.assertEqual(status, esperado % 256)
 
+    def test_divisao_protegida_contra_zero_e_overflow(self):
+        casos = (
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+             "inicio {\n seja r = f(8) / 0\n}", 240),
+            ("funcao zero(n: inteiro) -> inteiro {\n retorne n - n\n}\n"
+             "inicio {\n seja r = 9 % zero(5)\n}", 240),
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n / 0\n}\n"
+             "inicio {\n seja r = f(13)\n}", 240),
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = f(0) / 0\n}", 240),
+            ("funcao minimo() -> inteiro {\n"
+             " retorne -8 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024\n}\n"
+             "inicio {\n seja r = minimo() / -1\n}", 241),
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = f(-8) / -1\n}", 8),
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = f(0) / -1\n}", 0),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    # test rcx,rcx; jne +12 e IDIV com extensao signed64.
+                    self.assertIn(bytes((72, 133, 201, 117, 12)), dados)
+                    self.assertIn(bytes((72, 153, 72, 247, 249)), dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
     def test_predicados_com_chamadas_diretas_e_compostas(self):
         casos = (
             ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
