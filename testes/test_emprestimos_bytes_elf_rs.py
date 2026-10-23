@@ -105,7 +105,8 @@ class TestesEmprestimoBytesELF(unittest.TestCase):
             "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne d[0] }\n"
             "inicio { seja d: bytes = criar_bytes(1048576)\n"
             " d[0] = 7\n seja i = 0\n seja r = 0\n"
-            " enquanto i < 300 { r = r + ler(d)\n i = i + 1 }\n}"
+            " enquanto i < 300 { r = r + ler(d)\n i = i + 1 }\n"
+            " r = r\n}"
         )
         for nivel in (0, 8):
             codigo, dados, status = self.gerar(
