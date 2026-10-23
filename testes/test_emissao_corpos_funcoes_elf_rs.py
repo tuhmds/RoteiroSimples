@@ -745,6 +745,86 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                     self.assertIsNone(retorno)
 
 
+
+    def test_retorno_exaustivo_se_senao_sem_retorne_final(self):
+        casos = (
+            ("funcao escolha(n: inteiro) -> inteiro {\n"
+             " se n > 0 {\n retorne 31\n } senao {\n retorne 43\n }\n"
+             "}\n inicio { seja r = escolha(6) }", 31),
+            ("funcao escolha(n: inteiro) -> inteiro {\n"
+             " se n > 0 {\n retorne 31\n } senao {\n retorne 43\n }\n"
+             "}\n inicio { seja r = escolha(-6) }", 43),
+            ("funcao escolha(n: inteiro) -> inteiro {\n"
+             " se n > 0 {\n"
+             " se n > 10 {\n retorne 7\n } senao {\n retorne 8\n }\n"
+             " } senao {\n retorne 9\n }\n"
+             "}\n inicio { seja r = escolha(3) }", 8),
+            ("funcao escolha(n: inteiro) -> inteiro {\n"
+             " se n > 0 {\n"
+             " se n > 10 {\n retorne 7\n } senao {\n retorne 8\n }\n"
+             " } senao {\n retorne 9\n }\n"
+             "}\n inicio { seja r = escolha(-3) }", 9),
+            ("funcao triplo(n: inteiro) -> inteiro {\n retorne n * 3\n}\n"
+             "funcao escolha(n: inteiro) -> inteiro {\n"
+             " se n > 0 {\n retorne triplo(n)\n"
+             " } senao {\n retorne 5\n }\n"
+             "}\n inicio { seja r = escolha(4) }", 12),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, esperado=esperado, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
+    def test_retorno_exaustivo_rejeita_inalcancavel(self):
+        casos = (
+            "funcao escolha(n: inteiro) -> inteiro {\n"
+            " se n > 0 {\n retorne 1\n } senao {\n retorne 2\n }\n"
+            " retorne 3\n}\n inicio { seja r = escolha(3) }",
+            "funcao escolha(n: inteiro) -> inteiro {\n"
+            " se n > 0 {\n retorne 1\n } senao {\n retorne 2\n }\n"
+            " n = n + 1\n retorne n\n}\n inicio { seja r = escolha(3) }",
+            "funcao escolha(n: inteiro) -> inteiro {\n"
+            " se n > 0 {\n"
+            " se n > 1 {\n retorne 1\n } senao {\n retorne 2\n }\n"
+            " n = n + 1\n"
+            " } senao {\n retorne 3\n }\n"
+            " retorne 4\n}\n inicio { seja r = escolha(3) }",
+        )
+        for nivel in (0, 8):
+            for fonte in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 10)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
+    def test_retorno_exaustivo_conserva_caminhos_sem_retorno(self):
+        casos = (
+            "funcao f(n: inteiro) -> inteiro {\n"
+            " se n > 0 {\n retorne 1\n } senao {\n n = n + 1\n }\n"
+            "}\n inicio { seja r = f(2) }",
+            "funcao f(n: inteiro) -> inteiro {\n"
+            " enquanto n > 0 {\n"
+            " se n > 1 {\n retorne 1\n } senao {\n retorne 2\n }\n"
+            " }\n}\n inicio { seja r = f(2) }",
+            "funcao f(n: inteiro) -> inteiro {\n"
+            " se n > 0 {\n"
+            " se n > 1 {\n retorne 1\n }\n"
+            " } senao {\n retorne 2\n }\n"
+            "}\n inicio { seja r = f(2) }",
+        )
+        for nivel in (0, 8):
+            for fonte in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 11)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
     def test_senao_em_funcoes_e_inicio(self):
         # Ambos os niveis geram o mesmo ELF funcional para os dois ramos.
         casos = (
@@ -760,11 +840,11 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
              "inicio {\n seja r = escolha(-3)\n}", 9),
             ("funcao escolha(n: inteiro) -> inteiro {\n"
              " se n < 0 {\n retorne 41\n } senao {\n retorne 42\n }\n"
-             " retorne 43\n}\n"
+             "}\n"
              "inicio {\n seja r = escolha(-2)\n}", 41),
             ("funcao escolha(n: inteiro) -> inteiro {\n"
              " se n < 0 {\n retorne 41\n } senao {\n retorne 42\n }\n"
-             " retorne 43\n}\n"
+             "}\n"
              "inicio {\n seja r = escolha(2)\n}", 42),
             ("funcao soma(n: inteiro) -> inteiro {\n"
              " seja i = 0\n seja r = 0\n"

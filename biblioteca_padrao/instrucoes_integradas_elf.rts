@@ -206,10 +206,105 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
     retorne mova(plano)
 }
 
+// Analise de caminhos da IR: uma condicao so garante retorno quando
+// os dois ramos retornam. Um laco pode nao executar, portanto nunca
+// garante retorno sozinho. Nao executa expressoes nem assume constantes.
+privado tipo EscopoRetorno {
+    classe: inteiro
+    garantido_antes: logico
+    garantido_primeiro: logico
+}
+
+privado tipo DiagnosticoRetorno {
+    codigo: inteiro
+    unidade: inteiro
+}
+
+privado funcao verificar_retorno(plano: emprestimo[Plano]) -> DiagnosticoRetorno {
+    seja resposta: DiagnosticoRetorno
+    seja pilha: lista[EscopoRetorno]
+    seja garantido = falso
+    seja indice = 0
+    enquanto indice < tamanho(plano.instrucoes) {
+        seja instrucao: Instrucao = plano.instrucoes[indice]
+        resposta.unidade = instrucao.unidade_inicio
+
+        // A transicao senao encerra apenas o primeiro ramo.
+        se instrucao.categoria == 8 {
+            se tamanho(pilha) == 0 {
+                resposta.codigo = 7
+                retorne resposta
+            }
+            seja escopo: EscopoRetorno = pilha[tamanho(pilha) - 1]
+            se escopo.classe != 3 {
+                resposta.codigo = 7
+                retorne resposta
+            }
+            escopo.garantido_primeiro = garantido
+            escopo.classe = 8
+            pilha[tamanho(pilha) - 1] = escopo
+            garantido = falso
+            indice = indice + 1
+            continue
+        }
+
+        // Apos o fechamento, a garantia retorna ao escopo externo.
+        se instrucao.categoria == 5 {
+            se tamanho(pilha) == 0 {
+                resposta.codigo = 2
+                retorne resposta
+            }
+            seja escopo: EscopoRetorno = pilha[tamanho(pilha) - 1]
+            remova_ultimo(pilha)
+            seja retorna_bloco = falso
+            se escopo.classe == 8 {
+                retorna_bloco = escopo.garantido_primeiro e garantido
+            }
+            // Se sem senao e enquanto nao garantem retorno.
+            garantido = escopo.garantido_antes ou retorna_bloco
+            indice = indice + 1
+            continue
+        }
+
+        // O fechamento final e permitido mesmo apos retorno garantido.
+        se instrucao.categoria == 6 {
+            se tamanho(pilha) != 0 {
+                resposta.codigo = 2
+                retorne resposta
+            }
+            se nao garantido {
+                resposta.codigo = 11
+            }
+            retorne resposta
+        }
+
+        // Uma instrucao apos um retorno garantido e inalcancavel,
+        // incluindo o caso se/senao com retornos nos dois ramos.
+        se garantido {
+            resposta.codigo = 10
+            retorne resposta
+        }
+
+        se instrucao.categoria == 3 ou instrucao.categoria == 4 {
+            seja escopo: EscopoRetorno
+            escopo.classe = instrucao.categoria
+            escopo.garantido_antes = garantido
+            adicione(pilha, escopo)
+            garantido = falso
+        }
+        se instrucao.categoria == 7 {
+            garantido = verdadeiro
+        }
+        indice = indice + 1
+    }
+    resposta.codigo = 2
+    retorne resposta
+}
+
 // Analisar corpo de funcao no mesmo formato de IR do bloco principal.
-// Categoria 7: retorne. Exigimos retorno final incondicional.
-// Erro 10: instrucao inalcancavel apos retorne no mesmo bloco.
-// Erro 11: funcao pode terminar sem retorne incondicional final.
+// Categoria 7: retorne, categoria 8: transicao senao.
+// Erro 10: instrucao inalcancavel por retorno garantido.
+// Erro 11: existe caminho que termina sem retorne.
 publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], abertura_corpo: inteiro, fechamento_corpo: inteiro) -> Plano {
     seja plano: Plano
     seja total = tamanho(unidades)
@@ -231,7 +326,6 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
     seja profundidade = 0
     seja pilha_controles: lista[inteiro]
     seja i = abertura_corpo + 1
-    seja houve_retorno_final = falso
     seja retorno_bloqueante = -1
     enquanto i <= fechamento_corpo {
         plano.unidade_erro = i
@@ -347,9 +441,6 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
                 plano.codigo_erro = 4
                 retorne mova(plano)
             }
-            se profundidade == 0 {
-                houve_retorno_final = verdadeiro
-            }
             retorno_bloqueante = profundidade
             adicione(plano.instrucoes, instrucao)
             i = instrucao.valor_fim
@@ -413,12 +504,7 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
         plano.codigo_erro = 2
         retorne mova(plano)
     }
-    se nao houve_retorno_final {
-        plano.codigo_erro = 11
-        plano.unidade_erro = fechamento_corpo
-        retorne mova(plano)
-    }
-    se tamanho(plano.instrucoes) == 0 {
+    se tamanho(plano.instrucoes) < 2 {
         plano.codigo_erro = 2
         retorne mova(plano)
     }
@@ -427,14 +513,10 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
         plano.codigo_erro = 2
         retorne mova(plano)
     }
-    se tamanho(plano.instrucoes) < 2 {
-        plano.codigo_erro = 2
-        retorne mova(plano)
-    }
-    seja penultima: Instrucao = plano.instrucoes[tamanho(plano.instrucoes) - 2]
-    se penultima.categoria != 7 ou penultima.profundidade != 0 {
-        plano.codigo_erro = 11
-        plano.unidade_erro = penultima.unidade_inicio
+    seja caminhos = verificar_retorno(empreste(plano))
+    se caminhos.codigo != 0 {
+        plano.codigo_erro = caminhos.codigo
+        plano.unidade_erro = caminhos.unidade
         retorne mova(plano)
     }
     plano.unidade_erro = fechamento_corpo
