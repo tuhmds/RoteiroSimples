@@ -255,7 +255,7 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoIntegradoELF {
         }
         // O emissor legado conserva apenas inteiros; nao emitir bytes com
         // layout de pilha incorreto quando receber a IR compartilhada.
-        se instrucao.categoria == 1 e instrucao.tipo_local == 2 {
+        se instrucao.categoria == 1 e (instrucao.tipo_local == 2 ou instrucao.tipo_local == 3) {
             resposta.codigo_erro = 2
             retorne mova(resposta)
         }
