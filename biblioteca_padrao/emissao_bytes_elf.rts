@@ -62,16 +62,31 @@ publico funcao inicializar(codigo: bytes, fonte: emprestimo[bytes], literal: lex
 }
 
 // Le o comprimento de um local bytes e entrega um inteiro na pilha.
-publico funcao emitir_tamanho(codigo: bytes, indice_local: inteiro, dinamico: logico) -> bytes {
-    adicione_byte(codigo, 72)
-    adicione_byte(codigo, 139)
-    adicione_byte(codigo, 133)
-    seja campo_tamanho = indice_local + 1
-    se dinamico {
-        campo_tamanho = indice_local + 2
+// tipo 2: local, 3: mmap proprietario, 4: emprestimo[bytes].
+publico funcao emitir_tamanho(codigo: bytes, indice_local: inteiro, tipo_local: inteiro) -> bytes {
+    se tipo_local == 4 {
+        // Emprestimo aponta para o slot de ponteiro do descritor do dono:
+        // [referencia] e ponteiro, [referencia - 8] e comprimento.
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 139)
+        adicione_byte(codigo, 133)
+        seja endereco_emprestimo = deslocamento(mova(codigo), (indice_local + 1) * 8)
+        mova(codigo, endereco_emprestimo)
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 139)
+        adicione_byte(codigo, 64)
+        adicione_byte(codigo, 248) // mov rax, [rax - 8]
+    } senao {
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 139)
+        adicione_byte(codigo, 133)
+        seja campo_tamanho = indice_local + 1
+        se tipo_local == 3 {
+            campo_tamanho = indice_local + 2
+        }
+        seja carregado = deslocamento(mova(codigo), campo_tamanho * 8)
+        mova(codigo, carregado)
     }
-    seja carregado = deslocamento(mova(codigo), campo_tamanho * 8)
-    mova(codigo, carregado)
     adicione_byte(codigo, 80)
     retorne mova(codigo)
 }
@@ -79,7 +94,7 @@ publico funcao emitir_tamanho(codigo: bytes, indice_local: inteiro, dinamico: lo
 // Recebe indice inteiro avaliado no topo da pilha, devolve o byte como
 // inteiro 0..255. Acesso invalido encerra o ELF com codigo 23; jamais le
 // memoria fora da area local. Alvos usam deslocamentos rel32.
-publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro, dinamico: logico) -> bytes {
+publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro, tipo_local: inteiro) -> bytes {
     adicione_byte(codigo, 88) // pop rax (indice)
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 133)
@@ -92,15 +107,29 @@ publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro, dinamico: lo
         adicione_byte(codigo, 0)
         i = i + 1
     }
-    adicione_byte(codigo, 72)
-    adicione_byte(codigo, 59)
-    adicione_byte(codigo, 133) // cmp rax, [rbp - slot_comprimento]
-    seja indice_comprimento = indice_local + 1
-    se dinamico {
-        indice_comprimento = indice_local + 2
+    se tipo_local == 4 {
+        // rdx = ponteiro para descriptor proprietario; comparar com
+        // comprimento por referencia, sem transferir a propriedade.
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 139)
+        adicione_byte(codigo, 149)
+        seja ref_descritor = deslocamento(mova(codigo), (indice_local + 1) * 8)
+        mova(codigo, ref_descritor)
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 59)
+        adicione_byte(codigo, 66)
+        adicione_byte(codigo, 248) // cmp rax, [rdx - 8]
+    } senao {
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 59)
+        adicione_byte(codigo, 133)
+        seja indice_comprimento = indice_local + 1
+        se tipo_local == 3 {
+            indice_comprimento = indice_local + 2
+        }
+        seja tamanho_endereco = deslocamento(mova(codigo), indice_comprimento * 8)
+        mova(codigo, tamanho_endereco)
     }
-    seja tamanho_endereco = deslocamento(mova(codigo), indice_comprimento * 8)
-    mova(codigo, tamanho_endereco)
     adicione_byte(codigo, 15)
     adicione_byte(codigo, 131) // jae rel32
     seja salto_excesso = tamanho(codigo)
@@ -109,13 +138,19 @@ publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro, dinamico: lo
         adicione_byte(codigo, 0)
         i = i + 1
     }
-    se dinamico {
-        // 48 8B 95 disp32: mov rdx, [rbp - ponteiro]
+    se tipo_local == 3 ou tipo_local == 4 {
+        // Para emprestimo, rdx e endereco do descritor do dono; o
+        // ponteiro real esta em [rdx]. Para dono, slot ja tem ponteiro.
         adicione_byte(codigo, 72)
         adicione_byte(codigo, 139)
         adicione_byte(codigo, 149)
         seja endereco_ponteiro = deslocamento(mova(codigo), (indice_local + 1) * 8)
         mova(codigo, endereco_ponteiro)
+        se tipo_local == 4 {
+            adicione_byte(codigo, 72)
+            adicione_byte(codigo, 139)
+            adicione_byte(codigo, 18) // mov rdx, [rdx]
+        }
         // 0F B6 04 02: movzx eax, byte [rdx + rax]
         adicione_byte(codigo, 15)
         adicione_byte(codigo, 182)
@@ -374,5 +409,26 @@ publico funcao emitir_liberacao_automatica(codigo: bytes, indice_local: inteiro)
     seja corrigido = fluxo.corrigir(mova(codigo), pular, depois)
     mova(codigo, corrigido)
     adicione_byte(codigo, 88) // pop rax
+    retorne mova(codigo)
+}
+
+// Emite argumento emprestado sem copiar o buffer nem o seu conteudo.
+// Apenas donos dinamicos (tipo 3) e emprestimos (tipo 4) podem ser
+// passados nesta etapa. O destino nao recebe munmap/ownership.
+publico funcao emitir_argumento_emprestado(codigo: bytes, indice_local: inteiro, tipo_local: inteiro) -> bytes {
+    se tipo_local == 3 {
+        // lea rax, [rbp - slot_ponteiro]
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 141)
+        adicione_byte(codigo, 133)
+    } senao {
+        // mov rax, [rbp - slot_ref]
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 139)
+        adicione_byte(codigo, 133)
+    }
+    seja posicao = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    mova(codigo, posicao)
+    adicione_byte(codigo, 80) // push rax para a ABI interna
     retorne mova(codigo)
 }
