@@ -95,7 +95,6 @@ class TestesFatiasBytesRS(unittest.TestCase):
             b"\x00\x00",
             b"abab",
             b"abcdef",
-            bytes(range(256)),
             ("Olá, mundo — ação 😃" * 3).encode("utf-8"),
             b"\x00\x7f\x01\x00\x7f\x01",
         )
@@ -106,6 +105,7 @@ class TestesFatiasBytesRS(unittest.TestCase):
 
     def test_diagnosticos_utf8_estritos_com_offsets(self):
         casos = (
+            (bytes(range(256)), 1, 128),
             (b"\x80", 1, 0),
             (b"\xc0\xaf", 1, 0),
             (b"\xf5\x80\x80\x80", 1, 0),
