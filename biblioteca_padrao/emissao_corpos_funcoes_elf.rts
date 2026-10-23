@@ -2,8 +2,8 @@
 // condicionais e lacos, com plano intermediario de instrucoes escrito em RS.
 // Funcoes com parametros inteiros, locais, condicionais, lacos e retornos.
 // Erros de chamada: 12 nome inexistente, 13 quantidade de argumentos,
-// 14 chamada futura/recursiva, 15 delimitadores/argumentos malformados.
-// Chamadas permitidas apenas a funcoes declaradas anteriormente, sem recursao.
+// 14 ciclo de chamadas (recursao), 15 delimitadores/argumentos malformados.
+// Permite referencias a funcoes posteriores, mas rejeita recursao.
 // ABI interna privada; sem runtime System V externo.
 importe "lexico.rts" como lexico
 importe "assinaturas_compilador.rts" como assinaturas
@@ -20,6 +20,8 @@ publico tipo ResultadoCorposELF {
 
 publico tipo Ligacao {
     indice_funcao: inteiro
+    indice_origem: inteiro
+    unidade_chamada: inteiro
     posicao_deslocamento: inteiro
 }
 
@@ -400,7 +402,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         resposta.unidade_erro = primeiro
         retorne mova(resposta)
     }
-    se funcao_atual >= 0 e indice_funcao >= funcao_atual {
+    se funcao_atual >= 0 e indice_funcao == funcao_atual {
         resposta.codigo_erro = 14
         resposta.unidade_erro = primeiro
         retorne mova(resposta)
@@ -472,6 +474,8 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
     adicione_byte(codigo, 232)
     seja ligacao: Ligacao
     ligacao.indice_funcao = indice_funcao
+    ligacao.indice_origem = funcao_atual
+    ligacao.unidade_chamada = primeiro
     ligacao.posicao_deslocamento = tamanho(codigo)
     adicione(resposta.ligacoes, ligacao)
     seja j = 0
@@ -747,6 +751,73 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
     retorne mova(resposta)
 }
 
+// Usa chamadas realmente emitidas para construir um grafo de dependencia.
+// O limite de 16 funcoes torna viavel o fechamento transitivo O(n^3).
+// O indice de origem -1 representa inicio e nao pode participar de ciclo.
+privado tipo DiagnosticoCiclo {
+    codigo: inteiro
+    unidade: inteiro
+}
+
+privado funcao verificar_ciclos(ligacoes: emprestimo[lista[Ligacao]], quantidade: inteiro) -> DiagnosticoCiclo {
+    seja resultado: DiagnosticoCiclo
+    seja caminhos: lista[inteiro]
+    seja origens: lista[inteiro]
+    seja i = 0
+    enquanto i < quantidade * quantidade {
+        adicione(caminhos, 0)
+        adicione(origens, -1)
+        i = i + 1
+    }
+    i = 0
+    enquanto i < tamanho(ligacoes) {
+        seja ligacao: Ligacao = ligacoes[i]
+        se ligacao.indice_origem >= 0 {
+            seja indice = ligacao.indice_origem * quantidade + ligacao.indice_funcao
+            caminhos[indice] = 1
+            se origens[indice] < 0 {
+                origens[indice] = ligacao.unidade_chamada
+            }
+        }
+        i = i + 1
+    }
+    seja intermediario = 0
+    enquanto intermediario < quantidade {
+        seja origem = 0
+        enquanto origem < quantidade {
+            se caminhos[origem * quantidade + intermediario] == 1 {
+                seja destino = 0
+                enquanto destino < quantidade {
+                    se caminhos[intermediario * quantidade + destino] == 1 {
+                        caminhos[origem * quantidade + destino] = 1
+                    }
+                    destino = destino + 1
+                }
+            }
+            origem = origem + 1
+        }
+        intermediario = intermediario + 1
+    }
+    i = 0
+    enquanto i < quantidade {
+        se caminhos[i * quantidade + i] == 1 {
+            // Atribui o erro a uma chamada real pertencente ao ciclo.
+            seja destino = 0
+            enquanto destino < quantidade {
+                seja origem_token = origens[i * quantidade + destino]
+                se origem_token >= 0 e caminhos[destino * quantidade + i] == 1 {
+                    resultado.codigo = 14
+                    resultado.unidade = origem_token
+                    retorne resultado
+                }
+                destino = destino + 1
+            }
+        }
+        i = i + 1
+    }
+    retorne resultado
+}
+
 // Gera entrada _start, funcoes mais tarde, remendando call rel32.
 publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoCorposELF {
     seja resposta: ResultadoCorposELF
@@ -860,6 +931,15 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoCorposELF {
             indice_nova_ligacao = indice_nova_ligacao + 1
         }
         f = f + 1
+    }
+
+    // Rejeitar recursao direta/indireta antes de produzir um executavel.
+    // Ligacoes podem apontar tanto para tras quanto para frente.
+    seja ciclos = verificar_ciclos(empreste(ligacoes), tamanho(assinadas.funcoes))
+    se ciclos.codigo != 0 {
+        resposta.codigo_erro = ciclos.codigo
+        resposta.unidade_erro = ciclos.unidade
+        retorne mova(resposta)
     }
 
     // Corrigir call rel32 apos conhecer todos os destinos.
