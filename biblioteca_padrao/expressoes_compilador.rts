@@ -133,7 +133,7 @@ publico funcao verificar_constantes(fonte: emprestimo[bytes], unidades: empresti
             se (no.operador == 47 ou no.operador == 37) e direita_conhecida e direita == 0 {
                 resposta.codigo_erro = 9
                 resposta.unidade_erro = no.unidade
-                retorne mova(resposta)
+                retorne resposta
             }
             se conhecidos[no.esquerdo] e direita_conhecida {
                 seja esquerda = valores[no.esquerdo]
@@ -172,7 +172,7 @@ publico funcao verificar_constantes(fonte: emprestimo[bytes], unidades: empresti
         resposta.constante = conhecidos[arvore.raiz]
         resposta.valor = valores[arvore.raiz]
     }
-    retorne mova(resposta)
+    retorne resposta
 }
 
 // Entrada do analisador: intervalo de tokens [primeiro, ultimo).
