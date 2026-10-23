@@ -1,4 +1,6 @@
 // Biblioteca lexico da RS. Retorna tokens ou um diagnostico sem encerrar o processo.
+// Primeiro valida os bytes de entrada como UTF-8, sem copiar o arquivo.
+importe "fatias_bytes.rts" como fatias
 // Os tokens se referem a posicoes no arquivo fonte emprestado, sem copiar texto.
 publico tipo UnidadeLexica {
     classe: inteiro
@@ -143,7 +145,8 @@ privado funcao simbolo(valor: inteiro) -> logico {
     retorne falso
 }
 
-// Erros recuperaveis: -1 caractere nao aceito; -2 texto sem fechamento.
+// Erros recuperaveis: -1 caractere nao aceito; -2 texto sem fechamento;
+// -3 fonte com UTF-8 invalido.
 // A lista pode conter tokens validos anteriores ao erro; o ultimo sera diagnostico.
 privado funcao sinalizar(tokens_parciais: lista[UnidadeLexica], codigo: inteiro, posicao: inteiro, linha_erro: inteiro, coluna_erro: inteiro) -> lista[UnidadeLexica] {
     seja aviso: UnidadeLexica
@@ -191,6 +194,39 @@ publico funcao obter_diagnostico(unidades: emprestimo[lista[UnidadeLexica]]) -> 
 
 publico funcao analisar(fonte: emprestimo[bytes]) -> lista[UnidadeLexica] {
     seja encontrados: lista[UnidadeLexica]
+    // Rejeitar byte invalido antes do processamento de tokens. Erro -3
+    // inclui o inicio da sequencia invalida e sua linha/coluna Unicode.
+    seja validacao = fatias.validar_utf8(fonte)
+    se nao validacao.valido {
+        seja posicao = 0
+        seja linha_erro = 1
+        seja coluna_erro = 1
+        enquanto posicao < validacao.indice_erro {
+            seja atual = fonte[posicao]
+            se atual == 13 {
+                posicao = posicao + 1
+                se posicao < validacao.indice_erro {
+                    se fonte[posicao] == 10 {
+                        posicao = posicao + 1
+                    }
+                }
+                linha_erro = linha_erro + 1
+                coluna_erro = 1
+            } senao {
+                se atual == 10 {
+                    linha_erro = linha_erro + 1
+                    coluna_erro = 1
+                } senao {
+                    // Bytes de continuacao UTF-8 nao ocupam nova coluna.
+                    se atual < 128 ou atual >= 192 {
+                        coluna_erro = coluna_erro + 1
+                    }
+                }
+                posicao = posicao + 1
+            }
+        }
+        retorne sinalizar(mova(encontrados), -3, validacao.indice_erro, linha_erro, coluna_erro)
+    }
     seja indice = 0
     seja linha = 1
     seja coluna = 1

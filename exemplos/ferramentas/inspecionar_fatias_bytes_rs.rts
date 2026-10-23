@@ -1,0 +1,41 @@
+// Exercita FatiaBytes e validacao de UTF-8 sem copiar o buffer de entrada.
+importe "padrao/fatias_bytes.rts" como fatias
+
+inicio {
+    seja dados: bytes
+    carregue_arquivo("dados.bin", dados)
+    seja total = tamanho(dados)
+    seja metade = total / 2
+    seja toda = fatias.recortar(empreste(dados), 0, total)
+    seja primeira = fatias.recortar(empreste(dados), 0, metade)
+    seja segunda = fatias.recortar(empreste(dados), metade, total - metade)
+    seja derivada = fatias.subfatia(empreste(dados), toda, metade, total - metade)
+    seja fora = fatias.recortar(empreste(dados), total, 1)
+    seja negativa = fatias.recortar(empreste(dados), -1, 1)
+    seja subfora = fatias.subfatia(empreste(dados), toda, total, 1)
+    seja primeiro = fatias.ler(empreste(dados), toda, 0)
+    seja ultimo = fatias.ler(empreste(dados), toda, total)
+    seja validacao = fatias.validar_utf8(empreste(dados))
+
+    escreva(total)
+    escreva(primeira.comprimento)
+    escreva(segunda.comprimento)
+    se fatias.iguais(empreste(dados), primeira, empreste(dados), segunda) {
+        escreva(1)
+    } senao {
+        escreva(0)
+    }
+    se fatias.iguais(empreste(dados), segunda, empreste(dados), derivada) {
+        escreva(1)
+    } senao {
+        escreva(0)
+    }
+    escreva(fora.codigo_erro)
+    escreva(negativa.codigo_erro)
+    escreva(subfora.codigo_erro)
+    escreva(primeiro.codigo_erro)
+    escreva(primeiro.valor)
+    escreva(ultimo.codigo_erro)
+    escreva(validacao.codigo_erro)
+    escreva(validacao.indice_erro)
+}

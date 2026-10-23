@@ -87,6 +87,16 @@ class TestesLexicoEmRS(unittest.TestCase):
                 errors="replace", timeout=20,
             )
 
+    def executar_bytes(self, dados):
+        # Entrada binaria crua: cobre UTF-8 incorreto que .encode ocultaria.
+        with tempfile.TemporaryDirectory(prefix="rs_lexico_bytes_") as pasta:
+            Path(pasta, "codigo_fonte.rts").write_bytes(dados)
+            return subprocess.run(
+                (str(self.executavel),), cwd=pasta,
+                capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=20,
+            )
+
     def comparar(self, fonte):
         proc = self.executar(fonte)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
@@ -170,6 +180,27 @@ class TestesLexicoEmRS(unittest.TestCase):
                 processo = self.executar(fonte)
                 self.assertEqual(processo.returncode, 2)
                 self.assertIn("Erro lexico", processo.stdout)
+
+    def test_fonte_utf8_invalida_com_linha_e_coluna(self):
+        casos = (
+            (b'inicio { escreva("abc\x80") }', 1, 22),
+            (b'// comentario\r\ninicio { escreva("a\xc0\xaf") }', 2, 20),
+            (b'inicio { escreva("a\xe0\x80\x80") }', 1, 20),
+            (b'inicio { escreva("a\xed\xa0\x80") }', 1, 20),
+            (b'inicio { escreva("a\xf4\x90\x80\x80") }', 1, 20),
+            (b'inicio { escreva("a\xe2\x82")', 1, 20),
+        )
+        for dados, linha, coluna in casos:
+            with self.subTest(dados=dados):
+                processo = self.executar_bytes(dados)
+                self.assertEqual(processo.returncode, 2)
+                linhas = processo.stdout.splitlines()
+                self.assertTrue(linhas[0].startswith("Erro lexico: sequencia UTF-8"))
+                self.assertEqual(int(linhas[1]), linha)
+                self.assertEqual(int(linhas[2]), coluna)
+
+    def test_utf8_valido_continua_funcionando(self):
+        self.comparar('inicio { escreva("ação 🎯") }\n')
 
     def test_texto_sem_fechamento(self):
         processo = self.executar('inicio {\n escreva("texto incompleto\n}\n')

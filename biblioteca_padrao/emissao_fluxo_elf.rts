@@ -3,6 +3,7 @@
 // se sem senao e enquanto com comparacoes inteiras.
 // Nao e ainda um compilador RS autonomo.
 importe "lexico.rts" como lexico
+importe "fatias_bytes.rts" como fatias
 importe "expressoes_compilador.rts" como expressoes
 importe "emissao_elf_minima.rts" como elf
 
@@ -58,6 +59,9 @@ publico funcao igual(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, no
     se unidade.classe != 1 ou unidade.comprimento_byte != tamanho(nome) {
         retorne falso
     }
+    se nao fatias.contida(tamanho(fonte), unidade.inicio_byte, unidade.comprimento_byte) {
+        retorne falso
+    }
     seja i = 0
     enquanto i < tamanho(nome) {
         se fonte[unidade.inicio_byte + i] != byte_em(nome, i) {
@@ -72,6 +76,9 @@ publico funcao simbolo(fonte: emprestimo[bytes], unidade: lexico.UnidadeLexica, 
     se unidade.classe != 4 ou unidade.comprimento_byte != 1 {
         retorne falso
     }
+    se nao fatias.contida(tamanho(fonte), unidade.inicio_byte, 1) {
+        retorne falso
+    }
     retorne fonte[unidade.inicio_byte] == valor
 }
 
@@ -79,14 +86,9 @@ publico funcao mesmo_nome(fonte: emprestimo[bytes], a: lexico.UnidadeLexica, b: 
     se a.classe != 1 ou b.classe != 1 ou a.comprimento_byte != b.comprimento_byte {
         retorne falso
     }
-    seja i = 0
-    enquanto i < a.comprimento_byte {
-        se fonte[a.inicio_byte + i] != fonte[b.inicio_byte + i] {
-            retorne falso
-        }
-        i = i + 1
-    }
-    retorne verdadeiro
+    seja primeira = fatias.recortar(fonte, a.inicio_byte, a.comprimento_byte)
+    seja segunda = fatias.recortar(fonte, b.inicio_byte, b.comprimento_byte)
+    retorne fatias.iguais(fonte, primeira, fonte, segunda)
 }
 
 // Procura do mais recente para o mais antigo: o nome do escopo interno
