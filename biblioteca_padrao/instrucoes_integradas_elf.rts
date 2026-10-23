@@ -197,10 +197,8 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
         seja declaracao = fluxo.igual(fonte, token, empreste(texto_seja))
         seja posicao_nome = i
         se declaracao {
-            se profundidade != 0 {
-                plano.codigo_erro = 3
-                retorne mova(plano)
-            }
+            // Declaracoes em se, senao e enquanto tambem recebem um slot
+            // proprio; a visibilidade e controlada pelo emissor.
             posicao_nome = i + 1
             plano.quantidade_locais = plano.quantidade_locais + 1
             se plano.quantidade_locais > 128 {
@@ -545,10 +543,8 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
         seja declaracao = fluxo.igual(fonte, token, empreste(texto_seja))
         seja posicao_nome = i
         se declaracao {
-            se profundidade != 0 {
-                plano.codigo_erro = 3
-                retorne mova(plano)
-            }
+            // Declaracoes em se, senao e enquanto tambem recebem um slot
+            // proprio; a visibilidade e controlada pelo emissor.
             posicao_nome = i + 1
             plano.quantidade_locais = plano.quantidade_locais + 1
             se plano.quantidade_locais > 128 {
