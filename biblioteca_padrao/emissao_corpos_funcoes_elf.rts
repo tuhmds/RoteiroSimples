@@ -80,9 +80,9 @@ privado funcao parametro_bytes_emprestado(fonte: emprestimo[bytes], unidades: em
     seja tipo_bytes: texto = "bytes"
     seja marcador: lexico.UnidadeLexica = unidades[parametro.tipo_inicio]
     seja abertura: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 1]
-    seja tipo: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 2]
+    seja unidade_tipo_bytes: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 2]
     seja fechamento: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 3]
-    retorne fluxo.igual(fonte, marcador, empreste(palavra)) e fluxo.simbolo(fonte, abertura, 91) e fluxo.igual(fonte, tipo, empreste(tipo_bytes)) e fluxo.simbolo(fonte, fechamento, 93)
+    retorne fluxo.igual(fonte, marcador, empreste(palavra)) e fluxo.simbolo(fonte, abertura, 91) e fluxo.igual(fonte, unidade_tipo_bytes, empreste(tipo_bytes)) e fluxo.simbolo(fonte, fechamento, 93)
 }
 
 // Verifica a assinatura e o corpo inteiro: retorne expressao.
