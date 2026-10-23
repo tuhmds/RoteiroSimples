@@ -62,11 +62,15 @@ publico funcao inicializar(codigo: bytes, fonte: emprestimo[bytes], literal: lex
 }
 
 // Le o comprimento de um local bytes e entrega um inteiro na pilha.
-publico funcao emitir_tamanho(codigo: bytes, indice_local: inteiro) -> bytes {
+publico funcao emitir_tamanho(codigo: bytes, indice_local: inteiro, dinamico: logico) -> bytes {
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 139)
     adicione_byte(codigo, 133)
-    seja carregado = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    seja campo_tamanho = indice_local + 1
+    se dinamico {
+        campo_tamanho = indice_local + 2
+    }
+    seja carregado = deslocamento(mova(codigo), campo_tamanho * 8)
     mova(codigo, carregado)
     adicione_byte(codigo, 80)
     retorne mova(codigo)
