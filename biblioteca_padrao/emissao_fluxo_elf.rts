@@ -261,7 +261,7 @@ publico funcao emitir_expressao(codigo: bytes, fonte: emprestimo[bytes], unidade
                     adicione_byte(codigo, 89)
                     adicione_byte(codigo, 88)
                     se no.operador == 43 {
-                        adicione_byte(codigo, 72) {
+                        adicione_byte(codigo, 72)
                         adicione_byte(codigo, 1)
                         adicione_byte(codigo, 200)
                     }
