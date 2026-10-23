@@ -1401,5 +1401,160 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                     self.assertIsNone(status)
 
 
+    def test_bytes_escrita_e_dinamicos_mmap_o0_o8(self):
+        casos = (
+            ("funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "ABC"\n'
+             " dados[1] = 90\n"
+             " retorne dados[0] + dados[1] + dados[2]\n"
+             "}\n inicio { seja r = f() }", 65 + 90 + 67),
+            ("funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "ABC"\n'
+             " seja i: inteiro = 0\n"
+             " dados[i + 2] = 120\n"
+             " retorne dados[2]\n"
+             "}\n inicio { seja r = f() }", 120),
+            ("funcao f() -> inteiro {\n"
+             " seja dados: bytes = criar_bytes(128)\n"
+             " dados[120] = 201\n"
+             " seja r = dados[120] + tamanho(dados)\n"
+             " liberar_bytes(dados)\n"
+             " retorne r\n"
+             "}\n inicio { seja r = f() }", (201 + 128) % 256),
+            ("funcao f() -> inteiro {\n"
+             " seja dados: bytes = criar_bytes(0)\n"
+             " seja r = tamanho(dados)\n"
+             " liberar_bytes(dados)\n"
+             " retorne r\n"
+             "}\n inicio { seja r = f() }", 0),
+            ("funcao f() -> inteiro {\n"
+             " seja dados: bytes = criar_bytes(65537)\n"
+             " dados[65536] = 255\n"
+             " seja r = dados[65536] + dados[0]\n"
+             " liberar_bytes(dados)\n"
+             " retorne r\n"
+             "}\n inicio { seja r = f() }", 255),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja dados: bytes = criar_bytes(n + 2)\n"
+             " dados[n] = n + 30\n"
+             " seja r = dados[n] + tamanho(dados)\n"
+             " liberar_bytes(dados)\n retorne r\n"
+             "}\n inicio { seja r = f(10) }", 52),
+            ("funcao f() -> inteiro {\n"
+             " seja i: inteiro = 0\n seja total: inteiro = 0\n"
+             " enquanto i < 3 {\n"
+             " seja dados: bytes = criar_bytes(64)\n"
+             " dados[i] = i + 65\n"
+             " total = total + dados[i]\n"
+             " liberar_bytes(dados)\n"
+             " i = i + 1\n }\n"
+             " retorne total\n"
+             "}\n inicio { seja r = f() }", (65 + 66 + 67) % 256),
+            ("funcao f() -> inteiro {\n"
+             " seja i: inteiro = 1\n"
+             " se i > 0 {\n"
+             " seja dados: bytes = criar_bytes(i + 40)\n"
+             " dados[i + 32] = 200\n"
+             " i = dados[i + 32]\n"
+             " liberar_bytes(dados)\n"
+             " }\n retorne i\n"
+             "}\n inicio { seja r = f() }", 200),
+            ("funcao f() -> inteiro {\n"
+             " seja dados: bytes = criar_bytes(4)\n"
+             " dados[0] = 255\n"
+             " seja r = dados[0]\n"
+             " liberar_bytes(dados)\n"
+             " retorne r\n"
+             "}\n inicio { seja r = f() }", 255),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte, esperado=esperado):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado % 256)
+
+    def test_bytes_dinamicos_erros_de_limites_propriedade_e_valor(self):
+        casos = (
+            ("funcao f() -> inteiro {\n"
+             " seja dados: bytes = criar_bytes(-1)\n"
+             " liberar_bytes(dados)\n retorne 0\n"
+             "}\n inicio { seja r = f() }", 24),
+            ("funcao f() -> inteiro {\n"
+             " seja dados: bytes = criar_bytes(1048577)\n"
+             " liberar_bytes(dados)\n retorne 0\n"
+             "}\n inicio { seja r = f() }", 24),
+            ("funcao f() -> inteiro {\n"
+             " seja dados: bytes = criar_bytes(2)\n"
+             " dados[2] = 10\n liberar_bytes(dados)\n retorne 0\n"
+             "}\n inicio { seja r = f() }", 23),
+            ("funcao f() -> inteiro {\n"
+             " seja dados: bytes = criar_bytes(2)\n"
+             " dados[-1] = 10\n liberar_bytes(dados)\n retorne 0\n"
+             "}\n inicio { seja r = f() }", 23),
+            ("funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "ABC"\n'
+             " dados[0] = 256\n retorne 0\n"
+             "}\n inicio { seja r = f() }", 23),
+            ("funcao f() -> inteiro {\n"
+             " seja dados: bytes = criar_bytes(2)\n"
+             " dados[0] = -1\n liberar_bytes(dados)\n retorne 0\n"
+             "}\n inicio { seja r = f() }", 23),
+            ("funcao f() -> inteiro {\n"
+             " seja dados: bytes = criar_bytes(2)\n"
+             " liberar_bytes(dados)\n"
+             " retorne dados[0]\n"
+             "}\n inicio { seja r = f() }", 23),
+            ("funcao f() -> inteiro {\n"
+             " seja dados: bytes = criar_bytes(2)\n"
+             " liberar_bytes(dados)\n"
+             " liberar_bytes(dados)\n retorne 0\n"
+             "}\n inicio { seja r = f() }", 25),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, esperado=esperado, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
+    def test_bytes_dinamicos_sintaxe_e_tipos_invalidos(self):
+        casos = (
+            (18, "funcao f() -> inteiro {\n"
+             " seja a = 1\n a[0] = 65\n retorne 0\n"
+             "}\n inicio { seja r = f() }"),
+            (18, "funcao f() -> inteiro {\n"
+             ' seja a: bytes = "ABC"\n'
+             " liberar_bytes(a)\n retorne 0\n"
+             "}\n inicio { seja r = f() }"),
+            (18, "funcao f() -> inteiro {\n"
+             " seja a: bytes = criar_bytes(5)\n"
+             " a = 10\n liberar_bytes(a)\n retorne 0\n"
+             "}\n inicio { seja r = f() }"),
+            (5, "funcao f() -> inteiro {\n"
+             " liberar_bytes(a)\n retorne 0\n"
+             "}\n inicio { seja r = f() }"),
+            (3, "funcao f() -> inteiro {\n"
+             ' seja a: bytes = "ABC"\n'
+             " a[] = 1\n retorne 0\n"
+             "}\n inicio { seja r = f() }"),
+            (17, "funcao f() -> inteiro {\n"
+             " seja a: bytes = criar_bytes()\n"
+             " retorne 0\n"
+             "}\n inicio { seja r = f() }"),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, esperado=esperado, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, esperado)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
+
 if __name__ == "__main__":
     unittest.main()
