@@ -70,6 +70,21 @@ privado funcao executar_expressao(codigo: bytes, fonte: emprestimo[bytes], unida
     retorne fluxo.emitir_expressao(mova(codigo), fonte, unidades, nomes, primeiro, ultimo)
 }
 
+// Somente a anotacao exata emprestimo[bytes] e aceita pelo emissor
+// experimental. Ela nao transfere propriedade do descritor.
+privado funcao parametro_bytes_emprestado(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], parametro: assinaturas.ParametroFuncao) -> logico {
+    se parametro.tipo_fim != parametro.tipo_inicio + 4 {
+        retorne falso
+    }
+    seja palavra: texto = "emprestimo"
+    seja tipo_bytes: texto = "bytes"
+    seja marcador: lexico.UnidadeLexica = unidades[parametro.tipo_inicio]
+    seja abertura: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 1]
+    seja tipo: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 2]
+    seja fechamento: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 3]
+    retorne fluxo.igual(fonte, marcador, empreste(palavra)) e fluxo.simbolo(fonte, abertura, 91) e fluxo.igual(fonte, tipo, empreste(tipo_bytes)) e fluxo.simbolo(fonte, fechamento, 93)
+}
+
 // Verifica a assinatura e o corpo inteiro: retorne expressao.
 // Diagnostico: 2 assinatura, 3 corpo, 4 duplicidade.
 privado funcao validar_funcoes(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], grupo: emprestimo[assinaturas.Assinaturas]) -> inteiro {
@@ -110,11 +125,14 @@ privado funcao validar_funcoes(fonte: emprestimo[bytes], unidades: emprestimo[li
         j = 0
         enquanto j < atual.quantidade_parametros {
             seja p: assinaturas.ParametroFuncao = grupo.parametros[atual.primeiro_parametro + j]
-            se p.tipo_fim != p.tipo_inicio + 1 {
-                retorne 2
+            seja parametro_valido = parametro_bytes_emprestado(fonte, unidades, p)
+            se p.tipo_fim == p.tipo_inicio + 1 {
+                seja tipo_parametro: lexico.UnidadeLexica = unidades[p.tipo_inicio]
+                se fluxo.igual(fonte, tipo_parametro, empreste(retorno)) {
+                    parametro_valido = verdadeiro
+                }
             }
-            seja tipo_parametro: lexico.UnidadeLexica = unidades[p.tipo_inicio]
-            se nao fluxo.igual(fonte, tipo_parametro, empreste(retorno)) {
+            se nao parametro_valido {
                 retorne 2
             }
             seja k = 0
@@ -190,8 +208,8 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 seja nome_buffer: lexico.UnidadeLexica = unidades[primeiro + 2]
                 seja indice_buffer = fluxo.resolver(fonte, nomes, nome_buffer)
                 se indice_buffer >= 0 {
-                    se tipos[indice_buffer] == 2 ou tipos[indice_buffer] == 3 {
-                        seja trecho_tamanho = emisbytes.emitir_tamanho(mova(codigo), indice_buffer, tipos[indice_buffer] == 3)
+                    se tipos[indice_buffer] == 2 ou tipos[indice_buffer] == 3 ou tipos[indice_buffer] == 4 {
+                        seja trecho_tamanho = emisbytes.emitir_tamanho(mova(codigo), indice_buffer, tipos[indice_buffer])
                         mova(resposta.codigo, trecho_tamanho)
                         retorne mova(resposta)
                     }
@@ -214,7 +232,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             se primeiro_fecho == ultimo - 1 {
                 seja indice_buffer = fluxo.resolver(fonte, nomes, primeiro_valor)
             se indice_buffer >= 0 {
-                se tipos[indice_buffer] == 2 ou tipos[indice_buffer] == 3 {
+                se tipos[indice_buffer] == 2 ou tipos[indice_buffer] == 3 ou tipos[indice_buffer] == 4 {
                     seja parte_indice = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 2, ultimo - 1, funcao_atual, nivel + 1)
                     se parte_indice.codigo_erro != 0 {
                         resposta.codigo_erro = parte_indice.codigo_erro
@@ -228,7 +246,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                         adicione(resposta.ligacoes, pendente)
                         k = k + 1
                     }
-                    seja leitura = emisbytes.emitir_leitura(mova(codigo), indice_buffer, tipos[indice_buffer] == 3)
+                    seja leitura = emisbytes.emitir_leitura(mova(codigo), indice_buffer, tipos[indice_buffer])
                     mova(resposta.codigo, leitura)
                     retorne mova(resposta)
                 }
@@ -446,6 +464,23 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         }
     }
     se nao chamada {
+        // Tipos bytes nao podem escapar para uma expressao inteira por
+        // erro de coerção, inclusive retorne dados ou dados + 1.
+        seja verificador = primeiro
+        enquanto verificador < ultimo {
+            seja candidato: lexico.UnidadeLexica = unidades[verificador]
+            se candidato.classe == 1 {
+                seja local = fluxo.resolver(fonte, nomes, candidato)
+                se local >= 0 {
+                    se tipos[local] != 1 {
+                        resposta.codigo_erro = 18
+                        resposta.unidade_erro = verificador
+                        retorne mova(resposta)
+                    }
+                }
+            }
+            verificador = verificador + 1
+        }
         seja simples = executar_expressao(mova(codigo), fonte, unidades, nomes, primeiro, ultimo)
         se simples.erro != 0 {
             resposta.codigo_erro = 7
@@ -475,7 +510,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         f = f + 1
     }
     // Validacao de assinatura antes de emitir instrucoes da chamada.
-    // A assinatura tipada do subconjunto so admite parametros e retorno inteiro.
+    // Parametros aceitam inteiro ou emprestimo[bytes] de buffer dinamico.
     se indice_funcao < 0 {
         resposta.codigo_erro = 12
         resposta.unidade_erro = primeiro
@@ -534,18 +569,41 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
     }
     seja argumento = tamanho(inicios) - 1
     enquanto argumento >= 0 {
-        seja parte = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, inicios[argumento], finais[argumento], funcao_atual, nivel + 1)
-        se parte.codigo_erro != 0 {
-            resposta.codigo_erro = parte.codigo_erro
-            resposta.unidade_erro = parte.unidade_erro
-            retorne mova(resposta)
-        }
-        mova(codigo, parte.codigo)
-        seja l = 0
-        enquanto l < tamanho(parte.ligacoes) {
-            seja ligacao_filha: Ligacao = parte.ligacoes[l]
-            adicione(resposta.ligacoes, ligacao_filha)
-            l = l + 1
+        seja p_alvo: assinaturas.ParametroFuncao = assinadas.parametros[funcao_alvo.primeiro_parametro + argumento]
+        se parametro_bytes_emprestado(fonte, unidades, p_alvo) {
+            // O argumento deve ser exclusivamente um identificador dono
+            // dinamico ou um emprestimo recebido. Sem temporarios.
+            resposta.unidade_erro = inicios[argumento]
+            se finais[argumento] != inicios[argumento] + 1 {
+                resposta.codigo_erro = 18
+                retorne mova(resposta)
+            }
+            seja token_buffer: lexico.UnidadeLexica = unidades[inicios[argumento]]
+            seja indice_buffer = fluxo.resolver(fonte, nomes, token_buffer)
+            se indice_buffer < 0 {
+                resposta.codigo_erro = 5
+                retorne mova(resposta)
+            }
+            se tipos[indice_buffer] != 3 e tipos[indice_buffer] != 4 {
+                resposta.codigo_erro = 18
+                retorne mova(resposta)
+            }
+            seja argumento_buffer = emisbytes.emitir_argumento_emprestado(mova(codigo), indice_buffer, tipos[indice_buffer])
+            mova(codigo, argumento_buffer)
+        } senao {
+            seja parte = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, inicios[argumento], finais[argumento], funcao_atual, nivel + 1)
+            se parte.codigo_erro != 0 {
+                resposta.codigo_erro = parte.codigo_erro
+                resposta.unidade_erro = parte.unidade_erro
+                retorne mova(resposta)
+            }
+            mova(codigo, parte.codigo)
+            seja l = 0
+            enquanto l < tamanho(parte.ligacoes) {
+                seja ligacao_filha: Ligacao = parte.ligacoes[l]
+                adicione(resposta.ligacoes, ligacao_filha)
+                l = l + 1
+            }
         }
         argumento = argumento - 1
     }
@@ -686,7 +744,15 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
     enquanto p < tamanho(parametros) {
         seja nome_parametro: lexico.UnidadeLexica = parametros[p]
         adicione(nomes, nome_parametro)
-        adicione(tipos, 1)
+        seja tipo_parametro = 1
+        se funcao_atual >= 0 {
+            seja assinatura_atual: assinaturas.AssinaturaFuncao = assinadas.funcoes[funcao_atual]
+            seja parametro_atual: assinaturas.ParametroFuncao = assinadas.parametros[assinatura_atual.primeiro_parametro + p]
+            se parametro_bytes_emprestado(fonte, unidades, parametro_atual) {
+                tipo_parametro = 4
+            }
+        }
+        adicione(tipos, tipo_parametro)
         p = p + 1
     }
     seja f = 0
@@ -958,7 +1024,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             continue
         }
         se instrucao.categoria == 2 {
-            se tipos[indice_local] == 2 ou tipos[indice_local] == 3 {
+            se tipos[indice_local] == 2 ou tipos[indice_local] == 3 ou tipos[indice_local] == 4 {
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
             }
