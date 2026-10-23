@@ -190,7 +190,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 seja nome_buffer: lexico.UnidadeLexica = unidades[primeiro + 2]
                 seja indice_buffer = fluxo.resolver(fonte, nomes, nome_buffer)
                 se indice_buffer >= 0 {
-                    se tipos[indice_buffer] == 2 {
+                    se tipos[indice_buffer] == 2 ou tipos[indice_buffer] == 3 {
                         seja trecho_tamanho = emisbytes.emitir_tamanho(mova(codigo), indice_buffer)
                         mova(resposta.codigo, trecho_tamanho)
                         retorne mova(resposta)
@@ -214,7 +214,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             se primeiro_fecho == ultimo - 1 {
                 seja indice_buffer = fluxo.resolver(fonte, nomes, primeiro_valor)
             se indice_buffer >= 0 {
-                se tipos[indice_buffer] == 2 {
+                se tipos[indice_buffer] == 2 ou tipos[indice_buffer] == 3 {
                     seja parte_indice = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 2, ultimo - 1, funcao_atual, nivel + 1)
                     se parte_indice.codigo_erro != 0 {
                         resposta.codigo_erro = parte_indice.codigo_erro
@@ -228,7 +228,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                         adicione(resposta.ligacoes, pendente)
                         k = k + 1
                     }
-                    seja leitura = emisbytes.emitir_leitura(mova(codigo), indice_buffer)
+                    seja leitura = emisbytes.emitir_leitura(mova(codigo), indice_buffer, tipos[indice_buffer] == 3)
                     mova(resposta.codigo, leitura)
                     retorne mova(resposta)
                 }
@@ -831,7 +831,24 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             posicao_ir = posicao_ir + 1
             continue
         }
-        se instrucao.categoria != 1 e instrucao.categoria != 2 e instrucao.categoria != 7 {
+        se instrucao.categoria == 12 {
+            // liberar_bytes(dados): transferencia de propriedade final.
+            seja token_liberar: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
+            seja indice_liberar = fluxo.resolver(fonte, empreste(nomes), token_liberar)
+            se indice_liberar < 0 {
+                resposta.codigo_erro = 5
+                retorne mova(resposta)
+            }
+            se tipos[indice_liberar] != 3 {
+                resposta.codigo_erro = 18
+                retorne mova(resposta)
+            }
+            seja liberado = emisbytes.emitir_liberacao(mova(codigo), indice_liberar)
+            mova(codigo, liberado)
+            posicao_ir = posicao_ir + 1
+            continue
+        }
+        se instrucao.categoria != 1 e instrucao.categoria != 2 e instrucao.categoria != 7 e instrucao.categoria != 11 {
             resposta.codigo_erro = 3
             retorne mova(resposta)
         }
@@ -868,28 +885,95 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         }
         seja primeiro = instrucao.valor_inicio
         seja ultimo = instrucao.valor_fim
+        se instrucao.categoria == 11 {
+            // dados[indice] = valor: as duas expressoes sao inteiras.
+            // O buffer deve ter tipo local 2 ou dinamico 3.
+            se tipos[indice_local] != 2 e tipos[indice_local] != 3 {
+                resposta.codigo_erro = 18
+                retorne mova(resposta)
+            }
+            seja indice_calculado = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, instrucao.indice_inicio, instrucao.indice_fim, funcao_atual, 0)
+            se indice_calculado.codigo_erro != 0 {
+                resposta.codigo_erro = indice_calculado.codigo_erro
+                resposta.unidade_erro = indice_calculado.unidade_erro
+                retorne mova(resposta)
+            }
+            mova(codigo, indice_calculado.codigo)
+            seja l = 0
+            enquanto l < tamanho(indice_calculado.ligacoes) {
+                seja pendente_indice: Ligacao = indice_calculado.ligacoes[l]
+                adicione(ligacoes, pendente_indice)
+                l = l + 1
+            }
+            seja dado_calculado = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0)
+            se dado_calculado.codigo_erro != 0 {
+                resposta.codigo_erro = dado_calculado.codigo_erro
+                resposta.unidade_erro = dado_calculado.unidade_erro
+                retorne mova(resposta)
+            }
+            mova(codigo, dado_calculado.codigo)
+            l = 0
+            enquanto l < tamanho(dado_calculado.ligacoes) {
+                seja pendente_valor: Ligacao = dado_calculado.ligacoes[l]
+                adicione(ligacoes, pendente_valor)
+                l = l + 1
+            }
+            seja escrita = emisbytes.emitir_escrita(mova(codigo), indice_local, tipos[indice_local] == 3)
+            mova(codigo, escrita)
+            posicao_ir = posicao_ir + 1
+            continue
+        }
         se instrucao.categoria == 2 {
             se tipos[indice_local] == 2 {
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
             }
         }
-        se instrucao.categoria == 1 e instrucao.tipo_local == 2 {
-            se ultimo != primeiro + 1 {
-                resposta.codigo_erro = 17
-                retorne mova(resposta)
+        se instrucao.categoria == 1 e (instrucao.tipo_local == 2 ou instrucao.tipo_local == 3) {
+            se instrucao.tipo_local == 2 {
+                se ultimo != primeiro + 1 {
+                    resposta.codigo_erro = 17
+                    retorne mova(resposta)
+                }
+                seja literal_bytes: lexico.UnidadeLexica = unidades[primeiro]
+                seja inicializacao = emisbytes.inicializar(mova(codigo), fonte, literal_bytes, indice_local)
+                se inicializacao.codigo_erro != 0 {
+                    resposta.codigo_erro = inicializacao.codigo_erro
+                    resposta.unidade_erro = primeiro
+                    retorne mova(resposta)
+                }
+                mova(codigo, inicializacao.codigo)
+            } senao {
+                // criar_bytes(comprimento): gera mmap, retorna buffer zerado.
+                se ultimo <= primeiro + 3 {
+                    resposta.codigo_erro = 17
+                    retorne mova(resposta)
+                }
+                seja abertura_criar: lexico.UnidadeLexica = unidades[primeiro + 1]
+                seja fechamento_criar: lexico.UnidadeLexica = unidades[ultimo - 1]
+                se nao fluxo.simbolo(fonte, abertura_criar, 40) ou nao fluxo.simbolo(fonte, fechamento_criar, 41) {
+                    resposta.codigo_erro = 17
+                    retorne mova(resposta)
+                }
+                seja pedido = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro + 2, ultimo - 1, funcao_atual, 0)
+                se pedido.codigo_erro != 0 {
+                    resposta.codigo_erro = pedido.codigo_erro
+                    resposta.unidade_erro = pedido.unidade_erro
+                    retorne mova(resposta)
+                }
+                mova(codigo, pedido.codigo)
+                seja l = 0
+                enquanto l < tamanho(pedido.ligacoes) {
+                    seja chamada_pedido: Ligacao = pedido.ligacoes[l]
+                    adicione(ligacoes, chamada_pedido)
+                    l = l + 1
+                }
+                seja reservado = emisbytes.emitir_alocacao(mova(codigo), indice_local)
+                mova(codigo, reservado)
             }
-            seja literal_bytes: lexico.UnidadeLexica = unidades[primeiro]
-            seja inicializacao = emisbytes.inicializar(mova(codigo), fonte, literal_bytes, indice_local)
-            se inicializacao.codigo_erro != 0 {
-                resposta.codigo_erro = inicializacao.codigo_erro
-                resposta.unidade_erro = primeiro
-                retorne mova(resposta)
-            }
-            mova(codigo, inicializacao.codigo)
             seja nome_buffer: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
             adicione(nomes, nome_buffer)
-            adicione(tipos, 2)
+            adicione(tipos, instrucao.tipo_local)
             seja reserva = 0
             enquanto reserva < 4 {
                 seja oculto: lexico.UnidadeLexica
