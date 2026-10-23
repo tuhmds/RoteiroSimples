@@ -62,6 +62,15 @@ na pilha e retorno em `rax`, com `leave; ret`.
   dos predicados `se`/`enquanto`, incluindo aritmetica mista.
   Expressoes de valor booleano e operadores logicos compostos ainda
   nao sao suportados.
+- **Analise antecipada de divisao por zero:** o compilador recusa
+  `/` e `%` cujo divisor seja uma constante comprovadamente zero,
+  incluindo parenteses, sinais e pequenas expressoes aritmeticas
+  como `7 / (5 - 5)` e `f(3) % (10 / 20)`. Usa **codigo 9** e
+  informa o indice do operador no fonte; nenhum ELF e gerado nesses
+  casos. O avaliador e conservador: so propaga constantes no intervalo
+  de -1000000000 a 1000000000, sem nomes nem chamadas dinamicas.
+  Isso nao e uma avaliacao de todas as constantes possiveis nem
+  substitui a verificacao em tempo de execucao de divisores dinamicos.
 - Para impedir recursao nesta etapa, uma funcao somente pode chamar
   funcoes **declaradas anteriormente**; chamadas futuras, recursivas e
   ciclos entre funcoes sao rejeitados.
@@ -107,7 +116,7 @@ falhar sem gerar arquivo. A CI geral e obrigatoria antes da integracao.
 
 ## Proximo passo
 
-Fortalecer a verificacao semantica dos caminhos de retorno e tipos,
-detectar divisoes por zero demonstraveis na compilacao e evoluir o
-tratamento de falhas para erros recuperaveis em lugar de encerramento do
-processo. Estudar recursao controlada, ABI publica e bootstrap.
+Fortalecer a verificacao semantica de caminhos de retorno e tipos,
+expandir de forma segura a analise de constantes e evoluir o tratamento
+de falhas dinamicas para erros recuperaveis. Depois estudar recursao
+controlada, ABI publica e bootstrap completo do compilador RS.
