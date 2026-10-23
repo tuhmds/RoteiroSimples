@@ -308,7 +308,7 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
             (13, "funcao sem() -> inteiro {\n retorne 7\n}\n"
              "inicio {\n seja r = sem(sem())\n}"),
             (14, "funcao primeira() -> inteiro {\n retorne segunda()\n}\n"
-             "funcao segunda() -> inteiro {\n retorne 7\n}\n"
+             "funcao segunda() -> inteiro {\n retorne primeira()\n}\n"
              "inicio {\n seja r = primeira()\n}"),
             (14, "funcao primeira(n: inteiro) -> inteiro {\n retorne primeira(n)\n}\n"
              "inicio {\n seja r = primeira(7)\n}"),
@@ -728,10 +728,6 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
             "funcao f(n: inteiro) -> inteiro {\n"
             " seja x = n\n enquanto x > 0 {\n x = x - 1\n }\n"
             " retorne 1000000001\n}\n inicio { seja r = f(1) }",
-            "funcao a() -> inteiro {\n"
-            " seja x = b()\n retorne x\n}\n"
-            "funcao b() -> inteiro {\n retorne 1\n}\n"
-            "inicio { seja r = a() }",
             "funcao f(n: inteiro) -> inteiro {\n"
             " seja x = n\n retorne x + desconhecido\n}\n"
             "inicio { seja r = f(3) }",
