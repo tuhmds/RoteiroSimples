@@ -75,7 +75,7 @@ publico funcao emitir_tamanho(codigo: bytes, indice_local: inteiro) -> bytes {
 // Recebe indice inteiro avaliado no topo da pilha, devolve o byte como
 // inteiro 0..255. Acesso invalido encerra o ELF com codigo 23; jamais le
 // memoria fora da area local. Alvos usam deslocamentos rel32.
-publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro) -> bytes {
+publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro, dinamico: logico) -> bytes {
     adicione_byte(codigo, 88) // pop rax (indice)
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 133)
@@ -91,7 +91,11 @@ publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro) -> bytes {
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 59)
     adicione_byte(codigo, 133) // cmp rax, [rbp - slot_comprimento]
-    seja tamanho_endereco = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    seja indice_comprimento = indice_local + 1
+    se dinamico {
+        indice_comprimento = indice_local + 2
+    }
+    seja tamanho_endereco = deslocamento(mova(codigo), indice_comprimento * 8)
     mova(codigo, tamanho_endereco)
     adicione_byte(codigo, 15)
     adicione_byte(codigo, 131) // jae rel32
@@ -101,13 +105,27 @@ publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro) -> bytes {
         adicione_byte(codigo, 0)
         i = i + 1
     }
-    // 0F B6 84 05 disp32: movzx eax, byte [rbp + rax + base]
-    adicione_byte(codigo, 15)
-    adicione_byte(codigo, 182)
-    adicione_byte(codigo, 132)
-    adicione_byte(codigo, 5)
-    seja byte_endereco = deslocamento(mova(codigo), (indice_local + 5) * 8)
-    mova(codigo, byte_endereco)
+    se dinamico {
+        // 48 8B 95 disp32: mov rdx, [rbp - ponteiro]
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 139)
+        adicione_byte(codigo, 149)
+        seja endereco_ponteiro = deslocamento(mova(codigo), (indice_local + 1) * 8)
+        mova(codigo, endereco_ponteiro)
+        // 0F B6 04 02: movzx eax, byte [rdx + rax]
+        adicione_byte(codigo, 15)
+        adicione_byte(codigo, 182)
+        adicione_byte(codigo, 4)
+        adicione_byte(codigo, 2)
+    } senao {
+        // 0F B6 84 05 disp32: movzx eax, byte [rbp + rax + base]
+        adicione_byte(codigo, 15)
+        adicione_byte(codigo, 182)
+        adicione_byte(codigo, 132)
+        adicione_byte(codigo, 5)
+        seja byte_endereco = deslocamento(mova(codigo), (indice_local + 5) * 8)
+        mova(codigo, byte_endereco)
+    }
     adicione_byte(codigo, 80) // push rax
     adicione_byte(codigo, 233) // jmp apos tratamento de erro
     seja salto_fim = tamanho(codigo)
@@ -133,5 +151,191 @@ publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro) -> bytes {
     mova(codigo, corrigido_excesso)
     seja corrigido_fim = fluxo.corrigir(mova(codigo), salto_fim, depois)
     mova(codigo, corrigido_fim)
+    retorne mova(codigo)
+}
+
+
+// Emite um desvio de 6 bytes (jcc rel32) sobre exit(status), 12 bytes.
+// A condicao fornecida significa "validacao aprovada".
+privado funcao exigir(codigo: bytes, salto_valido: inteiro, status: inteiro) -> bytes {
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, salto_valido)
+    seja distancia = elf.anexar_inteiro(mova(codigo), 12, 4)
+    mova(codigo, distancia)
+    adicione_byte(codigo, 184) // mov eax, SYS_exit
+    seja numero_syscall = elf.anexar_inteiro(mova(codigo), 60, 4)
+    mova(codigo, numero_syscall)
+    adicione_byte(codigo, 191) // mov edi, status
+    seja codigo_saida = elf.anexar_inteiro(mova(codigo), status, 4)
+    mova(codigo, codigo_saida)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 5)
+    retorne mova(codigo)
+}
+
+// Recebe comprimento na pilha. Usa mmap anonimo Linux (syscall 9).
+// Descriptor: ponteiro, comprimento logico e capacidade de desalocacao.
+// Aloca comprimento + 1 para permitir buffer vazio; teto: 1 MiB.
+// Falha de tamanho ou mmap encerra com exit(24).
+publico funcao emitir_alocacao(codigo: bytes, indice_local: inteiro) -> bytes {
+    adicione_byte(codigo, 88) // pop rax: comprimento
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 133)
+    adicione_byte(codigo, 192) // test rax, rax
+    seja tamanho_valido = exigir(mova(codigo), 137, 24) // jns
+    mova(codigo, tamanho_valido)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 61) // cmp rax, imm32
+    seja limite = elf.anexar_inteiro(mova(codigo), 1048576, 4)
+    mova(codigo, limite)
+    seja dentro_limite = exigir(mova(codigo), 134, 24) // jbe
+    mova(codigo, dentro_limite)
+    // [rbp - (indice+2)*8] = comprimento logico
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 133)
+    seja campo_tamanho = deslocamento(mova(codigo), (indice_local + 2) * 8)
+    mova(codigo, campo_tamanho)
+    // rsi = comprimento + 1, [rbp - (indice+3)*8] = capacidade
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 198) // mov rsi, rax
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 255)
+    adicione_byte(codigo, 198) // inc rsi
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 181)
+    seja campo_capacidade = deslocamento(mova(codigo), (indice_local + 3) * 8)
+    mova(codigo, campo_capacidade)
+    adicione_byte(codigo, 87) // push rdi: preservar resultado de inicio
+    adicione_byte(codigo, 49)
+    adicione_byte(codigo, 255) // xor edi,edi
+    adicione_byte(codigo, 184)
+    seja numero_mmap = elf.anexar_inteiro(mova(codigo), 9, 4)
+    mova(codigo, numero_mmap)
+    adicione_byte(codigo, 186)
+    seja protecao = elf.anexar_inteiro(mova(codigo), 3, 4)
+    mova(codigo, protecao)
+    adicione_byte(codigo, 65)
+    adicione_byte(codigo, 186)
+    seja opcoes = elf.anexar_inteiro(mova(codigo), 34, 4)
+    mova(codigo, opcoes)
+    // mov r8, -1: fd anonimo
+    adicione_byte(codigo, 73)
+    adicione_byte(codigo, 199)
+    adicione_byte(codigo, 192)
+    seja fd = elf.anexar_inteiro(mova(codigo), 4294967295, 4)
+    mova(codigo, fd)
+    adicione_byte(codigo, 69)
+    adicione_byte(codigo, 49)
+    adicione_byte(codigo, 201) // xor r9d, r9d
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 5) // syscall mmap
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 133)
+    adicione_byte(codigo, 192) // test rax,rax
+    seja mmap_valido = exigir(mova(codigo), 137, 24) // jns
+    mova(codigo, mmap_valido)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 133)
+    seja campo_ponteiro = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    mova(codigo, campo_ponteiro)
+    adicione_byte(codigo, 95) // pop rdi
+    retorne mova(codigo)
+}
+
+// Recebe na pilha indice e valor (0..255). Verifica ambos antes de
+// escrever, inclusive valores negativos, sem truncamento silencioso.
+// Suporta armazenamento local e mmap. Erro -> exit(23).
+publico funcao emitir_escrita(codigo: bytes, indice_local: inteiro, dinamico: logico) -> bytes {
+    adicione_byte(codigo, 89) // pop rcx: valor
+    adicione_byte(codigo, 88) // pop rax: indice
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 129)
+    adicione_byte(codigo, 249) // cmp rcx, 255 (signed/unsigned)
+    seja teto_byte = elf.anexar_inteiro(mova(codigo), 255, 4)
+    mova(codigo, teto_byte)
+    seja byte_valido = exigir(mova(codigo), 134, 23) // jbe
+    mova(codigo, byte_valido)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 133)
+    adicione_byte(codigo, 192)
+    seja indice_nao_negativo = exigir(mova(codigo), 137, 23) // jns
+    mova(codigo, indice_nao_negativo)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 59)
+    adicione_byte(codigo, 133) // cmp rax, [rbp - tamanho]
+    seja campo_comprimento = indice_local + 1
+    se dinamico {
+        campo_comprimento = indice_local + 2
+    }
+    seja tamanho_endereco = deslocamento(mova(codigo), campo_comprimento * 8)
+    mova(codigo, tamanho_endereco)
+    seja indice_valido = exigir(mova(codigo), 130, 23) // jb
+    mova(codigo, indice_valido)
+    se dinamico {
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 139)
+        adicione_byte(codigo, 149) // mov rdx, [rbp - ponteiro]
+        seja ponteiro = deslocamento(mova(codigo), (indice_local + 1) * 8)
+        mova(codigo, ponteiro)
+        adicione_byte(codigo, 136)
+        adicione_byte(codigo, 12)
+        adicione_byte(codigo, 2) // mov byte [rdx+rax], cl
+    } senao {
+        adicione_byte(codigo, 136)
+        adicione_byte(codigo, 140)
+        adicione_byte(codigo, 5)
+        seja posicao_byte = deslocamento(mova(codigo), (indice_local + 5) * 8)
+        mova(codigo, posicao_byte)
+    }
+    retorne mova(codigo)
+}
+
+// Recurso de propriedade explicita: munmap(ptr, capacidade).
+// Zera o descriptor na liberacao. Segunda liberacao -> exit(25).
+// A liberação e a responsabilidade do programa, nao automatica.
+publico funcao emitir_liberacao(codigo: bytes, indice_local: inteiro) -> bytes {
+    adicione_byte(codigo, 87) // push rdi, preserva resultado da main
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 189)
+    seja ponteiro = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    mova(codigo, ponteiro)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 133)
+    adicione_byte(codigo, 255) // test rdi, rdi
+    seja dono_valido = exigir(mova(codigo), 133, 25) // jnz
+    mova(codigo, dono_valido)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 181)
+    seja tamanho_reserva = deslocamento(mova(codigo), (indice_local + 3) * 8)
+    mova(codigo, tamanho_reserva)
+    adicione_byte(codigo, 184)
+    seja numero_munmap = elf.anexar_inteiro(mova(codigo), 11, 4)
+    mova(codigo, numero_munmap)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 5)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 133)
+    adicione_byte(codigo, 192) // test rax,rax
+    seja liberado = exigir(mova(codigo), 132, 25) // jz
+    mova(codigo, liberado)
+    // Invalidar ponteiro, comprimento e capacidade para bloquear reuso.
+    seja campo = 1
+    enquanto campo <= 3 {
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 199)
+        adicione_byte(codigo, 133)
+        seja endereco = deslocamento(mova(codigo), (indice_local + campo) * 8)
+        mova(codigo, endereco)
+        seja zero = elf.anexar_inteiro(mova(codigo), 0, 4)
+        mova(codigo, zero)
+        campo = campo + 1
+    }
+    adicione_byte(codigo, 95) // pop rdi
     retorne mova(codigo)
 }
