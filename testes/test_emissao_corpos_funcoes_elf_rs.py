@@ -1184,5 +1184,98 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                     self.assertIsNone(status)
 
 
+    def test_declaracoes_tipadas_inteiro_em_funcoes_e_inicio(self):
+        casos = (
+            ("funcao dobro(n: inteiro) -> inteiro {\n"
+             " seja resultado: inteiro = n * 2\n"
+             " retorne resultado\n}\n"
+             "inicio { seja saida: inteiro = dobro(7) }", 14),
+            ("funcao escolher(n: inteiro) -> inteiro {\n"
+             " seja resultado: inteiro = 0\n"
+             " se n > 0 {\n"
+             " seja valor: inteiro = n + 4\n resultado = valor\n"
+             " } senao {\n"
+             " seja valor: inteiro = 20\n resultado = valor\n"
+             " }\n retorne resultado\n}\n"
+             "inicio { seja saida: inteiro = escolher(3) }", 7),
+            ("funcao escolher(n: inteiro) -> inteiro {\n"
+             " seja resultado: inteiro = 0\n"
+             " se n > 0 {\n"
+             " seja valor: inteiro = n + 4\n resultado = valor\n"
+             " } senao {\n"
+             " seja valor: inteiro = 20\n resultado = valor\n"
+             " }\n retorne resultado\n}\n"
+             "inicio { seja saida: inteiro = escolher(-3) }", 20),
+            ("funcao somar(n: inteiro) -> inteiro {\n"
+             " seja i: inteiro = 0\n"
+             " seja total: inteiro = 0\n"
+             " enquanto i < n {\n"
+             " seja parcela: inteiro = i + 2\n"
+             " total = total + parcela\n i = i + 1\n"
+             " }\n retorne total\n}\n"
+             "inicio { seja saida: inteiro = somar(4) }", 14),
+            ("funcao calcular(n: inteiro) -> inteiro {\n"
+             " seja valor: inteiro = n\n"
+             " se n > 0 {\n"
+             " seja valor: inteiro = 11\n"
+             " valor = valor + 1\n"
+             " }\n retorne valor\n}\n"
+             "inicio { seja saida: inteiro = calcular(5) }", 5),
+            ("funcao base(n: inteiro) -> inteiro {\n"
+             " seja x: inteiro = n + 1\n retorne x\n}\n"
+             "funcao executar(n: inteiro) -> inteiro {\n"
+             " seja x: inteiro = base(n)\n"
+             " retorne x + 2\n}\n"
+             "inicio { seja saida: inteiro = executar(5) }", 8),
+            ("funcao base(n: inteiro) -> inteiro {\n"
+             " seja x: inteiro = n + 1\n retorne x\n}\n"
+             "inicio {\n"
+             " seja saida: inteiro = base(2)\n"
+             " se saida > 0 {\n"
+             " seja parcial: inteiro = saida + 2\n"
+             " saida = parcial\n }\n"
+             " saida = base(saida)\n}", 6),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
+    def test_declaracoes_tipadas_rejeitam_tipos_e_sintaxe_incorretos(self):
+        casos = (
+            (2, "funcao f() -> inteiro {\n"
+             " seja x: real = 2\n retorne x\n}\n"
+             "inicio { seja r = f() }"),
+            (2, "funcao f() -> inteiro {\n"
+             " seja x: texto = 2\n retorne x\n}\n"
+             "inicio { seja r = f() }"),
+            (2, "funcao f() -> inteiro {\n"
+             " seja x: lista[inteiro] = 2\n retorne x\n}\n"
+             "inicio { seja r = f() }"),
+            (2, "funcao f() -> inteiro {\n retorne 1\n}\n"
+             "inicio { seja r: bytes = f() }"),
+            (3, "funcao f() -> inteiro {\n"
+             " seja x: inteiro 2\n retorne x\n}\n"
+             "inicio { seja r = f() }"),
+            (3, "funcao f() -> inteiro {\n"
+             " seja x: inteiro: inteiro = 2\n retorne x\n}\n"
+             "inicio { seja r = f() }"),
+            (3, "funcao f() -> inteiro {\n"
+             " seja x: inteiro = 2\n x: inteiro = 3\n retorne x\n}\n"
+             "inicio { seja r = f() }"),
+        )
+        for nivel in (0, 8):
+            for esperado, fonte in casos:
+                with self.subTest(nivel=nivel, esperado=esperado, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, esperado)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
+
 if __name__ == "__main__":
     unittest.main()

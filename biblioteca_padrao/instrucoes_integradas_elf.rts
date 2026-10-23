@@ -34,6 +34,7 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
     }
     seja texto_inicio: texto = "inicio"
     seja texto_seja: texto = "seja"
+    seja texto_inteiro: texto = "inteiro"
     seja texto_se: texto = "se"
     seja texto_enquanto: texto = "enquanto"
     seja texto_senao: texto = "senao"
@@ -211,9 +212,31 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
             retorne mova(plano)
         }
         seja nome: lexico.UnidadeLexica = unidades[posicao_nome]
-        seja atribuicao: lexico.UnidadeLexica = unidades[posicao_nome + 1]
-        se nome.classe != 1 ou nao fluxo.simbolo(fonte, atribuicao, 61) {
+        se nome.classe != 1 {
             plano.codigo_erro = 3
+            retorne mova(plano)
+        }
+        seja indice_igual = posicao_nome + 1
+        // Uma declaracao pode especificar o tipo inteiro. Neste
+        // subconjunto ELF, outros tipos devem falhar explicitamente.
+        seja separador_tipo: lexico.UnidadeLexica = unidades[indice_igual]
+        se declaracao e fluxo.simbolo(fonte, separador_tipo, 58) {
+            se indice_igual + 2 >= total {
+                plano.codigo_erro = 3
+                retorne mova(plano)
+            }
+            seja unidade_tipo: lexico.UnidadeLexica = unidades[indice_igual + 1]
+            plano.unidade_erro = indice_igual + 1
+            se nao fluxo.igual(fonte, unidade_tipo, empreste(texto_inteiro)) {
+                plano.codigo_erro = 2
+                retorne mova(plano)
+            }
+            indice_igual = indice_igual + 2
+        }
+        seja atribuicao: lexico.UnidadeLexica = unidades[indice_igual]
+        se nao fluxo.simbolo(fonte, atribuicao, 61) ou indice_igual + 1 >= total {
+            plano.codigo_erro = 3
+            plano.unidade_erro = indice_igual
             retorne mova(plano)
         }
         instrucao.categoria = 2
@@ -221,7 +244,7 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
             instrucao.categoria = 1
         }
         instrucao.unidade_nome = posicao_nome
-        instrucao.valor_inicio = posicao_nome + 2
+        instrucao.valor_inicio = indice_igual + 1
         instrucao.valor_fim = fluxo.fim_expressao(fonte, unidades, instrucao.valor_inicio, nome.linha)
         se instrucao.valor_fim <= instrucao.valor_inicio {
             plano.codigo_erro = 4
@@ -360,6 +383,7 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
         retorne mova(plano)
     }
     seja texto_seja: texto = "seja"
+    seja texto_inteiro: texto = "inteiro"
     seja texto_se: texto = "se"
     seja texto_enquanto: texto = "enquanto"
     seja texto_senao: texto = "senao"
@@ -557,9 +581,31 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
             retorne mova(plano)
         }
         seja nome: lexico.UnidadeLexica = unidades[posicao_nome]
-        seja atribuicao: lexico.UnidadeLexica = unidades[posicao_nome + 1]
-        se nome.classe != 1 ou nao fluxo.simbolo(fonte, atribuicao, 61) {
+        se nome.classe != 1 {
             plano.codigo_erro = 3
+            retorne mova(plano)
+        }
+        seja indice_igual = posicao_nome + 1
+        // Uma declaracao pode especificar o tipo inteiro. Neste
+        // subconjunto ELF, outros tipos devem falhar explicitamente.
+        seja separador_tipo: lexico.UnidadeLexica = unidades[indice_igual]
+        se declaracao e fluxo.simbolo(fonte, separador_tipo, 58) {
+            se indice_igual + 2 >= total {
+                plano.codigo_erro = 3
+                retorne mova(plano)
+            }
+            seja unidade_tipo: lexico.UnidadeLexica = unidades[indice_igual + 1]
+            plano.unidade_erro = indice_igual + 1
+            se nao fluxo.igual(fonte, unidade_tipo, empreste(texto_inteiro)) {
+                plano.codigo_erro = 2
+                retorne mova(plano)
+            }
+            indice_igual = indice_igual + 2
+        }
+        seja atribuicao: lexico.UnidadeLexica = unidades[indice_igual]
+        se nao fluxo.simbolo(fonte, atribuicao, 61) ou indice_igual + 1 >= total {
+            plano.codigo_erro = 3
+            plano.unidade_erro = indice_igual
             retorne mova(plano)
         }
         instrucao.categoria = 2
@@ -567,7 +613,7 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
             instrucao.categoria = 1
         }
         instrucao.unidade_nome = posicao_nome
-        instrucao.valor_inicio = posicao_nome + 2
+        instrucao.valor_inicio = indice_igual + 1
         instrucao.valor_fim = fluxo.fim_expressao(fonte, unidades, instrucao.valor_inicio, nome.linha)
         se instrucao.valor_fim <= instrucao.valor_inicio {
             plano.codigo_erro = 4

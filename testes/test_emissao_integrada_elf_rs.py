@@ -141,6 +141,52 @@ class TestesEmissaoIntegradaELFRS(unittest.TestCase):
                 if status is not None:
                     self.assertEqual(status, esperado % 256)
 
+    def test_locais_tipados_no_emissor_integrado(self):
+        casos = (
+            ("funcao dobro(x: inteiro) -> inteiro {\n retorne x * 2\n}\n"
+             "inicio {\n"
+             " seja i: inteiro = 0\n"
+             " seja total: inteiro = 0\n"
+             " enquanto i < 4 {\n"
+             " seja parcela: inteiro = i + 1\n"
+             " total = total + parcela\n i = i + 1\n"
+             " }\n total = dobro(total)\n}", 20),
+            ("funcao dobro(x: inteiro) -> inteiro {\n retorne x * 2\n}\n"
+             "inicio {\n"
+             " seja total: inteiro = 1\n"
+             " se total > 0 {\n"
+             " seja total: inteiro = 10\n"
+             " total = total + 1\n }\n"
+             " seja contador: inteiro = 0\n"
+             " enquanto contador < 2 {\n contador = contador + 1\n }\n"
+             " total = dobro(total)\n}", 2),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
+    def test_locais_tipados_invalidos_no_emissor_integrado(self):
+        casos = (
+            (2, "funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja x: real = f(1)\n}"),
+            (2, "funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja x: bytes = f(1)\n}"),
+            (3, "funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja x: inteiro 1\n}"),
+        )
+        for nivel in (0, 8):
+            for erro, fonte in casos:
+                with self.subTest(nivel=nivel, erro=erro, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, erro)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
     def test_rejeita_gramatica_nao_suportada_sem_gravar(self):
         ruins = (
             "",
