@@ -139,6 +139,115 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                     if status is not None:
                         self.assertEqual(status, esperado % 256)
 
+    def test_codigo_inalcancavel_apos_retorne(self):
+        casos = (
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n\n n = n + 1\n}\n"
+             "inicio {\n seja r = f(1)\n}", 10),
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n\n retorne n + 1\n}\n"
+             "inicio {\n seja r = f(2)\n}", 10),
+            ("funcao f(n: inteiro) -> inteiro {\n seja x = n\n"
+             " retorne x\n x = x + 2\n}\n"
+             "inicio {\n seja r = f(3)\n}", 10),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " se n > 0 {\n retorne n\n n = n + 2\n }\n"
+             " retorne 0\n}\n inicio {\n seja r = f(1)\n}", 10),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " enquanto n > 0 {\n retorne n\n n = n - 1\n }\n"
+             " retorne 0\n}\n inicio {\n seja r = f(1)\n}", 10),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " se n > 0 {\n se n > 1 {\n retorne n\n n = n - 1\n }\n }\n"
+             " retorne 0\n}\n inicio {\n seja r = f(1)\n}", 10),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, arquivo, resultado = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, esperado)
+                    self.assertIsNone(arquivo)
+                    self.assertIsNone(resultado)
+
+    def test_caminho_sem_retorno_final(self):
+        casos = (
+            "funcao f(n: inteiro) -> inteiro {\n seja x = n + 1\n}\n"
+            "inicio {\n seja r = f(3)\n}",
+            "funcao f(n: inteiro) -> inteiro {\n"
+            " se n > 0 {\n retorne n\n }\n}\n"
+            "inicio {\n seja r = f(3)\n}",
+            "funcao f(n: inteiro) -> inteiro {\n"
+            " enquanto n > 0 {\n retorne n\n }\n}\n"
+            "inicio {\n seja r = f(3)\n}",
+            "funcao f(n: inteiro) -> inteiro {\n"
+            " se n > 0 {\n retorne n\n }\n n = n + 1\n}\n"
+            "inicio {\n seja r = f(3)\n}",
+        )
+        for nivel in (0, 8):
+            for fonte in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, arquivo, resultado = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 11)
+                    self.assertIsNone(arquivo)
+                    self.assertIsNone(resultado)
+
+    def test_retorno_antecipado_nao_bloqueia_bloco_externo(self):
+        casos = (
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " se n > 0 {\n retorne 7\n }\n"
+             " n = n + 3\n retorne n\n}\n"
+             "inicio {\n seja r = f(2)\n}", 7),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " se n > 0 {\n retorne 7\n }\n"
+             " n = n + 3\n retorne n\n}\n"
+             "inicio {\n seja r = f(-2)\n}", 1),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " enquanto n > 0 {\n retorne 8\n }\n"
+             " retorne n\n}\n"
+             "inicio {\n seja r = f(4)\n}", 8),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " enquanto n > 0 {\n retorne 8\n }\n"
+             " retorne n\n}\n"
+             "inicio {\n seja r = f(0)\n}", 0),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " se n > 0 {\n"
+             "  se n > 1 {\n retorne 10\n }\n"
+             " n = n + 1\n }\n"
+             " retorne n\n}\n"
+             "inicio {\n seja r = f(1)\n}", 2),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " se n > 0 {\n"
+             "  se n > 1 {\n retorne 10\n }\n"
+             " n = n + 1\n }\n"
+             " retorne n\n}\n"
+             "inicio {\n seja r = f(3)\n}", 10),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, arquivo, resultado = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(arquivo)
+                    if resultado is not None:
+                        self.assertEqual(resultado, esperado)
+
+    def test_indice_do_primeiro_comando_inalcancavel(self):
+        fonte = ("funcao f(n: inteiro) -> inteiro {\n"
+                 " retorne n\n n = n + 1\n}\n"
+                 "inicio {\n seja r = f(1)\n}")
+        for nivel in (0, 8):
+            with self.subTest(nivel=nivel):
+                with tempfile.TemporaryDirectory(prefix="rs_caminho_retorno_") as pasta:
+                    raiz = Path(pasta)
+                    (raiz / "codigo_fonte.rts").write_text(fonte, encoding="utf-8")
+                    processo = subprocess.run(
+                        [str(self.ferramentas[nivel])], cwd=raiz, timeout=30,
+                        capture_output=True, text=True, encoding="utf-8", errors="replace",
+                    )
+                    self.assertEqual(processo.returncode, 0, processo.stderr)
+                    valores = [int(v) for v in processo.stdout.splitlines()]
+                    self.assertEqual(len(valores), 2)
+                    self.assertEqual(valores[0], 10)
+                    self.assertGreater(valores[1], 0)
+                    self.assertFalse((raiz / "resultado_corpos_elf").exists())
+
     def test_retorno_direto_de_chamada(self):
         casos = (
             ("funcao aumentar(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"

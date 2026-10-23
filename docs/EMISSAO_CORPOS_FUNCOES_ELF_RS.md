@@ -44,9 +44,18 @@ na pilha e retorno em `rax`, com `leave; ret`.
   sem nomes duplicados e sem sombra.
 - Atribuicoes, comparacoes inteiras, aritmetica `+ - * / %`, `se`,
   `enquanto`, com ate 32 niveis de controle e retorno antecipado.
-- **Obrigatorio um `retorne expressao` final no nivel exterior de cada
-  funcao**, garantindo que a execucao nao termine por um caminho sem
-  retorno. Outros retornos dentro de `se` e `enquanto` sao permitidos.
+- **Analise dos caminhos de retorno:** cada funcao exige um
+  `retorne expressao` final e incondicional no nivel exterior do corpo.
+  A falta dessa garantia e o **erro 11**, com indice da posicao no
+  fonte. Retornos antecipados dentro de `se` e `enquanto` sao
+  permitidos, mas nao garantem sozinhos o retorno da funcao:
+  um condicional pode ser falso e um laco pode nao executar.
+- **Codigo inalcancavel:** qualquer nova instrucao apos `retorne` no
+  mesmo bloco e rejeitada com **erro 10**, apontando o primeiro
+  comando inalcancavel. Fechar o bloco restaura a analise do fluxo
+  externo: comandos depois de um `se` ou `enquanto` com retorno
+  interno continuam validos quando o ramo pode nao ser executado.
+  O diagnostico e conservador e nao avalia a verdade das condicoes.
 - Chamadas diretas permitidas no lado direito completo de declaracao,
   atribuicao e `retorne`, inclusive chamadas aninhadas como argumento
   integral: `retorne soma(dobro(n), soma(2, 3))`.
@@ -116,7 +125,7 @@ falhar sem gerar arquivo. A CI geral e obrigatoria antes da integracao.
 
 ## Proximo passo
 
-Fortalecer a verificacao semantica de caminhos de retorno e tipos,
-expandir de forma segura a analise de constantes e evoluir o tratamento
-de falhas dinamicas para erros recuperaveis. Depois estudar recursao
-controlada, ABI publica e bootstrap completo do compilador RS.
+Continuar a analise semantica de tipos e chamadas, consolidar os
+caminhos de retorno com futuras estruturas `senao` e ampliar a analise
+segura de constantes. A longo prazo, evoluir as falhas dinamicas para
+erros recuperaveis, estudar ABI e concluir o bootstrap da RS.
