@@ -1548,7 +1548,7 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
              "}\n inicio { seja r = f() }"),
         )
         for nivel in (0, 8):
-            for fonte, esperado in casos:
+            for esperado, fonte in casos:
                 with self.subTest(nivel=nivel, esperado=esperado, fonte=fonte):
                     codigo, dados, status = self.gerar(fonte, nivel)
                     self.assertEqual(codigo, esperado)
