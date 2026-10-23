@@ -30,6 +30,7 @@ privado tipo ControleIntegrado {
     inicio_condicao: inteiro
     posicao_deslocamento: inteiro
     identificador_laco: inteiro
+    marcador_locais: inteiro
 }
 
 // Desvios pendentes para o enquanto mais interno. Os destinos finais
@@ -653,6 +654,15 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                     d = d + 1
                 }
             }
+            // Os nomes declarados dentro deste bloco deixam de estar
+            // visiveis. Os slots de pilha permanecem reservados e estaveis.
+            seja desativar = controle.marcador_locais
+            enquanto desativar < tamanho(nomes) {
+                seja nome_interno: lexico.UnidadeLexica = nomes[desativar]
+                nome_interno.classe = 0
+                nomes[desativar] = nome_interno
+                desativar = desativar + 1
+            }
             posicao_ir = posicao_ir + 1
             continue
         }
@@ -709,8 +719,18 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             seja entrada_senao = tamanho(codigo)
             seja corrigido_senao = fluxo.corrigir(mova(codigo), controle_senao.posicao_deslocamento, entrada_senao)
             mova(codigo, corrigido_senao)
+            // O ramo verdadeiro foi fechado: suas variaveis locais nao
+            // podem vazar para o senao, nem bloquear novos nomes nele.
+            seja desativar = controle_senao.marcador_locais
+            enquanto desativar < tamanho(nomes) {
+                seja nome_interno: lexico.UnidadeLexica = nomes[desativar]
+                nome_interno.classe = 0
+                nomes[desativar] = nome_interno
+                desativar = desativar + 1
+            }
             controle_senao.classe = 8
             controle_senao.posicao_deslocamento = deslocamento_fim
+            controle_senao.marcador_locais = tamanho(nomes)
             controles[tamanho(controles) - 1] = controle_senao
             posicao_ir = posicao_ir + 1
             continue
@@ -735,6 +755,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             controle.inicio_condicao = inicio_condicao
             controle.posicao_deslocamento = tamanho(codigo) - 4
             controle.identificador_laco = posicao_ir
+            controle.marcador_locais = tamanho(nomes)
             adicione(controles, controle)
             posicao_ir = posicao_ir + 1
             continue
@@ -755,7 +776,14 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             seja nome: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
             indice_local = fluxo.resolver(fonte, empreste(nomes), nome)
             se instrucao.categoria == 1 {
-                se indice_local >= 0 {
+                // Apenas o escopo atual proibe redeclaracao. Um nome do
+                // escopo externo pode ser ocultado por um nome interno.
+                seja inicio_escopo = 0
+                se tamanho(controles) > 0 {
+                    seja controle_atual: ControleIntegrado = controles[tamanho(controles) - 1]
+                    inicio_escopo = controle_atual.marcador_locais
+                }
+                se indice_local >= inicio_escopo {
                     resposta.codigo_erro = 4
                     retorne mova(resposta)
                 }

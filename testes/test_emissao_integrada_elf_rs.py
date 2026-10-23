@@ -105,6 +105,10 @@ class TestesEmissaoIntegradaELFRS(unittest.TestCase):
              "inicio {\n seja n = 0\n seja total = 0\n enquanto n < 4 {\n"
              " n = n + 1\n se n == 3 {\n total = dois(n, 7)\n }\n"
              " se n == 4 {\n total = total + 1\n }\n }\n}", 22),
+            ("funcao f(a: inteiro) -> inteiro {\n retorne a\n}\n"
+             "inicio {\n seja x = f(1)\n"
+             " se x > 0 {\n seja y = 2\n x = x + y\n }\n"
+             " enquanto x < 4 {\n x = x + 1\n }\n}", 4),
         )
         for nivel in (0, 8):
             for fonte, esperado in casos:
@@ -142,8 +146,6 @@ class TestesEmissaoIntegradaELFRS(unittest.TestCase):
             "",
             "inicio {\n seja a = 2\n}",
             "funcao f(a: inteiro) -> inteiro {\n retorne a\n}\ninicio {}",
-            "funcao f(a: inteiro) -> inteiro {\n retorne a\n}\n"
-            "inicio {\n seja x = f(1)\n se x > 0 {\n seja y = 2\n }\n}",
             "funcao f(a: inteiro) -> inteiro {\n retorne a\n}\n"
             "inicio {\n seja x = f(1)\n enquanto x > 0 {\n x = x - 1\n}",
             "funcao f(a: inteiro) -> inteiro {\n retorne a\n}\n"

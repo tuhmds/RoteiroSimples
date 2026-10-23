@@ -723,9 +723,6 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
             " seja x = n\n retorne x\n"
             " escreva(x)\n}\n inicio { seja r = f(2) }",
             "funcao f(n: inteiro) -> inteiro {\n"
-            " seja x = n\n se x > 0 {\n seja y = 4\n }\n"
-            " retorne x\n}\n inicio { seja r = f(1) }",
-            "funcao f(n: inteiro) -> inteiro {\n"
             " seja x = n\n enquanto x > 0 {\n x = x - 1\n }\n"
             " retorne 1000000001\n}\n inicio { seja r = f(1) }",
             "funcao f(n: inteiro) -> inteiro {\n"
@@ -1075,6 +1072,108 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
             (10, "funcao f(n: inteiro) -> inteiro {\n"
              " enquanto n > 0 {\n continue\n n = n - 1\n }\n"
              " retorne n\n}\n inicio { seja r = f(3) }"),
+        )
+        for nivel in (0, 8):
+            for esperado, fonte in casos:
+                with self.subTest(nivel=nivel, esperado=esperado, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, esperado)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
+
+    def test_escopos_locais_de_bloco_elf_o0_o8(self):
+        casos = (
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja r = 1\n"
+             " se n > 0 {\n seja t = n + 2\n r = t + 4\n }\n"
+             " retorne r\n}\n inicio { seja r = f(5) }", 11),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja r = 1\n"
+             " se n > 0 {\n seja t = n + 2\n r = t + 4\n }\n"
+             " retorne r\n}\n inicio { seja r = f(-3) }", 1),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja r = 0\n"
+             " se n > 0 {\n seja t = 10\n r = t\n"
+             " } senao {\n seja t = 20\n r = t\n }\n"
+             " retorne r\n}\n inicio { seja r = f(4) }", 10),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja r = 0\n"
+             " se n > 0 {\n seja t = 10\n r = t\n"
+             " } senao {\n seja t = 20\n r = t\n }\n"
+             " retorne r\n}\n inicio { seja r = f(-4) }", 20),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja r = 7\n se n > 0 {\n"
+             " seja r = 19\n r = r + 1\n }\n retorne r\n"
+             "}\n inicio { seja r = f(2) }", 7),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja r = 7\n se n > 0 {\n"
+             " seja r = 19\n r = r + 1\n }\n retorne r\n"
+             "}\n inicio { seja r = f(-2) }", 7),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja i = 0\n seja r = 0\n"
+             " enquanto i < n {\n"
+             " seja parte = i + 2\n r = r + parte\n i = i + 1\n"
+             " }\n retorne r\n}\n inicio { seja r = f(3) }", 9),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja v = 4\n seja r = 0\n"
+             " se n > 0 {\n seja v = 3\n"
+             " se n > 1 {\n seja v = 8\n r = v\n }\n"
+             " r = r + v\n }\n retorne r + v\n"
+             "}\n inicio { seja r = f(2) }", 15),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja r = 0\n se n > 0 {\n"
+             " seja n = 10\n r = n\n }\n retorne r + n\n"
+             "}\n inicio { seja r = f(3) }", 13),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja r = 0\n"
+             " se n > 0 {\n seja t = 3\n r = t\n }\n"
+             " se r > 0 {\n seja t = 9\n r = r + t\n }\n"
+             " retorne r\n}\n inicio { seja r = f(2) }", 12),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja x = n\n se x > 0 {\n seja y = 4\n }\n"
+             " retorne x\n}\n inicio { seja r = f(1) }", 1),
+            ("funcao identidade(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = 1\n se r > 0 {\n"
+             " seja interno = 5\n r = interno + 2\n }\n"
+             " r = identidade(r)\n}", 7),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, esperado=esperado, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
+    def test_escopos_locais_rejeitam_uso_fora_do_bloco_e_duplicidade(self):
+        casos = (
+            (7, "funcao f(n: inteiro) -> inteiro {\n"
+             " seja r = 0\n se n > 0 {\n seja x = 2\n r = x\n }\n"
+             " retorne x\n}\n inicio { seja r = f(1) }"),
+            (7, "funcao f(n: inteiro) -> inteiro {\n"
+             " seja r = 0\n se n > 0 {\n seja x = 2\n r = x\n"
+             " } senao {\n r = x\n }\n"
+             " retorne r\n}\n inicio { seja r = f(1) }"),
+            (7, "funcao f(n: inteiro) -> inteiro {\n"
+             " seja i = 0\n enquanto i < n {\n"
+             " seja x = i\n i = i + 1\n }\n"
+             " retorne x\n}\n inicio { seja r = f(2) }"),
+            (5, "funcao f(n: inteiro) -> inteiro {\n"
+             " seja i = 0\n enquanto i < n {\n"
+             " seja x = i\n i = i + 1\n }\n"
+             " x = 3\n retorne i\n}\n inicio { seja r = f(2) }"),
+            (4, "funcao f(n: inteiro) -> inteiro {\n"
+             " seja r = 0\n se n > 0 {\n"
+             " seja x = 1\n seja x = 2\n r = x\n }\n"
+             " retorne r\n}\n inicio { seja r = f(2) }"),
+            (4, "funcao f(n: inteiro) -> inteiro {\n"
+             " seja r = 1\n seja r = 2\n retorne r\n"
+             "}\n inicio { seja r = f(2) }"),
+            (4, "funcao f(n: inteiro) -> inteiro {\n"
+             " seja n = 4\n retorne n\n"
+             "}\n inicio { seja r = f(2) }"),
         )
         for nivel in (0, 8):
             for esperado, fonte in casos:

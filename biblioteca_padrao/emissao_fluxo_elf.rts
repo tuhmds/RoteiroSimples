@@ -89,14 +89,16 @@ publico funcao mesmo_nome(fonte: emprestimo[bytes], a: lexico.UnidadeLexica, b: 
     retorne verdadeiro
 }
 
+// Procura do mais recente para o mais antigo: o nome do escopo interno
+// pode ocultar um nome externo. Tokens inativos tem classe 0 e nao casam.
 publico funcao resolver(fonte: emprestimo[bytes], nomes: emprestimo[lista[lexico.UnidadeLexica]], nome: lexico.UnidadeLexica) -> inteiro {
-    seja i = 0
-    enquanto i < tamanho(nomes) {
+    seja i = tamanho(nomes) - 1
+    enquanto i >= 0 {
         seja candidato: lexico.UnidadeLexica = nomes[i]
         se mesmo_nome(fonte, candidato, nome) {
             retorne i
         }
-        i = i + 1
+        i = i - 1
     }
     retorne -1
 }
