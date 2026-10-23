@@ -341,10 +341,50 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                     codigo, dados, status = self.gerar(fonte, nivel)
                     self.assertEqual(codigo, 0)
                     # test rcx,rcx; jne +12 e IDIV com extensao signed64.
-                    self.assertIn(bytes((72, 133, 201, 117, 12)), dados)
+                    self.assertIn(bytes((72, 133, 201, 15, 133)), dados)
                     self.assertIn(bytes((72, 153, 72, 247, 249)), dados)
                     if status is not None:
                         self.assertEqual(status, esperado)
+
+    def test_diagnosticos_divisao_em_stderr(self):
+        if self.alvo != "linux":
+            return
+        casos = (
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = f(8) / 0\n}", 240, "RS: divisao por zero\n"),
+            ("funcao zero(n: inteiro) -> inteiro {\n retorne n - n\n}\n"
+             "inicio {\n seja r = 9 % zero(5)\n}", 240, "RS: divisao por zero\n"),
+            ("funcao minimo() -> inteiro {\n"
+             " retorne -8 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024\n}\n"
+             "inicio {\n seja r = minimo() / -1\n}", 241, "RS: estouro na divisao\n"),
+            ("funcao retorna(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = retorna(240)\n}", 240, ""),
+            ("funcao retorna(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = retorna(241)\n}", 241, ""),
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = f(-12) / -5\n}", 2, ""),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado, diagnostico in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    with tempfile.TemporaryDirectory(prefix="rs_diagnostico_elf_") as pasta:
+                        raiz = Path(pasta)
+                        (raiz / "codigo_fonte.rts").write_text(fonte, encoding="utf-8")
+                        gerador = subprocess.run(
+                            [str(self.ferramentas[nivel])], cwd=raiz, timeout=30,
+                            capture_output=True, text=True, encoding="utf-8", errors="replace",
+                        )
+                        self.assertEqual(gerador.returncode, 0, gerador.stderr)
+                        self.assertEqual(int(gerador.stdout.splitlines()[0]), 0)
+                        arquivo = raiz / "resultado_corpos_elf"
+                        arquivo.chmod(0o700)
+                        processo = subprocess.run(
+                            [str(arquivo)], cwd=raiz, timeout=4,
+                            capture_output=True, text=True, encoding="utf-8", errors="replace",
+                        )
+                        self.assertEqual(processo.returncode, esperado)
+                        self.assertEqual(processo.stderr, diagnostico)
+                        self.assertEqual(processo.stdout, "")
 
     def test_predicados_com_chamadas_diretas_e_compostas(self):
         casos = (
