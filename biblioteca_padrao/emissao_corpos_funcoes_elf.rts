@@ -11,6 +11,7 @@ importe "emissao_elf_minima.rts" como elf
 importe "emissao_fluxo_elf.rts" como fluxo
 importe "expressoes_compilador.rts" como expressoes
 importe "instrucoes_integradas_elf.rts" como instrucoes
+importe "emissao_bytes_elf.rts" como emisbytes
 
 publico tipo ResultadoCorposELF {
     arquivo: bytes
@@ -171,7 +172,7 @@ privado tipo ValorEmitido {
 // Uma chamada pode ser argumento integral de outra chamada. A emissao
 // recursiva limita a profundidade e preserva os argumentos em ordem inversa
 // na pilha, conforme a ABI interna. Expressoes e chamadas podem ser misturadas.
-privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], assinadas: emprestimo[assinaturas.Assinaturas], primeiro: inteiro, ultimo: inteiro, funcao_atual: inteiro, nivel: inteiro) -> ValorEmitido {
+privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], tipos: emprestimo[lista[inteiro]], assinadas: emprestimo[assinaturas.Assinaturas], primeiro: inteiro, ultimo: inteiro, funcao_atual: inteiro, nivel: inteiro) -> ValorEmitido {
     seja resposta: ValorEmitido
     resposta.unidade_erro = primeiro
     se primeiro >= ultimo ou nivel > 8 {
@@ -179,6 +180,62 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         retorne mova(resposta)
     }
     seja primeiro_valor: lexico.UnidadeLexica = unidades[primeiro]
+    // Intrinsecos de bytes imutaveis: tamanho(buffer) e buffer[indice].
+    se primeiro + 3 < ultimo e primeiro_valor.classe == 1 {
+        seja segundo_bytes: lexico.UnidadeLexica = unidades[primeiro + 1]
+        seja ultimo_bytes: lexico.UnidadeLexica = unidades[ultimo - 1]
+        seja nome_tamanho: texto = "tamanho"
+        se fluxo.igual(fonte, primeiro_valor, empreste(nome_tamanho)) e ultimo == primeiro + 4 {
+            se fluxo.simbolo(fonte, segundo_bytes, 40) e fluxo.simbolo(fonte, ultimo_bytes, 41) {
+                seja nome_buffer: lexico.UnidadeLexica = unidades[primeiro + 2]
+                seja indice_buffer = fluxo.resolver(fonte, nomes, nome_buffer)
+                se indice_buffer >= 0 {
+                    se tipos[indice_buffer] == 2 {
+                        seja trecho_tamanho = emisbytes.emitir_tamanho(mova(codigo), indice_buffer)
+                        mova(resposta.codigo, trecho_tamanho)
+                        retorne mova(resposta)
+                    }
+                }
+            }
+        }
+        se fluxo.simbolo(fonte, segundo_bytes, 91) e fluxo.simbolo(fonte, ultimo_bytes, 93) {
+            // O primeiro fechamento deve coincidir com o fim da expressao.
+            // Dados[0] + dados[2] nao e uma indexacao unica.
+            seja primeiro_fecho = ultimo - 1
+            seja cursor_indice = primeiro + 2
+            enquanto cursor_indice < ultimo - 1 {
+                seja token_indice: lexico.UnidadeLexica = unidades[cursor_indice]
+                se fluxo.simbolo(fonte, token_indice, 93) {
+                    primeiro_fecho = cursor_indice
+                    pare
+                }
+                cursor_indice = cursor_indice + 1
+            }
+            se primeiro_fecho == ultimo - 1 {
+                seja indice_buffer = fluxo.resolver(fonte, nomes, primeiro_valor)
+            se indice_buffer >= 0 {
+                se tipos[indice_buffer] == 2 {
+                    seja parte_indice = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 2, ultimo - 1, funcao_atual, nivel + 1)
+                    se parte_indice.codigo_erro != 0 {
+                        resposta.codigo_erro = parte_indice.codigo_erro
+                        resposta.unidade_erro = parte_indice.unidade_erro
+                        retorne mova(resposta)
+                    }
+                    mova(codigo, parte_indice.codigo)
+                    seja k = 0
+                    enquanto k < tamanho(parte_indice.ligacoes) {
+                        seja pendente: Ligacao = parte_indice.ligacoes[k]
+                        adicione(resposta.ligacoes, pendente)
+                        k = k + 1
+                    }
+                    seja leitura = emisbytes.emitir_leitura(mova(codigo), indice_buffer)
+                    mova(resposta.codigo, leitura)
+                    retorne mova(resposta)
+                }
+            }
+            }
+        }
+    }
     // Preservar o parser aritmetico original quando nao houver chamada.
     // Somente expressoes com uma chamada entram na decomposicao abaixo.
     seja contem_chamada = falso
@@ -186,8 +243,10 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
     enquanto indice_busca + 1 < ultimo {
         seja atual_busca: lexico.UnidadeLexica = unidades[indice_busca]
         seja seguinte_busca: lexico.UnidadeLexica = unidades[indice_busca + 1]
-        se atual_busca.classe == 1 e fluxo.simbolo(fonte, seguinte_busca, 40) {
-            contem_chamada = verdadeiro
+        se atual_busca.classe == 1 {
+            se fluxo.simbolo(fonte, seguinte_busca, 40) ou fluxo.simbolo(fonte, seguinte_busca, 91) {
+                contem_chamada = verdadeiro
+            }
         }
         indice_busca = indice_busca + 1
     }
@@ -195,6 +254,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         // Encontrar o operador binario externo de menor precedencia.
         // Empates escolhem o ultimo operador, preservando associatividade.
         seja profundidade = 0
+        seja nivel_colchetes = 0
         seja corte = -1
         seja prioridade_corte = 3
         seja operador_corte = 0
@@ -204,6 +264,12 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             se fluxo.simbolo(fonte, atual, 40) {
                 profundidade = profundidade + 1
             }
+            se fluxo.simbolo(fonte, atual, 91) {
+                nivel_colchetes = nivel_colchetes + 1
+            }
+            se fluxo.simbolo(fonte, atual, 93) {
+                nivel_colchetes = nivel_colchetes - 1
+            }
             se fluxo.simbolo(fonte, atual, 41) {
                 profundidade = profundidade - 1
                 se profundidade < 0 {
@@ -212,9 +278,12 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                     retorne mova(resposta)
                 }
             }
-            se profundidade == 0 e i > primeiro e atual.classe == 4 e atual.comprimento_byte == 1 {
+            se profundidade == 0 e nivel_colchetes == 0 e i > primeiro e atual.classe == 4 e atual.comprimento_byte == 1 {
                 seja anterior: lexico.UnidadeLexica = unidades[i - 1]
                 seja anterior_valor = anterior.classe == 1 ou anterior.classe == 2 ou fluxo.simbolo(fonte, anterior, 41)
+                se fluxo.simbolo(fonte, anterior, 93) {
+                    anterior_valor = verdadeiro
+                }
                 se anterior_valor {
                     seja sinal = fonte[atual.inicio_byte]
                     seja prioridade = 0
@@ -233,7 +302,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             }
             i = i + 1
         }
-        se profundidade != 0 {
+        se profundidade != 0 ou nivel_colchetes != 0 {
             resposta.codigo_erro = 6
             retorne mova(resposta)
         }
@@ -264,7 +333,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 }
             }
             // Cada operando deixa um inteiro na pilha, como o backend original.
-            seja esquerda = emitir_valor(mova(codigo), fonte, unidades, nomes, assinadas, primeiro, corte, funcao_atual, nivel + 1)
+            seja esquerda = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro, corte, funcao_atual, nivel + 1)
             se esquerda.codigo_erro != 0 {
                 resposta.codigo_erro = esquerda.codigo_erro
                 resposta.unidade_erro = esquerda.unidade_erro
@@ -277,7 +346,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 adicione(resposta.ligacoes, ligacao_esquerda)
                 j = j + 1
             }
-            seja direita = emitir_valor(mova(codigo), fonte, unidades, nomes, assinadas, corte + 1, ultimo, funcao_atual, nivel + 1)
+            seja direita = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, corte + 1, ultimo, funcao_atual, nivel + 1)
             se direita.codigo_erro != 0 {
                 resposta.codigo_erro = direita.codigo_erro
                 resposta.unidade_erro = direita.unidade_erro
@@ -337,14 +406,14 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 i = i + 1
             }
             se externa e profundidade_externa == 0 {
-                retorne emitir_valor(mova(codigo), fonte, unidades, nomes, assinadas, primeiro + 1, ultimo - 1, funcao_atual, nivel + 1)
+                retorne emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 1, ultimo - 1, funcao_atual, nivel + 1)
             }
         }
         // Sinais unarios na frente de chamadas e subexpressoes.
         se primeiro_valor.classe == 4 e primeiro_valor.comprimento_byte == 1 {
             seja sinal_inicial = fonte[primeiro_valor.inicio_byte]
             se sinal_inicial == 43 ou sinal_inicial == 45 {
-                seja interior = emitir_valor(mova(codigo), fonte, unidades, nomes, assinadas, primeiro + 1, ultimo, funcao_atual, nivel + 1)
+                seja interior = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 1, ultimo, funcao_atual, nivel + 1)
                 se interior.codigo_erro != 0 {
                     resposta.codigo_erro = interior.codigo_erro
                     resposta.unidade_erro = interior.unidade_erro
@@ -465,7 +534,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
     }
     seja argumento = tamanho(inicios) - 1
     enquanto argumento >= 0 {
-        seja parte = emitir_valor(mova(codigo), fonte, unidades, nomes, assinadas, inicios[argumento], finais[argumento], funcao_atual, nivel + 1)
+        seja parte = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, inicios[argumento], finais[argumento], funcao_atual, nivel + 1)
         se parte.codigo_erro != 0 {
             resposta.codigo_erro = parte.codigo_erro
             resposta.unidade_erro = parte.unidade_erro
@@ -507,7 +576,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
 
 // Compila uma comparacao signed64. Ambos os lados aceitam chamadas e
 // expressoes compostas, preservando todas as ligacoes call rel32.
-privado funcao emitir_predicado(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], assinadas: emprestimo[assinaturas.Assinaturas], primeiro: inteiro, ultimo: inteiro, funcao_atual: inteiro) -> ValorEmitido {
+privado funcao emitir_predicado(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], tipos: emprestimo[lista[inteiro]], assinadas: emprestimo[assinaturas.Assinaturas], primeiro: inteiro, ultimo: inteiro, funcao_atual: inteiro) -> ValorEmitido {
     seja resposta: ValorEmitido
     resposta.unidade_erro = primeiro
     seja posicao = -1
@@ -545,7 +614,7 @@ privado funcao emitir_predicado(codigo: bytes, fonte: emprestimo[bytes], unidade
         resposta.codigo_erro = 7
         retorne mova(resposta)
     }
-    seja esquerda = emitir_valor(mova(codigo), fonte, unidades, nomes, assinadas, primeiro, posicao, funcao_atual, 0)
+    seja esquerda = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro, posicao, funcao_atual, 0)
     se esquerda.codigo_erro != 0 {
         resposta.codigo_erro = esquerda.codigo_erro
         resposta.unidade_erro = esquerda.unidade_erro
@@ -558,7 +627,7 @@ privado funcao emitir_predicado(codigo: bytes, fonte: emprestimo[bytes], unidade
         adicione(resposta.ligacoes, ligacao_esquerda)
         j = j + 1
     }
-    seja direita = emitir_valor(mova(codigo), fonte, unidades, nomes, assinadas, posicao + 1, ultimo, funcao_atual, 0)
+    seja direita = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, posicao + 1, ultimo, funcao_atual, 0)
     se direita.codigo_erro != 0 {
         resposta.codigo_erro = direita.codigo_erro
         resposta.unidade_erro = direita.unidade_erro
@@ -594,11 +663,13 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
     seja resposta: EstadoCorpo
     seja numero_locais = plano_principal.quantidade_locais
     seja nomes: lista[lexico.UnidadeLexica]
+    seja tipos: lista[inteiro]
     seja ligacoes: lista[Ligacao]
     seja p = 0
     enquanto p < tamanho(parametros) {
         seja nome_parametro: lexico.UnidadeLexica = parametros[p]
         adicione(nomes, nome_parametro)
+        adicione(tipos, 1)
         p = p + 1
     }
     seja f = 0
@@ -737,7 +808,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         }
         se instrucao.categoria == 3 ou instrucao.categoria == 4 {
             seja inicio_condicao = tamanho(codigo)
-            seja predicado = emitir_predicado(mova(codigo), fonte, unidades, empreste(nomes), assinadas, instrucao.valor_inicio, instrucao.valor_fim, funcao_atual)
+            seja predicado = emitir_predicado(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, instrucao.valor_inicio, instrucao.valor_fim, funcao_atual)
             se predicado.codigo_erro != 0 {
                 resposta.codigo_erro = predicado.codigo_erro
                 resposta.unidade_erro = predicado.unidade_erro
@@ -797,7 +868,40 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         }
         seja primeiro = instrucao.valor_inicio
         seja ultimo = instrucao.valor_fim
-        seja valor = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), assinadas, primeiro, ultimo, funcao_atual, 0)
+        se instrucao.categoria == 2 {
+            se tipos[indice_local] == 2 {
+                resposta.codigo_erro = 18
+                retorne mova(resposta)
+            }
+        }
+        se instrucao.categoria == 1 e instrucao.tipo_local == 2 {
+            se ultimo != primeiro + 1 {
+                resposta.codigo_erro = 17
+                retorne mova(resposta)
+            }
+            seja literal_bytes: lexico.UnidadeLexica = unidades[primeiro]
+            seja inicializacao = emisbytes.inicializar(mova(codigo), fonte, literal_bytes, indice_local)
+            se inicializacao.codigo_erro != 0 {
+                resposta.codigo_erro = inicializacao.codigo_erro
+                resposta.unidade_erro = primeiro
+                retorne mova(resposta)
+            }
+            mova(codigo, inicializacao.codigo)
+            seja nome_buffer: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
+            adicione(nomes, nome_buffer)
+            adicione(tipos, 2)
+            seja reserva = 0
+            enquanto reserva < 4 {
+                seja oculto: lexico.UnidadeLexica
+                oculto.classe = 0
+                adicione(nomes, oculto)
+                adicione(tipos, 0)
+                reserva = reserva + 1
+            }
+            posicao_ir = posicao_ir + 1
+            continue
+        }
+        seja valor = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0)
         se valor.codigo_erro != 0 {
             resposta.codigo_erro = valor.codigo_erro
             resposta.unidade_erro = valor.unidade_erro
@@ -826,6 +930,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         se instrucao.categoria == 1 {
             seja nome_novo: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
             adicione(nomes, nome_novo)
+            adicione(tipos, 1)
         }
         posicao_ir = posicao_ir + 1
     }

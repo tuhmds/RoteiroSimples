@@ -1256,7 +1256,7 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
             (2, "funcao f() -> inteiro {\n"
              " seja x: lista[inteiro] = 2\n retorne x\n}\n"
              "inicio { seja r = f() }"),
-            (2, "funcao f() -> inteiro {\n retorne 1\n}\n"
+            (17, "funcao f() -> inteiro {\n retorne 1\n}\n"
              "inicio { seja r: bytes = f() }"),
             (3, "funcao f() -> inteiro {\n"
              " seja x: inteiro 2\n retorne x\n}\n"
@@ -1271,6 +1271,130 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
         for nivel in (0, 8):
             for esperado, fonte in casos:
                 with self.subTest(nivel=nivel, esperado=esperado, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, esperado)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
+
+    def test_buffers_bytes_nativos_e_leituras_o0_o8(self):
+        casos = (
+            ("funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "ABC"\n'
+             " retorne dados[0]\n}\n"
+             "inicio { seja r = f() }", 65),
+            ("funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "ABC"\n'
+             " retorne dados[2]\n}\n"
+             "inicio { seja r = f() }", 67),
+            ("funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "ABC"\n'
+             " retorne tamanho(dados)\n}\n"
+             "inicio { seja r = f() }", 3),
+            ("funcao f() -> inteiro {\n"
+             ' seja dados: bytes = ""\n'
+             " retorne tamanho(dados)\n}\n"
+             "inicio { seja r = f() }", 0),
+            ("funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "0123456789abcdefghijklmnopqrstuv"\n'
+             " retorne dados[31]\n}\n"
+             "inicio { seja r = f() }", ord("v")),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             ' seja dados: bytes = "ABC"\n'
+             " retorne dados[n]\n}\n"
+             "inicio { seja r = f(1) }", 66),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             ' seja dados: bytes = "ABC"\n'
+             " retorne dados[n + 1] + tamanho(dados)\n}\n"
+             "inicio { seja r = f(1) }", 70),
+            ("funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "ABC"\n'
+             " retorne dados[0] + dados[2]\n}\n"
+             "inicio { seja r = f() }", 132),
+            ("funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "Ação"\n'
+             " retorne dados[1]\n}\n"
+             "inicio { seja r = f() }", 195),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             " seja valor: inteiro = n\n"
+             ' se n > 0 {\n seja dados: bytes = "Z"\n'
+             " valor = dados[0]\n }\n"
+             " retorne valor\n}\n"
+             "inicio { seja r = f(1) }", 90),
+            ("funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "A"\n'
+             ' se dados[0] > 64 {\n retorne tamanho(dados) + dados[0]\n }\n'
+             " retorne 0\n}\n"
+             "inicio { seja r = f() }", 66),
+            ("funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "XYZ"\n'
+             " seja i: inteiro = 0\n seja total: inteiro = 0\n"
+             " enquanto i < tamanho(dados) {\n"
+             " total = total + dados[i]\n i = i + 1\n"
+             " }\n retorne total\n}\n"
+             "inicio { seja r = f() }", 267 % 256),
+            ("funcao f() -> inteiro {\n retorne 1\n}\n"
+             'inicio { seja dados: bytes = "AB"\n'
+             " seja r: inteiro = f()\n"
+             " r = dados[0] + tamanho(dados)\n}", 67),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, esperado=esperado, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado % 256)
+
+    def test_buffers_bytes_nativos_indice_fora_do_limite(self):
+        fontes = (
+            ("funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "ABC"\n retorne dados[3]\n}\n'
+             "inicio { seja r = f() }"),
+            ("funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "ABC"\n retorne dados[-1]\n}\n'
+             "inicio { seja r = f() }"),
+            ("funcao f(n: inteiro) -> inteiro {\n"
+             ' seja dados: bytes = "ABC"\n retorne dados[n]\n}\n'
+             "inicio { seja r = f(100) }"),
+            ("funcao f() -> inteiro {\n"
+             ' seja dados: bytes = ""\n retorne dados[0]\n}\n'
+             "inicio { seja r = f() }"),
+        )
+        for nivel in (0, 8):
+            for fonte in fontes:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(dados)
+                    if status is not None:
+                        self.assertEqual(status, 23)
+
+    def test_buffers_bytes_nativos_diagnosticos_e_escopos(self):
+        casos = (
+            (17, "funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "0123456789abcdefghijklmnopqrstuvw"\n'
+             " retorne 0\n}\n inicio { seja r = f() }"),
+            (17, "funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "A\\\\n"\n'
+             " retorne 0\n}\n inicio { seja r = f() }"),
+            (17, "funcao f() -> inteiro {\n"
+             " seja dados: bytes = 42\n"
+             " retorne 0\n}\n inicio { seja r = f() }"),
+            (17, "funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "A" + "B"\n'
+             " retorne 0\n}\n inicio { seja r = f() }"),
+            (18, "funcao f() -> inteiro {\n"
+             ' seja dados: bytes = "A"\n dados = 9\n'
+             " retorne 0\n}\n inicio { seja r = f() }"),
+            (7, "funcao f() -> inteiro {\n"
+             ' se 1 > 0 {\n seja dados: bytes = "A"\n }\n'
+             " retorne dados[0]\n}\n inicio { seja r = f() }"),
+        )
+        for nivel in (0, 8):
+            for esperado, fonte in casos:
+                with self.subTest(nivel=nivel, erro=esperado, fonte=fonte):
                     codigo, dados, status = self.gerar(fonte, nivel)
                     self.assertEqual(codigo, esperado)
                     self.assertIsNone(dados)

@@ -1,0 +1,137 @@
+// Emissao experimental de buffers locais bytes imutaveis no ELF64.
+// Formato fixo por variavel: 1 qword de comprimento + 32 bytes de dados.
+// Nao aceita referencias, atribuicoes ao buffer nem retorno tipo bytes.
+importe "lexico.rts" como lexico
+importe "emissao_elf_minima.rts" como elf
+importe "emissao_fluxo_elf.rts" como fluxo
+
+publico tipo ResultadoBytesELF {
+    codigo: bytes
+    codigo_erro: inteiro
+}
+
+// Retorna o deslocamento signed32 codificado sem estouro do inteiro RS.
+privado funcao deslocamento(codigo: bytes, distancia: inteiro) -> bytes {
+    retorne elf.anexar_inteiro(mova(codigo), 4294967296 - distancia, 4)
+}
+
+// O token literal inclui as aspas. Nesta etapa escapes sao recusados:
+// o armazenamento preserva exatamente os bytes UTF-8 da fonte.
+publico funcao inicializar(codigo: bytes, fonte: emprestimo[bytes], literal: lexico.UnidadeLexica, indice_local: inteiro) -> ResultadoBytesELF {
+    seja resposta: ResultadoBytesELF
+    se literal.classe != 3 ou literal.comprimento_byte < 2 {
+        resposta.codigo_erro = 17
+        retorne mova(resposta)
+    }
+    seja quantidade = literal.comprimento_byte - 2
+    se quantidade > 32 {
+        resposta.codigo_erro = 17
+        retorne mova(resposta)
+    }
+    se literal.inicio_byte < 0 ou literal.comprimento_byte > tamanho(fonte) - literal.inicio_byte {
+        resposta.codigo_erro = 17
+        retorne mova(resposta)
+    }
+    seja i = 0
+    enquanto i < quantidade {
+        seja valor = fonte[literal.inicio_byte + 1 + i]
+        // Escapes precisam de um decodificador proprio antes de habilitar
+        // a sintaxe entre aspas com barras invertidas.
+        se valor == 92 {
+            resposta.codigo_erro = 17
+            retorne mova(resposta)
+        }
+        // C6 85 disp32 imm8: mov byte [rbp - base + i], valor
+        adicione_byte(codigo, 198)
+        adicione_byte(codigo, 133)
+        seja gravado = deslocamento(mova(codigo), (indice_local + 5) * 8 - i)
+        mova(codigo, gravado)
+        adicione_byte(codigo, valor)
+        i = i + 1
+    }
+    // 48 C7 85 disp32 imm32: comprimento em slot reservado.
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 199)
+    adicione_byte(codigo, 133)
+    seja gravado = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    mova(codigo, gravado)
+    seja tamanho_gravado = elf.anexar_inteiro(mova(codigo), quantidade, 4)
+    mova(codigo, tamanho_gravado)
+    mova(resposta.codigo, codigo)
+    retorne mova(resposta)
+}
+
+// Le o comprimento de um local bytes e entrega um inteiro na pilha.
+publico funcao emitir_tamanho(codigo: bytes, indice_local: inteiro) -> bytes {
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 133)
+    seja carregado = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    mova(codigo, carregado)
+    adicione_byte(codigo, 80)
+    retorne mova(codigo)
+}
+
+// Recebe indice inteiro avaliado no topo da pilha, devolve o byte como
+// inteiro 0..255. Acesso invalido encerra o ELF com codigo 23; jamais le
+// memoria fora da area local. Alvos usam deslocamentos rel32.
+publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro) -> bytes {
+    adicione_byte(codigo, 88) // pop rax (indice)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 133)
+    adicione_byte(codigo, 192) // test rax, rax
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 136) // js rel32
+    seja salto_negativo = tamanho(codigo)
+    seja i = 0
+    enquanto i < 4 {
+        adicione_byte(codigo, 0)
+        i = i + 1
+    }
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 59)
+    adicione_byte(codigo, 133) // cmp rax, [rbp - slot_comprimento]
+    seja tamanho_endereco = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    mova(codigo, tamanho_endereco)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 131) // jae rel32
+    seja salto_excesso = tamanho(codigo)
+    i = 0
+    enquanto i < 4 {
+        adicione_byte(codigo, 0)
+        i = i + 1
+    }
+    // 0F B6 84 05 disp32: movzx eax, byte [rbp + rax + base]
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 182)
+    adicione_byte(codigo, 132)
+    adicione_byte(codigo, 5)
+    seja byte_endereco = deslocamento(mova(codigo), (indice_local + 5) * 8)
+    mova(codigo, byte_endereco)
+    adicione_byte(codigo, 80) // push rax
+    adicione_byte(codigo, 233) // jmp apos tratamento de erro
+    seja salto_fim = tamanho(codigo)
+    i = 0
+    enquanto i < 4 {
+        adicione_byte(codigo, 0)
+        i = i + 1
+    }
+    seja destino_erro = tamanho(codigo)
+    // exit(23): falha deterministica de verificacao de limites.
+    adicione_byte(codigo, 184)
+    seja chamada = elf.anexar_inteiro(mova(codigo), 60, 4)
+    mova(codigo, chamada)
+    adicione_byte(codigo, 191)
+    seja status = elf.anexar_inteiro(mova(codigo), 23, 4)
+    mova(codigo, status)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 5)
+    seja depois = tamanho(codigo)
+    seja corrigido = fluxo.corrigir(mova(codigo), salto_negativo, destino_erro)
+    mova(codigo, corrigido)
+    seja corrigido_excesso = fluxo.corrigir(mova(codigo), salto_excesso, destino_erro)
+    mova(codigo, corrigido_excesso)
+    seja corrigido_fim = fluxo.corrigir(mova(codigo), salto_fim, depois)
+    mova(codigo, corrigido_fim)
+    retorne mova(codigo)
+}
