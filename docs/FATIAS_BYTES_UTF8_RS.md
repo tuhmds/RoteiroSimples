@@ -6,7 +6,7 @@ para acessar ou comparar intervalos.
 
 ## Modulo `biblioteca_padrao/fatias_bytes.rts`
 
-O tipo `FatiaBytes` guarda apenas `inicio` e `comprimento`, mais um
+O tipo `FatiaBytes` guarda apenas `deslocamento` e `comprimento`, mais um
 codigo de erro recuperavel. A fonte continua sob posse do chamador.
 
 - `contida(total, inicio, comprimento)`: verifica limites sem calcular
