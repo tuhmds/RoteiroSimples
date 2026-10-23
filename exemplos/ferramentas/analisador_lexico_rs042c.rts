@@ -11,7 +11,11 @@ inicio {
         se erro.classe == -2 {
             escreva("Erro lexico: texto sem aspas de fechamento.")
         } senao {
-            escreva("Erro lexico: caractere invalido.")
+            se erro.classe == -3 {
+                escreva("Erro lexico: sequencia UTF-8 invalida.")
+            } senao {
+                escreva("Erro lexico: caractere invalido.")
+            }
         }
         escreva(erro.linha)
         escreva(erro.coluna)
