@@ -233,12 +233,12 @@ privado funcao verificar_retorno(plano: emprestimo[Plano]) -> DiagnosticoRetorno
         se instrucao.categoria == 8 {
             se tamanho(pilha) == 0 {
                 resposta.codigo = 7
-                retorne mova(resposta)
+                retorne resposta
             }
             seja escopo: EscopoRetorno = pilha[tamanho(pilha) - 1]
             se escopo.classe != 3 {
                 resposta.codigo = 7
-                retorne mova(resposta)
+                retorne resposta
             }
             escopo.garantido_primeiro = garantido
             escopo.classe = 8
@@ -252,7 +252,7 @@ privado funcao verificar_retorno(plano: emprestimo[Plano]) -> DiagnosticoRetorno
         se instrucao.categoria == 5 {
             se tamanho(pilha) == 0 {
                 resposta.codigo = 2
-                retorne mova(resposta)
+                retorne resposta
             }
             seja escopo: EscopoRetorno = pilha[tamanho(pilha) - 1]
             remova_ultimo(pilha)
@@ -270,19 +270,19 @@ privado funcao verificar_retorno(plano: emprestimo[Plano]) -> DiagnosticoRetorno
         se instrucao.categoria == 6 {
             se tamanho(pilha) != 0 {
                 resposta.codigo = 2
-                retorne mova(resposta)
+                retorne resposta
             }
             se nao garantido {
                 resposta.codigo = 11
             }
-            retorne mova(resposta)
+            retorne resposta
         }
 
         // Uma instrucao apos um retorno garantido e inalcancavel,
         // incluindo o caso se/senao com retornos nos dois ramos.
         se garantido {
             resposta.codigo = 10
-            retorne mova(resposta)
+            retorne resposta
         }
 
         se instrucao.categoria == 3 ou instrucao.categoria == 4 {
@@ -298,7 +298,7 @@ privado funcao verificar_retorno(plano: emprestimo[Plano]) -> DiagnosticoRetorno
         indice = indice + 1
     }
     resposta.codigo = 2
-    retorne mova(resposta)
+    retorne resposta
 }
 
 // Analisar corpo de funcao no mesmo formato de IR do bloco principal.
