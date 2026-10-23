@@ -924,7 +924,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             continue
         }
         se instrucao.categoria == 2 {
-            se tipos[indice_local] == 2 {
+            se tipos[indice_local] == 2 ou tipos[indice_local] == 3 {
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
             }
