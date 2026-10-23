@@ -13,7 +13,9 @@ publico tipo Instrucao {
     valor_inicio: inteiro
     valor_fim: inteiro
     profundidade: inteiro
-    tipo_local: inteiro // 1 inteiro, 2 bytes (somente declaracoes)
+    tipo_local: inteiro // 1 inteiro, 2 bytes local, 3 bytes dinamico
+    indice_inicio: inteiro
+    indice_fim: inteiro
 }
 
 publico tipo Plano {
@@ -37,6 +39,8 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
     seja texto_seja: texto = "seja"
     seja texto_inteiro: texto = "inteiro"
     seja texto_bytes: texto = "bytes"
+    seja texto_criar: texto = "criar_bytes"
+    seja texto_liberar: texto = "liberar_bytes"
     seja texto_se: texto = "se"
     seja texto_enquanto: texto = "enquanto"
     seja texto_senao: texto = "senao"
@@ -62,6 +66,8 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
         instrucao.unidade_nome = -1
         instrucao.valor_inicio = -1
         instrucao.valor_fim = -1
+        instrucao.indice_inicio = -1
+        instrucao.indice_fim = -1
         instrucao.profundidade = profundidade
         // Depois de pare/continue, so o fechamento do bloco alcancado
         // por esse desvio permanece analisavel neste nivel.
@@ -197,6 +203,31 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
             plano.codigo_erro = 3
             retorne mova(plano)
         }
+        // liberar_bytes(nome) e uma instrucao explicita de ciclo de vida.
+        se fluxo.igual(fonte, token, empreste(texto_liberar)) {
+            se i + 3 >= total {
+                plano.codigo_erro = 3
+                retorne mova(plano)
+            }
+            seja abre_liberar: lexico.UnidadeLexica = unidades[i + 1]
+            seja nome_liberar: lexico.UnidadeLexica = unidades[i + 2]
+            seja fecha_liberar: lexico.UnidadeLexica = unidades[i + 3]
+            se nao fluxo.simbolo(fonte, abre_liberar, 40) ou nome_liberar.classe != 1 ou nao fluxo.simbolo(fonte, fecha_liberar, 41) {
+                plano.codigo_erro = 3
+                retorne mova(plano)
+            }
+            instrucao.categoria = 12
+            instrucao.unidade_nome = i + 2
+            adicione(plano.instrucoes, instrucao)
+            i = i + 4
+            se i < total {
+                seja separador_liberar: lexico.UnidadeLexica = unidades[i]
+                se fluxo.simbolo(fonte, separador_liberar, 59) {
+                    i = i + 1
+                }
+            }
+            continue
+        }
         seja declaracao = fluxo.igual(fonte, token, empreste(texto_seja))
         seja posicao_nome = i
         se declaracao {
@@ -219,6 +250,34 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
             retorne mova(plano)
         }
         seja indice_igual = posicao_nome + 1
+        // Uma atribuicao indexada e uma instrucao diferente da atribuicao
+        // do buffer inteiro: dados[indice] = valor.
+        seja indexado = falso
+        se nao declaracao {
+            seja abertura_indice: lexico.UnidadeLexica = unidades[indice_igual]
+            se fluxo.simbolo(fonte, abertura_indice, 91) {
+                instrucao.indice_inicio = indice_igual + 1
+                seja cursor_indice = instrucao.indice_inicio
+                enquanto cursor_indice < total {
+                    seja atual_indice: lexico.UnidadeLexica = unidades[cursor_indice]
+                    se fluxo.simbolo(fonte, atual_indice, 93) {
+                        pare
+                    }
+                    cursor_indice = cursor_indice + 1
+                }
+                se cursor_indice >= total ou cursor_indice == instrucao.indice_inicio {
+                    plano.codigo_erro = 3
+                    retorne mova(plano)
+                }
+                instrucao.indice_fim = cursor_indice
+                indice_igual = cursor_indice + 1
+                indexado = verdadeiro
+                se indice_igual >= total {
+                    plano.codigo_erro = 3
+                    retorne mova(plano)
+                }
+            }
+        }
         // Bytes locais usam 5 slots: comprimento (8 bytes) e 32 bytes
         // de dados. Outras declaracoes continuam usando apenas um slot.
         instrucao.tipo_local = 1
@@ -255,12 +314,21 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
         se declaracao {
             instrucao.categoria = 1
         }
+        se indexado {
+            instrucao.categoria = 11
+        }
         instrucao.unidade_nome = posicao_nome
         instrucao.valor_inicio = indice_igual + 1
         instrucao.valor_fim = fluxo.fim_expressao(fonte, unidades, instrucao.valor_inicio, nome.linha)
         se instrucao.valor_fim <= instrucao.valor_inicio {
             plano.codigo_erro = 4
             retorne mova(plano)
+        }
+        se instrucao.categoria == 1 e instrucao.tipo_local == 2 {
+            seja inicializador: lexico.UnidadeLexica = unidades[instrucao.valor_inicio]
+            se fluxo.igual(fonte, inicializador, empreste(texto_criar)) {
+                instrucao.tipo_local = 3
+            }
         }
         adicione(plano.instrucoes, instrucao)
         i = instrucao.valor_fim
@@ -397,6 +465,8 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
     seja texto_seja: texto = "seja"
     seja texto_inteiro: texto = "inteiro"
     seja texto_bytes: texto = "bytes"
+    seja texto_criar: texto = "criar_bytes"
+    seja texto_liberar: texto = "liberar_bytes"
     seja texto_se: texto = "se"
     seja texto_enquanto: texto = "enquanto"
     seja texto_senao: texto = "senao"
@@ -422,6 +492,8 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
         instrucao.unidade_nome = -1
         instrucao.valor_inicio = -1
         instrucao.valor_fim = -1
+        instrucao.indice_inicio = -1
+        instrucao.indice_fim = -1
         instrucao.profundidade = profundidade
         // Apos retorne, apenas o fechamento do mesmo bloco e alcancavel.
         // Um retorno dentro de se/enquanto nao bloqueia comandos fora dele.
@@ -577,6 +649,31 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
             plano.codigo_erro = 3
             retorne mova(plano)
         }
+        // liberar_bytes(nome) e uma instrucao explicita de ciclo de vida.
+        se fluxo.igual(fonte, token, empreste(texto_liberar)) {
+            se i + 3 >= total {
+                plano.codigo_erro = 3
+                retorne mova(plano)
+            }
+            seja abre_liberar: lexico.UnidadeLexica = unidades[i + 1]
+            seja nome_liberar: lexico.UnidadeLexica = unidades[i + 2]
+            seja fecha_liberar: lexico.UnidadeLexica = unidades[i + 3]
+            se nao fluxo.simbolo(fonte, abre_liberar, 40) ou nome_liberar.classe != 1 ou nao fluxo.simbolo(fonte, fecha_liberar, 41) {
+                plano.codigo_erro = 3
+                retorne mova(plano)
+            }
+            instrucao.categoria = 12
+            instrucao.unidade_nome = i + 2
+            adicione(plano.instrucoes, instrucao)
+            i = i + 4
+            se i < total {
+                seja separador_liberar: lexico.UnidadeLexica = unidades[i]
+                se fluxo.simbolo(fonte, separador_liberar, 59) {
+                    i = i + 1
+                }
+            }
+            continue
+        }
         seja declaracao = fluxo.igual(fonte, token, empreste(texto_seja))
         seja posicao_nome = i
         se declaracao {
@@ -599,6 +696,34 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
             retorne mova(plano)
         }
         seja indice_igual = posicao_nome + 1
+        // Uma atribuicao indexada e uma instrucao diferente da atribuicao
+        // do buffer inteiro: dados[indice] = valor.
+        seja indexado = falso
+        se nao declaracao {
+            seja abertura_indice: lexico.UnidadeLexica = unidades[indice_igual]
+            se fluxo.simbolo(fonte, abertura_indice, 91) {
+                instrucao.indice_inicio = indice_igual + 1
+                seja cursor_indice = instrucao.indice_inicio
+                enquanto cursor_indice < total {
+                    seja atual_indice: lexico.UnidadeLexica = unidades[cursor_indice]
+                    se fluxo.simbolo(fonte, atual_indice, 93) {
+                        pare
+                    }
+                    cursor_indice = cursor_indice + 1
+                }
+                se cursor_indice >= total ou cursor_indice == instrucao.indice_inicio {
+                    plano.codigo_erro = 3
+                    retorne mova(plano)
+                }
+                instrucao.indice_fim = cursor_indice
+                indice_igual = cursor_indice + 1
+                indexado = verdadeiro
+                se indice_igual >= total {
+                    plano.codigo_erro = 3
+                    retorne mova(plano)
+                }
+            }
+        }
         // Bytes locais usam 5 slots: comprimento (8 bytes) e 32 bytes
         // de dados. Outras declaracoes continuam usando apenas um slot.
         instrucao.tipo_local = 1
@@ -635,12 +760,21 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
         se declaracao {
             instrucao.categoria = 1
         }
+        se indexado {
+            instrucao.categoria = 11
+        }
         instrucao.unidade_nome = posicao_nome
         instrucao.valor_inicio = indice_igual + 1
         instrucao.valor_fim = fluxo.fim_expressao(fonte, unidades, instrucao.valor_inicio, nome.linha)
         se instrucao.valor_fim <= instrucao.valor_inicio {
             plano.codigo_erro = 4
             retorne mova(plano)
+        }
+        se instrucao.categoria == 1 e instrucao.tipo_local == 2 {
+            seja inicializador: lexico.UnidadeLexica = unidades[instrucao.valor_inicio]
+            se fluxo.igual(fonte, inicializador, empreste(texto_criar)) {
+                instrucao.tipo_local = 3
+            }
         }
         adicione(plano.instrucoes, instrucao)
         i = instrucao.valor_fim
