@@ -71,13 +71,15 @@ na pilha e retorno em `rax`, com `leave; ret`.
   deste emissor. A divisao signed64 trunca para zero e o resto conserva
   o sinal do dividendo. Antes de `idiv`, o emissor faz verificacoes
   nativas de dois erros aritmeticos: divisor zero encerra o processo
-  com status **240**; dividendo minimo signed64 com divisor -1 encerra
-  com status **241**. Sao sentinelas do processo gerado, nao codigos
-  de diagnostico do compilador nem excecoes recuperaveis. Ainda nao
-  existe mensagem no terminal, rastreamento de origem ou um resultado
-  tipado para esses erros; alem disso, valores validos de `inicio`
-  tambem podem terminar com os mesmos status. `inicio` continua
-  expondo a ultima atribuicao como status de saida (modulo 256).
+  com status **240** e escreve `RS: divisao por zero` no
+  **stderr**; dividendo minimo signed64 com divisor -1 encerra com
+  status **241** e escreve `RS: estouro na divisao` no stderr.
+  Mensagens sao emitidas pelo proprio ELF via `write(2,...)` do Linux,
+  sem runtime externo; portanto, um resultado valido de `inicio`
+  que coincida com 240/241 pode ser distinguido pela ausencia de stderr.
+  Ainda **nao** sao excecoes recuperaveis, nem trazem posicao exata de
+  origem. `inicio` continua expondo a ultima atribuicao como status
+  de saida (modulo 256).
 
 ## Arquitetura
 
@@ -101,7 +103,7 @@ falhar sem gerar arquivo. A CI geral e obrigatoria antes da integracao.
 
 ## Proximo passo
 
-Tornar erros aritmeticos recuperaveis e diagnosticados com origem
-e tipo (em vez de depender apenas de codigos de saida), fortalecer
-verificacao semantica dos caminhos de retorno e tipos. Depois estudar
-recursao controlada, ABI publica e etapas do bootstrap completo.
+Ampliar a identificacao de posicao de origem das falhas e criar
+erros aritmeticos recuperaveis em lugar de encerramento do processo,
+alem de fortalecer a verificacao semantica dos caminhos de retorno e
+tipos. Depois estudar recursao controlada, ABI publica e bootstrap.
