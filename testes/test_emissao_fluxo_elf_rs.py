@@ -122,7 +122,7 @@ class TestesEmissaoFluxoELFRS(unittest.TestCase):
 
     def test_divisao_protegida_no_fluxo_sem_chamadas(self):
         casos = (
-            ("inicio {\n seja a = 7\n a = a / 0\n}", 240),
+            ("inicio {\n seja a = 7\n seja b = a - a\n a = a / b\n}", 240),
             ("inicio {\n seja a = 5\n seja b = a - a\n a = a % b\n}", 240),
             ("inicio {\n seja n = -8 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024\n"
              " n = n / -1\n}", 241),
@@ -142,13 +142,13 @@ class TestesEmissaoFluxoELFRS(unittest.TestCase):
         if self.alvo != "linux":
             return
         casos = (
-            ("inicio {\n seja a = 7\n a = a / 0\n}", 240, "RS: divisao por zero\n"),
+            ("inicio {\n seja a = 7\n seja b = a - a\n a = a / b\n}", 240, "RS: divisao por zero\n"),
             ("inicio {\n seja a = 0\n a = a % a\n}", 240, "RS: divisao por zero\n"),
             ("inicio {\n seja a = -8 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024\n"
              " a = a / -1\n}", 241, "RS: estouro na divisao\n"),
             ("inicio {\n"
              "            seja valor = 4\n"
-             "            valor = valor / 0\n}", 240, "RS: divisao por zero\n"),
+             "            valor = valor / (valor - valor)\n}", 240, "RS: divisao por zero\n"),
             ("inicio {\n seja a = 240\n}", 240, ""),
             ("inicio {\n seja a = 241\n}", 241, ""),
         )
@@ -182,6 +182,41 @@ class TestesEmissaoFluxoELFRS(unittest.TestCase):
                             erro_esperado = erro_esperado.rstrip("\n") + f" (linha {linha}, coluna {coluna})\n"
                         self.assertEqual(processo.stderr, erro_esperado)
                         self.assertEqual(processo.stdout, "")
+
+    def test_divisor_constante_zero_e_rejeitado_na_compilacao(self):
+        invalidos = (
+            "inicio {\n seja a = 7 / 0\n}",
+            "inicio {\n seja a = 7 % 0\n}",
+            "inicio {\n seja a = 7 / (5 - 5)\n}",
+            "inicio {\n seja a = 7 % (+0)\n}",
+            "inicio {\n seja a = 7 / (10 / 20)\n}",
+            "inicio {\n seja a = 7 / -(3 - 3)\n}",
+            "inicio {\n seja a = 8\n se a / (4 - 4) > 0 {\n a = 1\n }\n}",
+            "inicio {\n seja a = 8\n enquanto a % (2 - 2) > 0 {\n a = 1\n }\n}",
+        )
+        for nivel in (0, 8):
+            for fonte in invalidos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 9)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
+    def test_divisor_variavel_nao_e_rejeitado_antecipadamente(self):
+        fontes = (
+            ("inicio {\n seja a = 8\n seja b = 2\n a = a / b\n}", 4),
+            ("inicio {\n seja a = 9\n seja b = 4\n a = a % b\n}", 1),
+            ("inicio {\n seja a = 9\n seja b = 0\n a = a / b\n}", 240),
+            ("inicio {\n seja a = 8 / (4 - 2)\n}", 4),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in fontes:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado)
 
     def test_lacos_e_aninhamentos(self):
         casos = (

@@ -77,6 +77,104 @@ privado funcao reduzir(arvore: ArvoreExpressao) -> ArvoreExpressao {
     retorne mova(arvore)
 }
 
+// Analise conservadora de constantes no subconjunto inteiro.
+// Marca expressoes constantes dentro de [-1000000000, 1000000000].
+// Falha 9: divisor literal ou expressao aritmetica que resulta em zero.
+// Nomes, chamadas e valores fora desse limite permanecem dinamicos.
+publico tipo ConstanteVerificada {
+    constante: logico
+    valor: inteiro
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+publico funcao verificar_constantes(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], arvore: emprestimo[ArvoreExpressao]) -> ConstanteVerificada {
+    seja resposta: ConstanteVerificada
+    seja conhecidos: lista[logico]
+    seja valores: lista[inteiro]
+    seja i = 0
+    enquanto i < tamanho(arvore.nos) {
+        seja no: NoExpressao = arvore.nos[i]
+        seja conhecido = falso
+        seja valor = 0
+        se no.categoria == 1 {
+            seja token: lexico.UnidadeLexica = unidades[no.unidade]
+            conhecido = verdadeiro
+            seja digito = 0
+            enquanto digito < token.comprimento_byte {
+                seja numero = fonte[token.inicio_byte + digito] - 48
+                se numero < 0 ou numero > 9 ou valor > 100000000 {
+                    conhecido = falso
+                    pare
+                }
+                valor = valor * 10 + numero
+                se valor > 1000000000 {
+                    conhecido = falso
+                    pare
+                }
+                digito = digito + 1
+            }
+        }
+        se no.categoria == 3 e no.direito >= 0 e no.direito < i {
+            se conhecidos[no.direito] {
+                conhecido = verdadeiro
+                valor = valores[no.direito]
+                se no.operador == 300 {
+                    valor = -valor
+                }
+                se no.operador != 300 e no.operador != 301 {
+                    conhecido = falso
+                }
+            }
+        }
+        se no.categoria == 4 e no.esquerdo >= 0 e no.direito >= 0 e no.esquerdo < i e no.direito < i {
+            seja direita_conhecida = conhecidos[no.direito]
+            seja direita = valores[no.direito]
+            se (no.operador == 47 ou no.operador == 37) e direita_conhecida e direita == 0 {
+                resposta.codigo_erro = 9
+                resposta.unidade_erro = no.unidade
+                retorne resposta
+            }
+            se conhecidos[no.esquerdo] e direita_conhecida {
+                seja esquerda = valores[no.esquerdo]
+                conhecido = verdadeiro
+                se no.operador == 43 {
+                    valor = esquerda + direita
+                } senao {
+                    se no.operador == 45 {
+                        valor = esquerda - direita
+                    } senao {
+                        se no.operador == 42 {
+                            valor = esquerda * direita
+                        } senao {
+                            se no.operador == 47 {
+                                valor = esquerda / direita
+                            } senao {
+                                se no.operador == 37 {
+                                    valor = esquerda % direita
+                                } senao {
+                                    conhecido = falso
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        se valor > 1000000000 ou valor < -1000000000 {
+            conhecido = falso
+        }
+        adicione(conhecidos, conhecido)
+        adicione(valores, valor)
+        i = i + 1
+    }
+    se arvore.raiz >= 0 e arvore.raiz < tamanho(valores) {
+        resposta.constante = conhecidos[arvore.raiz]
+        resposta.valor = valores[arvore.raiz]
+    }
+    retorne resposta
+}
+
 // Entrada do analisador: intervalo de tokens [primeiro, ultimo).
 // Erros: 1 intervalo, 2 vazio, 3 operando, 4 operador,
 // 5 abertura pendente, 6 fechamento solto, 7 token, 8 estado.
