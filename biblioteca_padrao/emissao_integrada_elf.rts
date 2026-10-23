@@ -23,6 +23,7 @@ privado tipo ControleIntegrado {
     classe: inteiro
     inicio_condicao: inteiro
     posicao_deslocamento: inteiro
+    marcador_locais: inteiro
 }
 
 // Emite um endereco local de 8 bytes relativo ao rbp.
@@ -223,6 +224,14 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoIntegradoELF {
             seja destino_desvio = tamanho(codigo)
             seja desvio_saida = fluxo.corrigir(mova(codigo), controle.posicao_deslocamento, destino_desvio)
             mova(codigo, desvio_saida)
+            // Preserva o slot, mas retira o nome do escopo externo.
+            seja desativar = controle.marcador_locais
+            enquanto desativar < tamanho(nomes) {
+                seja local_interno: lexico.UnidadeLexica = nomes[desativar]
+                local_interno.classe = 0
+                nomes[desativar] = local_interno
+                desativar = desativar + 1
+            }
             posicao_ir = posicao_ir + 1
             continue
         }
@@ -239,6 +248,7 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoIntegradoELF {
             controle.classe = instrucao.categoria
             controle.inicio_condicao = inicio_condicao
             controle.posicao_deslocamento = tamanho(codigo) - 4
+            controle.marcador_locais = tamanho(nomes)
             adicione(controles, controle)
             posicao_ir = posicao_ir + 1
             continue
@@ -250,7 +260,12 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoIntegradoELF {
         seja nome: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
         seja indice_local = fluxo.resolver(fonte, empreste(nomes), nome)
         se instrucao.categoria == 1 {
-            se indice_local >= 0 {
+            seja inicio_escopo = 0
+            se tamanho(controles) > 0 {
+                seja controle_atual: ControleIntegrado = controles[tamanho(controles) - 1]
+                inicio_escopo = controle_atual.marcador_locais
+            }
+            se indice_local >= inicio_escopo {
                 resposta.codigo_erro = 4
                 retorne mova(resposta)
             }
