@@ -1,0 +1,180 @@
+// Fatias sem copia sobre buffers de bytes emprestados.
+// A fatia guarda apenas offsets: o chamador preserva a vida da fonte.
+// Todos os acessos verificam limites antes de indexar o buffer.
+publico tipo FatiaBytes {
+    inicio: inteiro
+    comprimento: inteiro
+    codigo_erro: inteiro
+}
+
+publico tipo ResultadoByte {
+    valor: inteiro
+    codigo_erro: inteiro
+}
+
+publico tipo DiagnosticoUTF8 {
+    valido: logico
+    indice_erro: inteiro
+    codigo_erro: inteiro
+}
+
+// Verifica [inicio, inicio + comprimento) sem somar indices potencialmente
+// grandes. Uso de subtracao somente apos validar os operandos.
+publico funcao contida(total: inteiro, inicio: inteiro, comprimento: inteiro) -> logico {
+    se total < 0 ou inicio < 0 ou comprimento < 0 {
+        retorne falso
+    }
+    se inicio > total {
+        retorne falso
+    }
+    se comprimento > total - inicio {
+        retorne falso
+    }
+    retorne verdadeiro
+}
+
+publico funcao recortar(fonte: emprestimo[bytes], inicio: inteiro, comprimento: inteiro) -> FatiaBytes {
+    seja resposta: FatiaBytes
+    se nao contida(tamanho(fonte), inicio, comprimento) {
+        resposta.codigo_erro = 1
+        retorne resposta
+    }
+    resposta.inicio = inicio
+    resposta.comprimento = comprimento
+    retorne resposta
+}
+
+// Origem e tamanho da subfatia sao relativos a uma fatia ja validada.
+publico funcao subfatia(fonte: emprestimo[bytes], origem: FatiaBytes, inicio: inteiro, comprimento: inteiro) -> FatiaBytes {
+    seja resposta: FatiaBytes
+    se origem.codigo_erro != 0 ou nao contida(tamanho(fonte), origem.inicio, origem.comprimento) {
+        resposta.codigo_erro = 1
+        retorne resposta
+    }
+    se nao contida(origem.comprimento, inicio, comprimento) {
+        resposta.codigo_erro = 1
+        retorne resposta
+    }
+    resposta.inicio = origem.inicio + inicio
+    resposta.comprimento = comprimento
+    retorne resposta
+}
+
+// Erro 1: fatia invalida, erro 2: indice fora da fatia.
+publico funcao ler(fonte: emprestimo[bytes], fatia: FatiaBytes, indice: inteiro) -> ResultadoByte {
+    seja resposta: ResultadoByte
+    se fatia.codigo_erro != 0 ou nao contida(tamanho(fonte), fatia.inicio, fatia.comprimento) {
+        resposta.codigo_erro = 1
+        retorne resposta
+    }
+    se nao contida(fatia.comprimento, indice, 1) {
+        resposta.codigo_erro = 2
+        retorne resposta
+    }
+    resposta.valor = fonte[fatia.inicio + indice]
+    retorne resposta
+}
+
+// Comparacao binaria exata, incluindo zero, UTF-8 e valores acima de 127.
+// Nao aloca nem converte as fatias em textos.
+publico funcao iguais(primeira: emprestimo[bytes], a: FatiaBytes, segunda: emprestimo[bytes], b: FatiaBytes) -> logico {
+    se a.codigo_erro != 0 ou b.codigo_erro != 0 {
+        retorne falso
+    }
+    se nao contida(tamanho(primeira), a.inicio, a.comprimento) {
+        retorne falso
+    }
+    se nao contida(tamanho(segunda), b.inicio, b.comprimento) {
+        retorne falso
+    }
+    se a.comprimento != b.comprimento {
+        retorne falso
+    }
+    seja indice = 0
+    enquanto indice < a.comprimento {
+        se primeira[a.inicio + indice] != segunda[b.inicio + indice] {
+            retorne falso
+        }
+        indice = indice + 1
+    }
+    retorne verdadeiro
+}
+
+privado funcao continuacao(valor: inteiro) -> logico {
+    retorne valor >= 128 e valor <= 191
+}
+
+// UTF-8 estrito: rejeita sequencias truncadas, bytes de continuacao soltos,
+// codificacoes longas, substitutos UTF-16 e pontos acima de U+10FFFF.
+// Nao normaliza Unicode: apenas valida o formato binario do texto.
+publico funcao validar_utf8(fonte: emprestimo[bytes]) -> DiagnosticoUTF8 {
+    seja resposta: DiagnosticoUTF8
+    seja total = tamanho(fonte)
+    seja indice = 0
+    enquanto indice < total {
+        seja primeiro = fonte[indice]
+        se primeiro < 128 {
+            indice = indice + 1
+            continue
+        }
+        seja quantidade = 0
+        se primeiro >= 194 e primeiro <= 223 {
+            quantidade = 2
+        }
+        se primeiro >= 224 e primeiro <= 239 {
+            quantidade = 3
+        }
+        se primeiro >= 240 e primeiro <= 244 {
+            quantidade = 4
+        }
+        se quantidade == 0 {
+            resposta.codigo_erro = 1
+            resposta.indice_erro = indice
+            retorne resposta
+        }
+        se nao contida(total, indice, quantidade) {
+            resposta.codigo_erro = 2
+            resposta.indice_erro = indice
+            retorne resposta
+        }
+        seja segundo = fonte[indice + 1]
+        se nao continuacao(segundo) {
+            resposta.codigo_erro = 3
+            resposta.indice_erro = indice
+            retorne resposta
+        }
+        se primeiro == 224 e segundo < 160 {
+            resposta.codigo_erro = 4
+            resposta.indice_erro = indice
+            retorne resposta
+        }
+        se primeiro == 237 e segundo > 159 {
+            resposta.codigo_erro = 5
+            resposta.indice_erro = indice
+            retorne resposta
+        }
+        se primeiro == 240 e segundo < 144 {
+            resposta.codigo_erro = 4
+            resposta.indice_erro = indice
+            retorne resposta
+        }
+        se primeiro == 244 e segundo > 143 {
+            resposta.codigo_erro = 6
+            resposta.indice_erro = indice
+            retorne resposta
+        }
+        seja adicional = 2
+        enquanto adicional < quantidade {
+            se nao continuacao(fonte[indice + adicional]) {
+                resposta.codigo_erro = 3
+                resposta.indice_erro = indice
+                retorne resposta
+            }
+            adicional = adicional + 1
+        }
+        indice = indice + quantidade
+    }
+    resposta.valido = verdadeiro
+    resposta.indice_erro = total
+    retorne resposta
+}
