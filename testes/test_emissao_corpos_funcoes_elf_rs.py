@@ -320,13 +320,13 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
     def test_divisao_protegida_contra_zero_e_overflow(self):
         casos = (
             ("funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
-             "inicio {\n seja r = f(8) / 0\n}", 240),
+             "inicio {\n seja r = f(8) / (f(1) - f(1))\n}", 240),
             ("funcao zero(n: inteiro) -> inteiro {\n retorne n - n\n}\n"
              "inicio {\n seja r = 9 % zero(5)\n}", 240),
-            ("funcao f(n: inteiro) -> inteiro {\n retorne n / 0\n}\n"
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n / (n - n)\n}\n"
              "inicio {\n seja r = f(13)\n}", 240),
             ("funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
-             "inicio {\n seja r = f(0) / 0\n}", 240),
+             "inicio {\n seja r = f(0) / (f(1) - f(1))\n}", 240),
             ("funcao minimo() -> inteiro {\n"
              " retorne -8 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024\n}\n"
              "inicio {\n seja r = minimo() / -1\n}", 241),
@@ -351,7 +351,7 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
             return
         casos = (
             ("funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
-             "inicio {\n seja r = f(8) / 0\n}", 240, "RS: divisao por zero\n"),
+             "inicio {\n seja r = f(8) / (f(1) - f(1))\n}", 240, "RS: divisao por zero\n"),
             ("funcao zero(n: inteiro) -> inteiro {\n retorne n - n\n}\n"
              "inicio {\n seja r = 9 % zero(5)\n}", 240, "RS: divisao por zero\n"),
             ("funcao minimo() -> inteiro {\n"
@@ -359,7 +359,7 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
              "inicio {\n seja r = minimo() / -1\n}", 241, "RS: estouro na divisao\n"),
             ("funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n" +
              "\n" * 10 +
-             "inicio {\n            seja resultado = f(10) / 0\n}", 240, "RS: divisao por zero\n"),
+             "inicio {\n            seja resultado = f(10) / (f(1) - f(1))\n}", 240, "RS: divisao por zero\n"),
             ("funcao retorna(n: inteiro) -> inteiro {\n retorne n\n}\n"
              "inicio {\n seja r = retorna(240)\n}", 240, ""),
             ("funcao retorna(n: inteiro) -> inteiro {\n retorne n\n}\n"
@@ -397,6 +397,49 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                             diagnostico = diagnostico.rstrip("\n") + f" (linha {linha}, coluna {coluna})\n"
                         self.assertEqual(processo.stderr, diagnostico)
                         self.assertEqual(processo.stdout, "")
+
+    def test_rejeita_divisao_constante_zero_em_funcoes_e_chamadas(self):
+        invalidos = (
+            "funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+            "inicio {\n seja r = f(8) / 0\n}",
+            "funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+            "inicio {\n seja r = f(8) % (8 - 8)\n}",
+            "funcao f(n: inteiro) -> inteiro {\n retorne n / (6 - 6)\n}\n"
+            "inicio {\n seja r = f(8)\n}",
+            "funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+            "inicio {\n seja r = f(9 / (2 - 2))\n}",
+            "funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+            "inicio {\n seja r = f(4) + 7 / (10 / 20)\n}",
+            "funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+            "inicio {\n seja r = 2\n se f(4) / 0 > r {\n r = 5\n }\n}",
+            "funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+            "inicio {\n seja r = 2\n enquanto f(4) % (3 - 3) > r {\n r = 5\n }\n}",
+        )
+        for nivel in (0, 8):
+            for fonte in invalidos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 9)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
+    def test_divisores_dinamicos_em_funcoes_preservados(self):
+        casos = (
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = f(8) / (f(3) - f(1))\n}", 4),
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja x = 2\n seja r = f(8) % x\n}", 0),
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = f(8) / (f(3) - f(3))\n}", 240),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado)
 
     def test_predicados_com_chamadas_diretas_e_compostas(self):
         casos = (
