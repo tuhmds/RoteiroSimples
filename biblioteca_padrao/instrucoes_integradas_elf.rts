@@ -182,6 +182,8 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
 
 // Analisar corpo de funcao no mesmo formato de IR do bloco principal.
 // Categoria 7: retorne. Exigimos retorno final incondicional.
+// Erro 10: instrucao inalcancavel apos retorne no mesmo bloco.
+// Erro 11: funcao pode terminar sem retorne incondicional final.
 publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], abertura_corpo: inteiro, fechamento_corpo: inteiro) -> Plano {
     seja plano: Plano
     seja total = tamanho(unidades)
@@ -202,6 +204,7 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
     seja profundidade = 0
     seja i = abertura_corpo + 1
     seja houve_retorno_final = falso
+    seja retorno_bloqueante = -1
     enquanto i <= fechamento_corpo {
         plano.unidade_erro = i
         seja token: lexico.UnidadeLexica = unidades[i]
@@ -211,6 +214,17 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
         instrucao.valor_inicio = -1
         instrucao.valor_fim = -1
         instrucao.profundidade = profundidade
+        // Apos retorne, apenas o fechamento do mesmo bloco e alcancavel.
+        // Um retorno dentro de se/enquanto nao bloqueia comandos fora dele.
+        se retorno_bloqueante >= 0 {
+            se fluxo.simbolo(fonte, token, 125) e profundidade == retorno_bloqueante {
+                retorno_bloqueante = -1
+            } senao {
+                plano.codigo_erro = 10
+                plano.unidade_erro = i
+                retorne mova(plano)
+            }
+        }
         se fluxo.simbolo(fonte, token, 125) {
             se profundidade == 0 {
                 se i != fechamento_corpo {
@@ -284,6 +298,7 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
             se profundidade == 0 {
                 houve_retorno_final = verdadeiro
             }
+            retorno_bloqueante = profundidade
             adicione(plano.instrucoes, instrucao)
             i = instrucao.valor_fim
             se i < fechamento_corpo {
@@ -342,8 +357,13 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
             }
         }
     }
-    se i != fechamento_corpo + 1 ou profundidade != 0 ou nao houve_retorno_final {
+    se i != fechamento_corpo + 1 ou profundidade != 0 {
         plano.codigo_erro = 2
+        retorne mova(plano)
+    }
+    se nao houve_retorno_final {
+        plano.codigo_erro = 11
+        plano.unidade_erro = fechamento_corpo
         retorne mova(plano)
     }
     se tamanho(plano.instrucoes) == 0 {
@@ -361,7 +381,8 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
     }
     seja penultima: Instrucao = plano.instrucoes[tamanho(plano.instrucoes) - 2]
     se penultima.categoria != 7 ou penultima.profundidade != 0 {
-        plano.codigo_erro = 2
+        plano.codigo_erro = 11
+        plano.unidade_erro = penultima.unidade_inicio
         retorne mova(plano)
     }
     plano.unidade_erro = fechamento_corpo
