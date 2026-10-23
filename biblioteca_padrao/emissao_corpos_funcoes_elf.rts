@@ -191,7 +191,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 seja indice_buffer = fluxo.resolver(fonte, nomes, nome_buffer)
                 se indice_buffer >= 0 {
                     se tipos[indice_buffer] == 2 ou tipos[indice_buffer] == 3 {
-                        seja trecho_tamanho = emisbytes.emitir_tamanho(mova(codigo), indice_buffer)
+                        seja trecho_tamanho = emisbytes.emitir_tamanho(mova(codigo), indice_buffer, tipos[indice_buffer] == 3)
                         mova(resposta.codigo, trecho_tamanho)
                         retorne mova(resposta)
                     }
