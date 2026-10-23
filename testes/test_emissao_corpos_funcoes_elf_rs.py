@@ -840,11 +840,11 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
              "inicio {\n seja r = escolha(-3)\n}", 9),
             ("funcao escolha(n: inteiro) -> inteiro {\n"
              " se n < 0 {\n retorne 41\n } senao {\n retorne 42\n }\n"
-             " retorne 43\n}\n"
+             "}\n"
              "inicio {\n seja r = escolha(-2)\n}", 41),
             ("funcao escolha(n: inteiro) -> inteiro {\n"
              " se n < 0 {\n retorne 41\n } senao {\n retorne 42\n }\n"
-             " retorne 43\n}\n"
+             "}\n"
              "inicio {\n seja r = escolha(2)\n}", 42),
             ("funcao soma(n: inteiro) -> inteiro {\n"
              " seja i = 0\n seja r = 0\n"
