@@ -183,12 +183,12 @@ class TestesLexicoEmRS(unittest.TestCase):
 
     def test_fonte_utf8_invalida_com_linha_e_coluna(self):
         casos = (
-            (b'inicio { escreva("abc\\x80") }', 1, 22),
-            (b'// comentario\\r\\ninicio { escreva("a\\xc0\\xaf") }', 2, 20),
-            (b'inicio { escreva("a\\xe0\\x80\\x80") }', 1, 20),
-            (b'inicio { escreva("a\\xed\\xa0\\x80") }', 1, 20),
-            (b'inicio { escreva("a\\xf4\\x90\\x80\\x80") }', 1, 20),
-            (b'inicio { escreva("a\\xe2\\x82")', 1, 20),
+            (b'inicio { escreva("abc\x80") }', 1, 22),
+            (b'// comentario\r\ninicio { escreva("a\xc0\xaf") }', 2, 20),
+            (b'inicio { escreva("a\xe0\x80\x80") }', 1, 20),
+            (b'inicio { escreva("a\xed\xa0\x80") }', 1, 20),
+            (b'inicio { escreva("a\xf4\x90\x80\x80") }', 1, 20),
+            (b'inicio { escreva("a\xe2\x82")', 1, 20),
         )
         for dados, linha, coluna in casos:
             with self.subTest(dados=dados):
@@ -200,7 +200,7 @@ class TestesLexicoEmRS(unittest.TestCase):
                 self.assertEqual(int(linhas[2]), coluna)
 
     def test_utf8_valido_continua_funcionando(self):
-        self.comparar('inicio { escreva("ação 🎯") }\\n')
+        self.comparar('inicio { escreva("ação 🎯") }\n')
 
     def test_texto_sem_fechamento(self):
         processo = self.executar('inicio {\n escreva("texto incompleto\n}\n')
