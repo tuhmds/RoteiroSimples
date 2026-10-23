@@ -120,6 +120,24 @@ class TestesEmissaoFluxoELFRS(unittest.TestCase):
                     if status is not None:
                         self.assertEqual(status, esperado % 256)
 
+    def test_divisao_protegida_no_fluxo_sem_chamadas(self):
+        casos = (
+            ("inicio {\n seja a = 7\n a = a / 0\n}", 240),
+            ("inicio {\n seja a = 5\n seja b = a - a\n a = a % b\n}", 240),
+            ("inicio {\n seja n = -8 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024\n"
+             " n = n / -1\n}", 241),
+            ("inicio {\n seja n = -12\n n = n % -5\n}", 253),
+            ("inicio {\n seja n = -12\n n = n / -5\n}", 2),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIn(bytes((72, 133, 201, 117, 12)), dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
     def test_lacos_e_aninhamentos(self):
         casos = (
             ("inicio {\n seja n = 0\n enquanto n < 5 {\n n = n + 1\n }\n}", 5),
