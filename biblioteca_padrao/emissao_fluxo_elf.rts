@@ -167,7 +167,7 @@ publico funcao emitir_expressao(codigo: bytes, fonte: emprestimo[bytes], unidade
                         resposta.erro = 6
                         retorne mova(resposta)
                     }
-                    se no.operador != 43 e no.operador != 45 e no.operador != 42 {
+                    se no.operador != 43 e no.operador != 45 e no.operador != 42 e no.operador != 47 e no.operador != 37 {
                         resposta.erro = 6
                         retorne mova(resposta)
                     }
@@ -195,6 +195,20 @@ publico funcao emitir_expressao(codigo: bytes, fonte: emprestimo[bytes], unidade
                         adicione_byte(codigo, 175)
                         adicione_byte(codigo, 193)
                     }
+                    se no.operador == 47 ou no.operador == 37 {
+                        // cqo; idiv rcx: divisao signed64 com truncamento para zero.
+                        // Divisao por zero/overflow inteiro provocam a falha nativa SIGFPE.
+                        adicione_byte(codigo, 153)
+                        adicione_byte(codigo, 72)
+                        adicione_byte(codigo, 247)
+                        adicione_byte(codigo, 249)
+                        se no.operador == 37 {
+                            // O resto da divisao signed64 fica em rdx.
+                            adicione_byte(codigo, 72)
+                            adicione_byte(codigo, 137)
+                            adicione_byte(codigo, 208)
+                        }
+                    }
                     adicione_byte(codigo, 80)
                     remova_ultimo(pilha)
                     remova_ultimo(pilha)
@@ -214,7 +228,7 @@ publico funcao emitir_expressao(codigo: bytes, fonte: emprestimo[bytes], unidade
 }
 
 // Retorna o jcc que salta quando a comparacao signed64 e falsa.
-privado funcao salto_falso(fonte: emprestimo[bytes], operador: lexico.UnidadeLexica) -> inteiro {
+publico funcao salto_falso(fonte: emprestimo[bytes], operador: lexico.UnidadeLexica) -> inteiro {
     seja primeiro = fonte[operador.inicio_byte]
     se operador.comprimento_byte == 1 {
         se primeiro == 60 {

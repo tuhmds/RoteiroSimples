@@ -157,7 +157,7 @@ class TestesEmissaoIntegradaELFRS(unittest.TestCase):
             "funcao f(a: inteiro) -> inteiro {\n retorne a\n}\n"
             "inicio {\n seja x = f(1)\n escreva(x)\n}",
             "funcao f(a: inteiro) -> inteiro {\n retorne a\n}\n"
-            "inicio {\n seja x = f(1)\n x = x / 2\n}",
+            "inicio {\n seja x = f(1)\n x = x ** 2\n}",
             "funcao f(a: inteiro) -> inteiro {\n retorne a\n}\n"
             "inicio {\n seja x = f(1)\n x = 1000000001\n}",
             "funcao f(a: inteiro) -> inteiro {\n seja b = a * 2\n retorne b\n}\n"

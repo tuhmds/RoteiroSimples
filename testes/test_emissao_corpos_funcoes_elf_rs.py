@@ -220,7 +220,7 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
             "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
             "inicio {\n seja r = f(nao_existe(2))\n}",
             "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
-            "inicio {\n seja r = f(f(2)) / 1\n}",
+            "inicio {\n seja r = f(f(2)) ** 1\n}",
             "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
             "inicio {\n seja r = f(f(2)) (3)\n}",
         )
@@ -273,13 +273,101 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
     def test_chamadas_com_operadores_invalidas(self):
         fontes = (
             "funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
-            "inicio {\n seja r = dobro(3) / 2\n}",
+            "inicio {\n seja r = dobro(3) ** 2\n}",
             "funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
             "inicio {\n seja r = dobro(3) +\n}",
             "funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
             "inicio {\n seja r = dobro(3) * desconhecida(2)\n}",
             "funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
             "inicio {\n seja r = dobro(3) + (2 * 4\n}",
+        )
+        for nivel in (0, 8):
+            for fonte in fontes:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertNotEqual(codigo, 0)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
+    def test_divisao_e_resto_signed64(self):
+        casos = (
+            ("funcao metade(n: inteiro) -> inteiro {\n retorne n / 2\n}\n"
+             "inicio {\n seja r = metade(15)\n}", 7),
+            ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "inicio {\n seja r = dobro(19) / 5\n}", 7),
+            ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "inicio {\n seja r = dobro(19) % 5\n}", 3),
+            ("funcao base(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = (base(-17) / 5) + 10\n}", 7),
+            ("funcao base(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = base(-17) % 5\n}", 254),
+            ("funcao base(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = base(17) % -5\n}", 2),
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n / 2\n}\n"
+             "inicio {\n seja r = f(9) + 1\n}", 5),
+            ("funcao soma(a: inteiro, b: inteiro) -> inteiro {\n retorne a + b\n}\n"
+             "inicio {\n seja r = (soma(8, 3) / 2) + (soma(3, 4) % 3)\n}", 6),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIn(bytes((72, 153, 72, 247, 249)), dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado % 256)
+
+    def test_predicados_com_chamadas_diretas_e_compostas(self):
+        casos = (
+            ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "funcao teste(n: inteiro) -> inteiro {\n"
+             " se dobro(n) > 10 {\n retorne 17\n }\n retorne 3\n}\n"
+             "inicio {\n seja r = teste(6)\n}", 17),
+            ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"
+             "funcao teste(n: inteiro) -> inteiro {\n"
+             " se dobro(n) > 10 {\n retorne 17\n }\n retorne 3\n}\n"
+             "inicio {\n seja r = teste(2)\n}", 3),
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+             "inicio {\n seja x = 3\n"
+             " enquanto f(x) < 8 {\n x = x + 1\n }\n"
+             " seja r = x\n}", 7),
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n - 1\n}\n"
+             "inicio {\n seja x = 0\n"
+             " enquanto x + 2 <= f(9) {\n x = x + 1\n }\n"
+             " seja r = x\n}", 7),
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+             "inicio {\n seja x = 0\n"
+             " se f(3) * 2 == (f(5) + 2) {\n x = 91\n }\n"
+             " seja r = x\n}", 91),
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n - 3\n}\n"
+             "funcao g(n: inteiro) -> inteiro {\n retorne f(n) * 2\n}\n"
+             "inicio {\n seja x = 4\n"
+             " se g(5) != f(5) {\n x = g(8) + 1\n }\n"
+             " seja r = x\n}", 11),
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+             "inicio {\n seja x = 3\n"
+             " se f(x) % 2 == 0 {\n x = x + 19\n }\n"
+             " seja r = x\n}", 22),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIn(bytes((72, 57, 200, 15)), dados[127:])
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
+    def test_predicados_com_chamadas_invalidas(self):
+        fontes = (
+            "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+            "inicio {\n seja x = 0\n se f(2) >= desconhecida(3) {\n x = 1\n }\n}",
+            "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+            "inicio {\n seja x = 0\n se f() > 0 {\n x = 1\n }\n}",
+            "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+            "inicio {\n seja x = 0\n se f(3) > f(2) > 0 {\n x = 1\n }\n}",
+            "funcao f(n: inteiro) -> inteiro {\n retorne n + 1\n}\n"
+            "inicio {\n seja x = 0\n se f(3) + > 1 {\n x = 1\n }\n}",
         )
         for nivel in (0, 8):
             for fonte in fontes:
@@ -340,9 +428,6 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
             "inicio { seja r = a() }",
             "funcao f(n: inteiro) -> inteiro {\n"
             " seja x = n\n retorne x + desconhecido\n}\n"
-            "inicio { seja r = f(3) }",
-            "funcao f(n: inteiro) -> inteiro {\n"
-            " seja x = n\n x = x / 2\n retorne x\n}\n"
             "inicio { seja r = f(3) }",
         )
         for nivel in (0, 8):

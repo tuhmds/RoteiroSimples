@@ -103,6 +103,23 @@ class TestesEmissaoFluxoELFRS(unittest.TestCase):
                     if status is not None:
                         self.assertEqual(status, esperado % 256)
 
+    def test_divisao_e_resto_no_fluxo_sem_chamadas(self):
+        casos = (
+            ("inicio {\n seja a = -17\n a = a / 5\n}", 253),
+            ("inicio {\n seja a = -17\n a = a % 5\n}", 254),
+            ("inicio {\n seja a = 17\n a = a % -5\n}", 2),
+            ("inicio {\n seja a = 8\n a = a / 2 * 3 + 1\n}", 13),
+            ("inicio {\n seja a = 17\n se a / 3 == 5 {\n a = a % 3\n }\n}", 2),
+        )
+        for nivel in (0, 8):
+            for fonte, esperado in casos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIn(bytes((72, 153, 72, 247, 249)), dados)
+                    if status is not None:
+                        self.assertEqual(status, esperado % 256)
+
     def test_lacos_e_aninhamentos(self):
         casos = (
             ("inicio {\n seja n = 0\n enquanto n < 5 {\n n = n + 1\n }\n}", 5),
@@ -161,7 +178,7 @@ class TestesEmissaoFluxoELFRS(unittest.TestCase):
             "inicio {\n seja a = 1\n se a + 1 < a + 2 > 0 {\n a = 2\n }\n}",
             "inicio {\n seja a = 1\n se a > 0 { a = 2 }\n senao { a = 3 }\n}",
             "inicio {\n seja a = 1\n escreva(a)\n}",
-            "inicio {\n seja a = 1\n a = a / 2\n}",
+            "inicio {\n seja a = 1\n a = a ** 2\n}",
             "inicio {\n seja a = 1000000001\n}",
             "inicio {\n seja a = 1\n enquanto a < 3 {\n a = a + 1\n}",
             "funcao n() -> inteiro { retorne 1 } inicio { seja a = 2 }",
