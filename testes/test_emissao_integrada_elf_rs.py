@@ -157,6 +157,8 @@ class TestesEmissaoIntegradaELFRS(unittest.TestCase):
              " se total > 0 {\n"
              " seja total: inteiro = 10\n"
              " total = total + 1\n }\n"
+             " seja contador: inteiro = 0\n"
+             " enquanto contador < 2 {\n contador = contador + 1\n }\n"
              " total = dobro(total)\n}", 2),
         )
         for nivel in (0, 8):
