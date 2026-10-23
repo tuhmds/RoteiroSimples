@@ -126,7 +126,7 @@ class TestesEmissaoFluxoELFRS(unittest.TestCase):
             ("inicio {\n seja a = 5\n seja b = a - a\n a = a % b\n}", 240),
             ("inicio {\n seja n = -8 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024\n"
              " n = n / -1\n}", 241),
-            ("inicio {\n seja n = -12\n n = n % -5\n}", 253),
+            ("inicio {\n seja n = -12\n n = n % -5\n}", 254),
             ("inicio {\n seja n = -12\n n = n / -5\n}", 2),
         )
         for nivel in (0, 8):
