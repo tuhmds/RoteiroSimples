@@ -357,6 +357,9 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
             ("funcao minimo() -> inteiro {\n"
              " retorne -8 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024\n}\n"
              "inicio {\n seja r = minimo() / -1\n}", 241, "RS: estouro na divisao\n"),
+            ("funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n" +
+             "\n" * 10 +
+             "inicio {\n            seja resultado = f(10) / 0\n}", 240, "RS: divisao por zero\n"),
             ("funcao retorna(n: inteiro) -> inteiro {\n retorne n\n}\n"
              "inicio {\n seja r = retorna(240)\n}", 240, ""),
             ("funcao retorna(n: inteiro) -> inteiro {\n retorne n\n}\n"
@@ -383,6 +386,15 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                             capture_output=True, text=True, encoding="utf-8", errors="replace",
                         )
                         self.assertEqual(processo.returncode, esperado)
+                        if diagnostico:
+                            local_operador = fonte.find(" / ")
+                            if local_operador < 0:
+                                local_operador = fonte.find(" % ")
+                            self.assertGreaterEqual(local_operador, 0)
+                            local_operador += 1
+                            linha = fonte.count("\n", 0, local_operador) + 1
+                            coluna = local_operador - fonte.rfind("\n", 0, local_operador)
+                            diagnostico = diagnostico.rstrip("\n") + f" (linha {linha}, coluna {coluna})\n"
                         self.assertEqual(processo.stderr, diagnostico)
                         self.assertEqual(processo.stdout, "")
 

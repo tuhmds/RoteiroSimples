@@ -71,15 +71,19 @@ na pilha e retorno em `rax`, com `leave; ret`.
   deste emissor. A divisao signed64 trunca para zero e o resto conserva
   o sinal do dividendo. Antes de `idiv`, o emissor faz verificacoes
   nativas de dois erros aritmeticos: divisor zero encerra o processo
-  com status **240** e escreve `RS: divisao por zero` no
-  **stderr**; dividendo minimo signed64 com divisor -1 encerra com
-  status **241** e escreve `RS: estouro na divisao` no stderr.
-  Mensagens sao emitidas pelo proprio ELF via `write(2,...)` do Linux,
-  sem runtime externo; portanto, um resultado valido de `inicio`
-  que coincida com 240/241 pode ser distinguido pela ausencia de stderr.
-  Ainda **nao** sao excecoes recuperaveis, nem trazem posicao exata de
-  origem. `inicio` continua expondo a ultima atribuicao como status
-  de saida (modulo 256).
+  com status **240** e escreve `RS: divisao por zero (linha L, coluna C)`
+  no **stderr**; dividendo minimo signed64 com divisor -1 encerra com
+  status **241** e escreve `RS: estouro na divisao (linha L, coluna C)`.
+  Os valores L e C sao calculados pela analise dos bytes do arquivo-fonte,
+  com indices iniciados em 1 e a coluna contando bytes (nao caracteres
+  Unicode). O apontamento refere-se ao operador `/` ou `%` da
+  expressao responsavel pela falha, mesmo dentro de uma funcao ou
+  de uma condicao. As mensagens sao emitidas pelo proprio ELF via
+  `write(2,...)` do Linux, sem runtime externo; assim, um resultado
+  valido de `inicio` que coincida com 240/241 nao produz stderr.
+  Ainda **nao** sao excecoes recuperaveis e nao exibem a linha de
+  codigo original. `inicio` continua expondo a ultima atribuicao
+  como status de saida (modulo 256).
 
 ## Arquitetura
 
@@ -103,7 +107,7 @@ falhar sem gerar arquivo. A CI geral e obrigatoria antes da integracao.
 
 ## Proximo passo
 
-Ampliar a identificacao de posicao de origem das falhas e criar
-erros aritmeticos recuperaveis em lugar de encerramento do processo,
-alem de fortalecer a verificacao semantica dos caminhos de retorno e
-tipos. Depois estudar recursao controlada, ABI publica e bootstrap.
+Fortalecer a verificacao semantica dos caminhos de retorno e tipos,
+detectar divisoes por zero demonstraveis na compilacao e evoluir o
+tratamento de falhas para erros recuperaveis em lugar de encerramento do
+processo. Estudar recursao controlada, ABI publica e bootstrap.

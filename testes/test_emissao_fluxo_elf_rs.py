@@ -146,6 +146,9 @@ class TestesEmissaoFluxoELFRS(unittest.TestCase):
             ("inicio {\n seja a = 0\n a = a % a\n}", 240, "RS: divisao por zero\n"),
             ("inicio {\n seja a = -8 * 1024 * 1024 * 1024 * 1024 * 1024 * 1024\n"
              " a = a / -1\n}", 241, "RS: estouro na divisao\n"),
+            ("inicio {\n"
+             "            seja valor = 4\n"
+             "            valor = valor / 0\n}", 240, "RS: divisao por zero\n"),
             ("inicio {\n seja a = 240\n}", 240, ""),
             ("inicio {\n seja a = 241\n}", 241, ""),
         )
@@ -168,6 +171,15 @@ class TestesEmissaoFluxoELFRS(unittest.TestCase):
                             capture_output=True, text=True, encoding="utf-8", errors="replace",
                         )
                         self.assertEqual(processo.returncode, status_esperado)
+                        if erro_esperado:
+                            local_operador = fonte.find(" / ")
+                            if local_operador < 0:
+                                local_operador = fonte.find(" % ")
+                            self.assertGreaterEqual(local_operador, 0)
+                            local_operador += 1
+                            linha = fonte.count("\n", 0, local_operador) + 1
+                            coluna = local_operador - fonte.rfind("\n", 0, local_operador)
+                            erro_esperado = erro_esperado.rstrip("\n") + f" (linha {linha}, coluna {coluna})\n"
                         self.assertEqual(processo.stderr, erro_esperado)
                         self.assertEqual(processo.stdout, "")
 

@@ -269,7 +269,9 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 adicione_byte(codigo, 193) // imul rax, rcx
             }
             se operador_corte == 47 ou operador_corte == 37 {
-                seja protegido = fluxo.emitir_divisao_protegida(mova(codigo), operador_corte == 37)
+                seja unidade_operador: lexico.UnidadeLexica = unidades[corte]
+                seja posicao_operador = fluxo.localizar(fonte, unidade_operador.inicio_byte)
+                seja protegido = fluxo.emitir_divisao_protegida(mova(codigo), operador_corte == 37, posicao_operador.linha, posicao_operador.coluna)
                 mova(codigo, protegido)
             }
             adicione_byte(codigo, 80) // push rax
