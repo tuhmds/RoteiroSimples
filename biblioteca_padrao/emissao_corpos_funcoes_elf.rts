@@ -1,6 +1,8 @@
 // Emissor unificado ELF64 para chamadas, declaracoes, atribuicoes,
 // condicionais e lacos, com plano intermediario de instrucoes escrito em RS.
 // Funcoes com parametros inteiros, locais, condicionais, lacos e retornos.
+// Erros de chamada: 12 nome inexistente, 13 quantidade de argumentos,
+// 14 chamada futura/recursiva, 15 delimitadores/argumentos malformados.
 // Chamadas permitidas apenas a funcoes declaradas anteriormente, sem recursao.
 // ABI interna privada; sem runtime System V externo.
 importe "lexico.rts" como lexico
@@ -377,7 +379,8 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
     }
     seja ultimo_token: lexico.UnidadeLexica = unidades[ultimo - 1]
     se nao fluxo.simbolo(fonte, ultimo_token, 41) {
-        resposta.codigo_erro = 6
+        resposta.codigo_erro = 15
+        resposta.unidade_erro = ultimo - 1
         retorne mova(resposta)
     }
     seja indice_funcao = -1
@@ -390,8 +393,16 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         }
         f = f + 1
     }
-    se indice_funcao < 0 ou (funcao_atual >= 0 e indice_funcao >= funcao_atual) {
-        resposta.codigo_erro = 6
+    // Validacao de assinatura antes de emitir instrucoes da chamada.
+    // A assinatura tipada do subconjunto so admite parametros e retorno inteiro.
+    se indice_funcao < 0 {
+        resposta.codigo_erro = 12
+        resposta.unidade_erro = primeiro
+        retorne mova(resposta)
+    }
+    se funcao_atual >= 0 e indice_funcao >= funcao_atual {
+        resposta.codigo_erro = 14
+        resposta.unidade_erro = primeiro
         retorne mova(resposta)
     }
     seja funcao_alvo: assinaturas.AssinaturaFuncao = assinadas.funcoes[indice_funcao]
@@ -410,13 +421,13 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         }
         // O fechamento da chamada externa precisa ser o ultimo token.
         se nivel_parenteses < 0 ou (nivel_parenteses == 0 e posicao != ultimo - 1) {
-            resposta.codigo_erro = 6
+            resposta.codigo_erro = 15
             resposta.unidade_erro = posicao
             retorne mova(resposta)
         }
         se fluxo.simbolo(fonte, token, 44) e nivel_parenteses == 1 {
             se posicao == inicio_argumento {
-                resposta.codigo_erro = 6
+                resposta.codigo_erro = 15
                 resposta.unidade_erro = posicao
                 retorne mova(resposta)
             }
@@ -427,7 +438,8 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         posicao = posicao + 1
     }
     se nivel_parenteses != 0 ou (inicio_argumento == ultimo - 1 e inicio_argumento != primeiro + 2) {
-        resposta.codigo_erro = 6
+        resposta.codigo_erro = 15
+        resposta.unidade_erro = ultimo - 1
         retorne mova(resposta)
     }
     se inicio_argumento < ultimo - 1 {
@@ -435,7 +447,8 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         adicione(finais, ultimo - 1)
     }
     se tamanho(inicios) != funcao_alvo.quantidade_parametros {
-        resposta.codigo_erro = 6
+        resposta.codigo_erro = 13
+        resposta.unidade_erro = primeiro
         retorne mova(resposta)
     }
     seja argumento = tamanho(inicios) - 1

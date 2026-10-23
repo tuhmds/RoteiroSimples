@@ -291,6 +291,79 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
                     self.assertIsNone(dados)
                     self.assertIsNone(status)
 
+    def test_diagnosticos_semanticos_de_chamadas(self):
+        casos = (
+            (12, "funcao base(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = inexistente(2)\n}"),
+            (12, "funcao base(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = base(inexistente(3))\n}"),
+            (12, "funcao base(n: inteiro) -> inteiro {\n retorne desconhecida(n)\n}\n"
+             "inicio {\n seja r = base(2)\n}"),
+            (13, "funcao soma(a: inteiro, b: inteiro) -> inteiro {\n retorne a + b\n}\n"
+             "inicio {\n seja r = soma(1)\n}"),
+            (13, "funcao soma(a: inteiro, b: inteiro) -> inteiro {\n retorne a + b\n}\n"
+             "inicio {\n seja r = soma(1, 2, 3)\n}"),
+            (13, "funcao sem() -> inteiro {\n retorne 7\n}\n"
+             "inicio {\n seja r = sem(1)\n}"),
+            (13, "funcao sem() -> inteiro {\n retorne 7\n}\n"
+             "inicio {\n seja r = sem(sem())\n}"),
+            (14, "funcao primeira() -> inteiro {\n retorne segunda()\n}\n"
+             "funcao segunda() -> inteiro {\n retorne 7\n}\n"
+             "inicio {\n seja r = primeira()\n}"),
+            (14, "funcao primeira(n: inteiro) -> inteiro {\n retorne primeira(n)\n}\n"
+             "inicio {\n seja r = primeira(7)\n}"),
+            (15, "funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = f(, 1)\n}"),
+            (15, "funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = f(1,)\n}"),
+            (15, "funcao f(n: inteiro) -> inteiro {\n retorne n\n}\n"
+             "inicio {\n seja r = f(1,,2)\n}"),
+        )
+        for nivel in (0, 8):
+            for esperado, fonte in casos:
+                with self.subTest(nivel=nivel, erro=esperado, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, esperado)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
+    def test_assinaturas_restringem_tipos_a_inteiro(self):
+        invalidos = (
+            "funcao f(n: real) -> inteiro {\n retorne n\n}\n"
+            "inicio {\n seja r = f(1)\n}",
+            "funcao f(n: inteiro) -> real {\n retorne n\n}\n"
+            "inicio {\n seja r = f(1)\n}",
+            "funcao f(n: texto) -> inteiro {\n retorne 1\n}\n"
+            "inicio {\n seja r = f(1)\n}",
+        )
+        for nivel in (0, 8):
+            for fonte in invalidos:
+                with self.subTest(nivel=nivel, fonte=fonte):
+                    codigo, dados, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 2)
+                    self.assertIsNone(dados)
+                    self.assertIsNone(status)
+
+    def test_indice_da_chamada_com_quantidade_incorreta(self):
+        fonte = ("funcao soma(a: inteiro, b: inteiro) -> inteiro {\n"
+                 " retorne a + b\n}\n"
+                 "inicio {\n seja r = soma(1)\n}")
+        for nivel in (0, 8):
+            with self.subTest(nivel=nivel):
+                with tempfile.TemporaryDirectory(prefix="rs_chamada_assinatura_") as pasta:
+                    raiz = Path(pasta)
+                    (raiz / "codigo_fonte.rts").write_text(fonte, encoding="utf-8")
+                    resultado = subprocess.run(
+                        [str(self.ferramentas[nivel])], cwd=raiz, timeout=30,
+                        capture_output=True, text=True, encoding="utf-8", errors="replace",
+                    )
+                    self.assertEqual(resultado.returncode, 0, resultado.stderr)
+                    linhas = [int(v) for v in resultado.stdout.splitlines()]
+                    self.assertEqual(len(linhas), 2)
+                    self.assertEqual(linhas[0], 13)
+                    self.assertGreater(linhas[1], 0)
+                    self.assertFalse((raiz / "resultado_corpos_elf").exists())
+
     def test_chamadas_aninhadas_nos_argumentos(self):
         casos = (
             ("funcao dobro(n: inteiro) -> inteiro {\n retorne n * 2\n}\n"

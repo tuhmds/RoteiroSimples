@@ -59,6 +59,19 @@ na pilha e retorno em `rax`, com `leave; ret`.
 - Chamadas diretas permitidas no lado direito completo de declaracao,
   atribuicao e `retorne`, inclusive chamadas aninhadas como argumento
   integral: `retorne soma(dobro(n), soma(2, 3))`.
+- **Validacao semantica de chamadas:** o emissor consulta a assinatura
+  da funcao antes de gerar `call rel32` e diferencia quatro erros:
+  **12** (nome de funcao desconhecido), **13** (quantidade de argumentos
+  diferente da declaracao, incluindo funcoes sem parametros),
+  **14** (chamada recursiva ou a funcao declarada mais adiante) e
+  **15** (lista de argumentos malformada, como virgulas vazias).
+  Os erros incluem o indice do token da chamada ou delimitador e
+  nenhum arquivo ELF e gerado. A validacao percorre chamadas aninhadas.
+- **Tipos:** a analise das assinaturas exige `inteiro` no retorno
+  e em todos os parametros (erro **2** para outros tipos). As
+  expressoes de argumentos usam a validacao do emissor de inteiros;
+  tipos diferentes ainda nao sao suportados pelo subconjunto.
+  Portanto, isto **nao** constitui inferencia geral de tipos.
 - Cada argumento admite uma expressao aritmetica, uma chamada ou
   combinacoes como `soma(dobro(n) + 1, 4)` e `dobro(n) * 2 - 1`.
   O emissor preserva precedencia entre `+`, `-`, `*`, `/` e `%`, parenteses
@@ -125,7 +138,8 @@ falhar sem gerar arquivo. A CI geral e obrigatoria antes da integracao.
 
 ## Proximo passo
 
-Continuar a analise semantica de tipos e chamadas, consolidar os
-caminhos de retorno com futuras estruturas `senao` e ampliar a analise
-segura de constantes. A longo prazo, evoluir as falhas dinamicas para
-erros recuperaveis, estudar ABI e concluir o bootstrap da RS.
+Ampliar a analise de tipos alem de `inteiro` com representacao
+tipada para argumentos e retorno, e posteriormente permitir chamadas
+a funcoes declaradas mais adiante com analise de ciclos real.
+Consolidar o fluxo com `senao`, evoluir falhas dinamicas para
+erros recuperaveis e reduzir a dependencia do bootstrap Python.
