@@ -101,37 +101,37 @@ class TestesEmprestimoBytesELF(unittest.TestCase):
     def test_emprestimo_fixo_e_reemprestimo_sem_copia(self):
         casos = (
             (
-                "funcao ler(d: emprestimo[bytes]) -> inteiro {\\n"
-                " retorne d[0] + d[2] + tamanho(d)\\n}\\n"
-                'inicio { seja d: bytes = "ABC"\\n seja r = ler(d) }', 135,
+                "funcao ler(d: emprestimo[bytes]) -> inteiro {\n"
+                " retorne d[0] + d[2] + tamanho(d)\n}\n"
+                'inicio { seja d: bytes = "ABC"\n seja r = ler(d) }', 135,
             ),
             (
-                "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne d[1] }\\n"
-                "funcao repassar(d: emprestimo[bytes]) -> inteiro { retorne ler(d) }\\n"
-                'inicio { seja d: bytes = "XYZ"\\n d[1] = 19\\n'
+                "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne d[1] }\n"
+                "funcao repassar(d: emprestimo[bytes]) -> inteiro { retorne ler(d) }\n"
+                'inicio { seja d: bytes = "XYZ"\n d[1] = 19\n'
                 " seja r = repassar(d) }", 19,
             ),
             (
-                "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne tamanho(d) }\\n"
-                'inicio { seja d: bytes = ""\\n seja r = ler(d) }', 0,
+                "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne tamanho(d) }\n"
+                'inicio { seja d: bytes = ""\n seja r = ler(d) }', 0,
             ),
             (
-                "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne d[1] }\\n"
-                'inicio { seja d: bytes = "é"\\n seja r = ler(d) }', 169,
+                "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne d[1] }\n"
+                'inicio { seja d: bytes = "é"\n seja r = ler(d) }', 169,
             ),
             (
-                "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne d[0] }\\n"
-                'inicio { seja d: bytes = "A"\\n seja r = ler(d)\\n'
-                " d[0] = 42\\n r = r + d[0] }", 107,
+                "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne d[0] }\n"
+                'inicio { seja d: bytes = "A"\n seja r = ler(d)\n'
+                " d[0] = 42\n r = r + d[0] }", 107,
             ),
             (
-                "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne d[0] }\\n"
-                'inicio { seja a: bytes = "A"\\n seja v = 3\\n'
-                ' seja b: bytes = "Z"\\n seja r = ler(a) + ler(b) + v }', 158,
+                "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne d[0] }\n"
+                'inicio { seja a: bytes = "A"\n seja v = 3\n'
+                ' seja b: bytes = "Z"\n seja r = ler(a) + ler(b) + v }', 158,
             ),
             (
-                "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne d[3] }\\n"
-                'inicio { seja d: bytes = "ABC"\\n seja r = ler(d) }', 23,
+                "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne d[3] }\n"
+                'inicio { seja d: bytes = "ABC"\n seja r = ler(d) }', 23,
             ),
         )
         for nivel in (0, 8):
@@ -145,10 +145,10 @@ class TestesEmprestimoBytesELF(unittest.TestCase):
 
     def test_emprestimo_fixo_em_escopo_interno(self):
         fonte = (
-            "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne d[0] }\\n"
-            "inicio { seja r = 0\\n"
-            ' se 1 == 1 { seja d: bytes = "B"\\n r = ler(d) }\\n'
-            " r = r\\n}"
+            "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne d[0] }\n"
+            "inicio { seja r = 0\n"
+            ' se 1 == 1 { seja d: bytes = "B"\n r = ler(d) }\n'
+            " r = r\n}"
         )
         for nivel in (0, 8):
             with self.subTest(nivel=nivel):
@@ -160,12 +160,12 @@ class TestesEmprestimoBytesELF(unittest.TestCase):
 
     def test_fixo_nao_pode_ser_devolvido_ou_liberado_pelo_emprestado(self):
         casos = (
-            "funcao ler(d: emprestimo[bytes]) -> inteiro { d[0] = 5\\n retorne 1 }\\n"
-            'inicio { seja d: bytes = "A"\\n seja r = ler(d) }',
-            "funcao ler(d: emprestimo[bytes]) -> inteiro { liberar_bytes(d)\\n retorne 1 }\\n"
-            'inicio { seja d: bytes = "A"\\n seja r = ler(d) }',
-            "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne d }\\n"
-            'inicio { seja d: bytes = "A"\\n seja r = ler(d) }',
+            "funcao ler(d: emprestimo[bytes]) -> inteiro { d[0] = 5\n retorne 1 }\n"
+            'inicio { seja d: bytes = "A"\n seja r = ler(d) }',
+            "funcao ler(d: emprestimo[bytes]) -> inteiro { liberar_bytes(d)\n retorne 1 }\n"
+            'inicio { seja d: bytes = "A"\n seja r = ler(d) }',
+            "funcao ler(d: emprestimo[bytes]) -> inteiro { retorne d }\n"
+            'inicio { seja d: bytes = "A"\n seja r = ler(d) }',
         )
         for nivel in (0, 8):
             for fonte in casos:
