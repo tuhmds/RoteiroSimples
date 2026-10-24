@@ -109,6 +109,31 @@ privado funcao parametro_lista_emprestada(fonte: emprestimo[bytes], unidades: em
     retorne fluxo.igual(fonte, t0, empreste(palavra)) e fluxo.simbolo(fonte, t1, 91) e fluxo.igual(fonte, t2, empreste(tipo_lista)) e fluxo.simbolo(fonte, t3, 91) e fluxo.igual(fonte, t4, empreste(tipo_inteiro)) e fluxo.simbolo(fonte, t5, 93) e fluxo.simbolo(fonte, t6, 93)
 }
 
+// Reconhece emprestimo[lista[NomeRegistro]] com tipo declarado.
+// Retorna indice do esquema ou -1. Nao aceita tipos temporarios.
+privado funcao tipo_lista_registro_emprestada(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], parametro: assinaturas.ParametroFuncao) -> inteiro {
+    se parametro.tipo_fim != parametro.tipo_inicio + 7 {
+        retorne -1
+    }
+    seja palavra: texto = "emprestimo"
+    seja tipo_lista: texto = "lista"
+    seja t0: lexico.UnidadeLexica = unidades[parametro.tipo_inicio]
+    seja t1: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 1]
+    seja t2: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 2]
+    seja t3: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 3]
+    seja t4: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 4]
+    seja t5: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 5]
+    seja t6: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 6]
+    se nao fluxo.igual(fonte, t0, empreste(palavra)) ou nao fluxo.simbolo(fonte, t1, 91) ou nao fluxo.igual(fonte, t2, empreste(tipo_lista)) {
+        retorne -1
+    }
+    se nao fluxo.simbolo(fonte, t3, 91) ou t4.classe != 1 ou nao fluxo.simbolo(fonte, t5, 93) ou nao fluxo.simbolo(fonte, t6, 93) {
+        retorne -1
+    }
+    seja descricoes = esquemas.analisar(fonte, unidades)
+    retorne esquemas.buscar_tipo(fonte, unidades, empreste(descricoes), t4)
+}
+
 // Verifica a assinatura e o corpo inteiro: retorne expressao.
 // Diagnostico: 2 assinatura, 3 corpo, 4 duplicidade.
 privado funcao validar_funcoes(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], grupo: emprestimo[assinaturas.Assinaturas]) -> inteiro {
@@ -153,7 +178,7 @@ privado funcao validar_funcoes(fonte: emprestimo[bytes], unidades: emprestimo[li
         j = 0
         enquanto j < atual.quantidade_parametros {
             seja p: assinaturas.ParametroFuncao = grupo.parametros[atual.primeiro_parametro + j]
-            seja parametro_valido = parametro_bytes_emprestado(fonte, unidades, p) ou parametro_lista_emprestada(fonte, unidades, p)
+            seja parametro_valido = parametro_bytes_emprestado(fonte, unidades, p) ou parametro_lista_emprestada(fonte, unidades, p) ou tipo_lista_registro_emprestada(fonte, unidades, p) >= 0
             se p.tipo_fim == p.tipo_inicio + 1 {
                 seja tipo_parametro: lexico.UnidadeLexica = unidades[p.tipo_inicio]
                 se fluxo.igual(fonte, tipo_parametro, empreste(retorno)) {
@@ -256,6 +281,9 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 }
                 seja descricoes_lista = esquemas.analisar(fonte, unidades)
                 seja tipo_lista = tipos[lista_local] - 20
+                se tipos[lista_local] >= 30 {
+                    tipo_lista = tipos[lista_local] - 30
+                }
                 seja campo_lista = esquemas.buscar_campo(fonte, unidades, empreste(descricoes_lista), tipo_lista, nome_final)
                 se campo_lista < 0 {
                     resposta.codigo_erro = 5
@@ -275,7 +303,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                     adicione(resposta.ligacoes, ligacao)
                     indice_ligacao = indice_ligacao + 1
                 }
-                seja acesso = emisreglistas.emitir_leitura(mova(codigo), lista_local, campo_lista, layout_lista.quantidade_campos)
+                seja acesso = emisreglistas.emitir_leitura(mova(codigo), lista_local, campo_lista, layout_lista.quantidade_campos, tipos[lista_local] >= 30)
                 mova(resposta.codigo, acesso)
                 retorne mova(resposta)
             }
@@ -318,7 +346,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 seja indice_buffer = fluxo.resolver(fonte, nomes, nome_buffer)
                 se indice_buffer >= 0 {
                     se tipos[indice_buffer] == 5 ou tipos[indice_buffer] == 6 ou tipos[indice_buffer] >= 20 {
-                        seja trecho_lista = emislistas.emitir_tamanho(mova(codigo), indice_buffer, tipos[indice_buffer] == 6)
+                        seja trecho_lista = emislistas.emitir_tamanho(mova(codigo), indice_buffer, tipos[indice_buffer] == 6 ou tipos[indice_buffer] >= 30)
                         mova(resposta.codigo, trecho_lista)
                         retorne mova(resposta)
                     }
@@ -689,7 +717,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
     seja argumento = tamanho(inicios) - 1
     enquanto argumento >= 0 {
         seja p_alvo: assinaturas.ParametroFuncao = assinadas.parametros[funcao_alvo.primeiro_parametro + argumento]
-        se parametro_bytes_emprestado(fonte, unidades, p_alvo) ou parametro_lista_emprestada(fonte, unidades, p_alvo) {
+        se parametro_bytes_emprestado(fonte, unidades, p_alvo) ou parametro_lista_emprestada(fonte, unidades, p_alvo) ou tipo_lista_registro_emprestada(fonte, unidades, p_alvo) >= 0 {
             // O argumento deve ser exclusivamente um identificador
             // bytes fixo, dono dinamico ou emprestimo. Sem temporarios.
             resposta.unidade_erro = inicios[argumento]
@@ -704,21 +732,34 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 retorne mova(resposta)
             }
             seja modo_buffer = tipos[indice_buffer]
-            se parametro_lista_emprestada(fonte, unidades, p_alvo) {
-                // O proprietario lista (tipo 5) tem descritor mmap.
-                // O emprestimo lista (tipo 6) encaminha o mesmo descritor.
-                se modo_buffer != 5 e modo_buffer != 6 {
+            seja tipo_exigido = tipo_lista_registro_emprestada(fonte, unidades, p_alvo)
+            se tipo_exigido >= 0 {
+                // O registro e copiado apenas em adicione. O emprestimo
+                // transfere um ponteiro para o descritor do proprietario.
+                se modo_buffer != 20 + tipo_exigido e modo_buffer != 30 + tipo_exigido {
                     resposta.codigo_erro = 18
                     retorne mova(resposta)
                 }
                 modo_buffer = 3
-                se tipos[indice_buffer] == 6 {
+                se tipos[indice_buffer] == 30 + tipo_exigido {
                     modo_buffer = 4
                 }
             } senao {
-                se modo_buffer != 2 e modo_buffer != 3 e modo_buffer != 4 {
-                    resposta.codigo_erro = 18
-                    retorne mova(resposta)
+                se parametro_lista_emprestada(fonte, unidades, p_alvo) {
+                    // Lista inteira: propriedade 5, referencia 6.
+                    se modo_buffer != 5 e modo_buffer != 6 {
+                        resposta.codigo_erro = 18
+                        retorne mova(resposta)
+                    }
+                    modo_buffer = 3
+                    se tipos[indice_buffer] == 6 {
+                        modo_buffer = 4
+                    }
+                } senao {
+                    se modo_buffer != 2 e modo_buffer != 3 e modo_buffer != 4 {
+                        resposta.codigo_erro = 18
+                        retorne mova(resposta)
+                    }
                 }
             }
             seja argumento_buffer = emisbytes.emitir_argumento_emprestado(mova(codigo), indice_buffer, modo_buffer)
@@ -853,7 +894,7 @@ privado funcao emitir_predicado(codigo: bytes, fonte: emprestimo[bytes], unidade
 privado funcao emitir_limpeza_escopo(codigo: bytes, nomes: emprestimo[lista[lexico.UnidadeLexica]], tipos: emprestimo[lista[inteiro]], marcador: inteiro) -> bytes {
     seja i = tamanho(nomes) - 1
     enquanto i >= marcador {
-        se tipos[i] == 3 ou tipos[i] == 5 ou tipos[i] >= 20 {
+        se tipos[i] == 3 ou tipos[i] == 5 ou (tipos[i] >= 20 e tipos[i] < 30) {
             seja nome: lexico.UnidadeLexica = nomes[i]
             se nome.classe != 0 {
                 seja liberado = emisbytes.emitir_liberacao_automatica(mova(codigo), i)
@@ -887,6 +928,10 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             }
             se parametro_lista_emprestada(fonte, unidades, parametro_atual) {
                 tipo_parametro = 6
+            }
+            seja tipo_lista_registro = tipo_lista_registro_emprestada(fonte, unidades, parametro_atual)
+            se tipo_lista_registro >= 0 {
+                tipo_parametro = 30 + tipo_lista_registro
             }
         }
         adicione(tipos, tipo_parametro)
@@ -1076,7 +1121,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 resposta.codigo_erro = 5
                 retorne mova(resposta)
             }
-            se tipos[indice_lista] >= 20 {
+            se tipos[indice_lista] >= 20 e tipos[indice_lista] < 30 {
                 // adicione(lista[Registro], registro) copia todos os campos.
                 se instrucao.valor_fim != instrucao.valor_inicio + 1 {
                     resposta.codigo_erro = 18
@@ -1181,7 +1226,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         seja ultimo = instrucao.valor_fim
         se instrucao.categoria == 15 {
             // lista[indice].campo = valor: indice e valor ja sao inteiros.
-            se tipos[indice_local] < 20 {
+            se tipos[indice_local] < 20 ou tipos[indice_local] >= 30 {
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
             }
@@ -1226,7 +1271,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         }
         se instrucao.categoria == 14 {
             // Apenas um campo inteiro de um registro proprietario local.
-            se tipos[indice_local] < 7 {
+            se tipos[indice_local] < 7 ou tipos[indice_local] >= 20 {
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
             }
