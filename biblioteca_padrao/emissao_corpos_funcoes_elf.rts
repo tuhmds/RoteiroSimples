@@ -727,12 +727,12 @@ privado funcao emitir_predicado(codigo: bytes, fonte: emprestimo[bytes], unidade
     retorne mova(resposta)
 }
 
-// Desalocar somente os donos dinamicos visiveis a partir do marcador.
+// Desalocar donos bytes e listas dinamicas visiveis a partir do marcador.
 // Os nomes desativados de ramos anteriores nao podem ser desalocados.
 privado funcao emitir_limpeza_escopo(codigo: bytes, nomes: emprestimo[lista[lexico.UnidadeLexica]], tipos: emprestimo[lista[inteiro]], marcador: inteiro) -> bytes {
     seja i = tamanho(nomes) - 1
     enquanto i >= marcador {
-        se tipos[i] == 3 {
+        se tipos[i] == 3 ou tipos[i] == 5 {
             seja nome: lexico.UnidadeLexica = nomes[i]
             se nome.classe != 0 {
                 seja liberado = emisbytes.emitir_liberacao_automatica(mova(codigo), i)
@@ -1077,14 +1077,14 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             }
         }
         se instrucao.categoria == 1 e instrucao.tipo_local == 5 {
-            // Uma lista local usa tamanho + oito elementos signed64.
+            // Lista dinamica: tres slots (ponteiro, comprimento e capacidade).
             seja lista_vazia = emislistas.inicializar(mova(codigo), indice_local)
             mova(codigo, lista_vazia)
             seja nome_lista: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
             adicione(nomes, nome_lista)
             adicione(tipos, 5)
             seja reservado_lista = 0
-            enquanto reservado_lista < 8 {
+            enquanto reservado_lista < 2 {
                 seja oculto_lista: lexico.UnidadeLexica
                 oculto_lista.classe = 0
                 adicione(nomes, oculto_lista)
