@@ -19,14 +19,30 @@ privado funcao deslocamento(codigo: bytes, distancia: inteiro) -> bytes {
 // demais bytes UTF-8 literalmente. Escapes Unicode \uXXXX exigem uma
 // etapa posterior e continuam recusados (diagnostico 17).
 privado funcao valor_escape(valor: inteiro) -> inteiro {
-    se valor == 34 { retorne 34 }  // aspas
-    se valor == 92 { retorne 92 }  // barra invertida
-    se valor == 47 { retorne 47 }  // barra comum
-    se valor == 98 { retorne 8 }   // \b
-    se valor == 102 { retorne 12 } // \f
-    se valor == 110 { retorne 10 } // \n
-    se valor == 114 { retorne 13 } // \r
-    se valor == 116 { retorne 9 }  // \t
+    se valor == 34 {
+        retorne 34
+    }
+    se valor == 92 {
+        retorne 92
+    }
+    se valor == 47 {
+        retorne 47
+    }
+    se valor == 98 {
+        retorne 8
+    }
+    se valor == 102 {
+        retorne 12
+    }
+    se valor == 110 {
+        retorne 10
+    }
+    se valor == 114 {
+        retorne 13
+    }
+    se valor == 116 {
+        retorne 9
+    }
     retorne -1
 }
 
