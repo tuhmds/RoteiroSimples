@@ -962,11 +962,11 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 retorne mova(resposta)
             }
             mova(codigo, elemento_lista.codigo)
-            seja e = 0
-            enquanto e < tamanho(elemento_lista.ligacoes) {
-                seja destino_elemento: Ligacao = elemento_lista.ligacoes[e]
+            seja indice_ligacao_lista = 0
+            enquanto indice_ligacao_lista < tamanho(elemento_lista.ligacoes) {
+                seja destino_elemento: Ligacao = elemento_lista.ligacoes[indice_ligacao_lista]
                 adicione(ligacoes, destino_elemento)
-                e = e + 1
+                indice_ligacao_lista = indice_ligacao_lista + 1
             }
             seja inserido = emislistas.emitir_adicionar(mova(codigo), indice_lista)
             mova(codigo, inserido)
