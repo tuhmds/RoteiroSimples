@@ -1,5 +1,5 @@
 // Emissao experimental de buffers locais bytes imutaveis no ELF64.
-// Formato fixo por variavel: 1 qword de comprimento + 32 bytes de dados.
+// Formato fixo: comprimento, 32 bytes de dados e descritor de emprestimo.
 // Nao aceita referencias, atribuicoes ao buffer nem retorno tipo bytes.
 importe "lexico.rts" como lexico
 importe "emissao_elf_minima.rts" como elf
@@ -57,6 +57,32 @@ publico funcao inicializar(codigo: bytes, fonte: emprestimo[bytes], literal: lex
     mova(codigo, gravado)
     seja tamanho_gravado = elf.anexar_inteiro(mova(codigo), quantidade, 4)
     mova(codigo, tamanho_gravado)
+    // Construir descritor emprestavel em dois slots exclusivos, apos
+    // os 32 bytes locais. O ponteiro e para a pilha do proprietario:
+    // slot (indice + 6) = endereco dos dados (byte zero);
+    // slot (indice + 7) = comprimento imutavel do buffer fixo.
+    // O callee ve o mesmo contrato de [referencia] e [referencia-8]
+    // utilizado por emprestimos de buffers dinamicos.
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 141)
+    adicione_byte(codigo, 133) // lea rax, [rbp - inicio_dos_dados]
+    seja dados = deslocamento(mova(codigo), (indice_local + 5) * 8)
+    mova(codigo, dados)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 133) // mov [rbp - slot_ponteiro], rax
+    seja ponteiro = deslocamento(mova(codigo), (indice_local + 6) * 8)
+    mova(codigo, ponteiro)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 133) // mov rax, [rbp - slot_comprimento_original]
+    seja comprimento_original = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    mova(codigo, comprimento_original)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 133) // mov [rbp - slot_comprimento_emprestado], rax
+    seja comprimento_emprestado = deslocamento(mova(codigo), (indice_local + 7) * 8)
+    mova(codigo, comprimento_emprestado)
     mova(resposta.codigo, codigo)
     retorne mova(resposta)
 }
@@ -413,21 +439,26 @@ publico funcao emitir_liberacao_automatica(codigo: bytes, indice_local: inteiro)
 }
 
 // Emite argumento emprestado sem copiar o buffer nem o seu conteudo.
-// Apenas donos dinamicos (tipo 3) e emprestimos (tipo 4) podem ser
-// passados nesta etapa. O destino nao recebe munmap/ownership.
+// Tipo 2: descritor local reservado junto aos dados (sem munmap).
+// Tipo 3: ponteiro do descritor mmap proprietario.
+// Tipo 4: referencia emprestada recebida (reemprestimo).
+// A funcao chamada nunca adquire a propriedade.
 publico funcao emitir_argumento_emprestado(codigo: bytes, indice_local: inteiro, tipo_local: inteiro) -> bytes {
-    se tipo_local == 3 {
-        // lea rax, [rbp - slot_ponteiro]
+    seja slot = indice_local + 1
+    se tipo_local == 2 {
+        // lea rax, [rbp - slot_ponteiro_local]
+        slot = indice_local + 6
+    }
+    se tipo_local == 2 ou tipo_local == 3 {
         adicione_byte(codigo, 72)
         adicione_byte(codigo, 141)
-        adicione_byte(codigo, 133)
+        adicione_byte(codigo, 133) // lea rax, [rbp - slot]
     } senao {
-        // mov rax, [rbp - slot_ref]
         adicione_byte(codigo, 72)
         adicione_byte(codigo, 139)
-        adicione_byte(codigo, 133)
+        adicione_byte(codigo, 133) // mov rax, [rbp - slot_ref]
     }
-    seja posicao = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    seja posicao = deslocamento(mova(codigo), slot * 8)
     mova(codigo, posicao)
     adicione_byte(codigo, 80) // push rax para a ABI interna
     retorne mova(codigo)
