@@ -1,0 +1,139 @@
+// Esquemas minimos de registros de inteiros no emissor ELF64 escrito em RS.
+// Declaracoes no inicio da unidade: tipo Nome { campo: inteiro ... }
+// Nao aceita registros aninhados nem campos proprietarios nesta etapa.
+importe "lexico.rts" como lexico
+importe "emissao_fluxo_elf.rts" como fluxo
+
+publico tipo CampoRegistro {
+    unidade_nome: inteiro
+}
+
+publico tipo TipoRegistro {
+    unidade_nome: inteiro
+    primeiro_campo: inteiro
+    quantidade_campos: inteiro
+}
+
+publico tipo EsquemasRegistros {
+    tipos: lista[TipoRegistro]
+    campos: lista[CampoRegistro]
+    primeiro_corpo: inteiro
+    codigo_erro: inteiro
+    unidade_erro: inteiro
+}
+
+publico funcao buscar_tipo(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], descricoes: emprestimo[EsquemasRegistros], nome: lexico.UnidadeLexica) -> inteiro {
+    seja indice = 0
+    enquanto indice < tamanho(descricoes.tipos) {
+        seja registro: TipoRegistro = descricoes.tipos[indice]
+        seja declarado: lexico.UnidadeLexica = unidades[registro.unidade_nome]
+        se fluxo.mesmo_nome(fonte, declarado, nome) {
+            retorne indice
+        }
+        indice = indice + 1
+    }
+    retorne -1
+}
+
+publico funcao buscar_campo(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], descricoes: emprestimo[EsquemasRegistros], tipo_indice: inteiro, nome: lexico.UnidadeLexica) -> inteiro {
+    se tipo_indice < 0 ou tipo_indice >= tamanho(descricoes.tipos) {
+        retorne -1
+    }
+    seja registro: TipoRegistro = descricoes.tipos[tipo_indice]
+    seja indice = 0
+    enquanto indice < registro.quantidade_campos {
+        seja campo: CampoRegistro = descricoes.campos[registro.primeiro_campo + indice]
+        seja declarado: lexico.UnidadeLexica = unidades[campo.unidade_nome]
+        se fluxo.mesmo_nome(fonte, declarado, nome) {
+            retorne indice
+        }
+        indice = indice + 1
+    }
+    retorne -1
+}
+
+// Limite: 8 tipos; 1 a 8 campos inteiros cada, 64 campos por unidade.
+// As definicoes devem preceder todas as funcoes e o bloco inicio.
+publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]]) -> EsquemasRegistros {
+    seja resposta: EsquemasRegistros
+    seja palavra_tipo: texto = "tipo"
+    seja palavra_inteiro: texto = "inteiro"
+    seja cursor = 0
+    enquanto cursor < tamanho(unidades) {
+        seja atual: lexico.UnidadeLexica = unidades[cursor]
+        se nao fluxo.igual(fonte, atual, empreste(palavra_tipo)) {
+            pare
+        }
+        se tamanho(resposta.tipos) >= 8 ou cursor + 4 >= tamanho(unidades) {
+            resposta.codigo_erro = 2
+            resposta.unidade_erro = cursor
+            retorne mova(resposta)
+        }
+        seja nome: lexico.UnidadeLexica = unidades[cursor + 1]
+        seja abertura: lexico.UnidadeLexica = unidades[cursor + 2]
+        se nome.classe != 1 ou nao fluxo.simbolo(fonte, abertura, 123) {
+            resposta.codigo_erro = 2
+            resposta.unidade_erro = cursor + 1
+            retorne mova(resposta)
+        }
+        se buscar_tipo(fonte, unidades, empreste(resposta), nome) >= 0 {
+            resposta.codigo_erro = 4
+            resposta.unidade_erro = cursor + 1
+            retorne mova(resposta)
+        }
+        seja registro: TipoRegistro
+        registro.unidade_nome = cursor + 1
+        registro.primeiro_campo = tamanho(resposta.campos)
+        cursor = cursor + 3
+        enquanto cursor < tamanho(unidades) {
+            seja possivel_fim: lexico.UnidadeLexica = unidades[cursor]
+            se fluxo.simbolo(fonte, possivel_fim, 125) {
+                pare
+            }
+            se registro.quantidade_campos >= 8 ou cursor + 2 >= tamanho(unidades) {
+                resposta.codigo_erro = 2
+                resposta.unidade_erro = cursor
+                retorne mova(resposta)
+            }
+            seja nome_campo: lexico.UnidadeLexica = unidades[cursor]
+            seja dois_pontos: lexico.UnidadeLexica = unidades[cursor + 1]
+            seja tipo_campo: lexico.UnidadeLexica = unidades[cursor + 2]
+            se nome_campo.classe != 1 ou nao fluxo.simbolo(fonte, dois_pontos, 58) ou nao fluxo.igual(fonte, tipo_campo, empreste(palavra_inteiro)) {
+                resposta.codigo_erro = 2
+                resposta.unidade_erro = cursor
+                retorne mova(resposta)
+            }
+            seja anterior = 0
+            enquanto anterior < registro.quantidade_campos {
+                seja campo_antigo: CampoRegistro = resposta.campos[registro.primeiro_campo + anterior]
+                seja anterior_nome: lexico.UnidadeLexica = unidades[campo_antigo.unidade_nome]
+                se fluxo.mesmo_nome(fonte, anterior_nome, nome_campo) {
+                    resposta.codigo_erro = 4
+                    resposta.unidade_erro = cursor
+                    retorne mova(resposta)
+                }
+                anterior = anterior + 1
+            }
+            seja campo: CampoRegistro
+            campo.unidade_nome = cursor
+            adicione(resposta.campos, campo)
+            registro.quantidade_campos = registro.quantidade_campos + 1
+            cursor = cursor + 3
+            se cursor < tamanho(unidades) {
+                seja separador: lexico.UnidadeLexica = unidades[cursor]
+                se fluxo.simbolo(fonte, separador, 59) {
+                    cursor = cursor + 1
+                }
+            }
+        }
+        se cursor >= tamanho(unidades) ou registro.quantidade_campos == 0 {
+            resposta.codigo_erro = 2
+            resposta.unidade_erro = cursor
+            retorne mova(resposta)
+        }
+        adicione(resposta.tipos, registro)
+        cursor = cursor + 1
+    }
+    resposta.primeiro_corpo = cursor
+    retorne mova(resposta)
+}
