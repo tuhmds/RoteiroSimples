@@ -804,6 +804,10 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 retorne mova(resposta)
             }
             seja nome_copia: lexico.UnidadeLexica = unidades[inicios[argumento]]
+            se nome_copia.classe != 1 {
+                resposta.codigo_erro = 18
+                retorne mova(resposta)
+            }
             seja indice_copia_local = fluxo.resolver(fonte, nomes, nome_copia)
             se indice_copia_local < 0 {
                 resposta.codigo_erro = 5
