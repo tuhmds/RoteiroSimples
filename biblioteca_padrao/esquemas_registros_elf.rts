@@ -60,11 +60,11 @@ publico funcao buscar_campo(fonte: emprestimo[bytes], unidades: emprestimo[lista
 
 // Resolve um caminho nome.subcampo[.outro] em slots do registro raiz.
 // inicio/fim abrangem os nomes e os pontos; sem incluir a variavel raiz.
-publico funcao buscar_caminho(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], descricoes: emprestimo[EsquemasRegistros], tipo_indice: inteiro, inicio: inteiro, fim: inteiro) -> inteiro {
+publico funcao buscar_caminho(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], descricoes: emprestimo[EsquemasRegistros], tipo_indice: inteiro, posicao_inicial: inteiro, posicao_final: inteiro) -> inteiro {
     seja atual_tipo = tipo_indice
-    seja posicao = inicio
+    seja posicao = posicao_inicial
     seja deslocamento_final = 0
-    enquanto posicao < fim {
+    enquanto posicao < posicao_final {
         se atual_tipo < 0 ou atual_tipo >= tamanho(descricoes.tipos) {
             retorne -2
         }
@@ -91,7 +91,7 @@ publico funcao buscar_caminho(fonte: emprestimo[bytes], unidades: emprestimo[lis
         }
         deslocamento_final = deslocamento_final + campo_atual.deslocamento
         posicao = posicao + 1
-        se posicao == fim {
+        se posicao == posicao_final {
             se campo_atual.tipo_filho >= 0 {
                 retorne -2
             }
