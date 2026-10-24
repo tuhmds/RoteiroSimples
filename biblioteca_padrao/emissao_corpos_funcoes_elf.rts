@@ -14,6 +14,8 @@ importe "expressoes_compilador.rts" como expressoes
 importe "instrucoes_integradas_elf.rts" como instrucoes
 importe "emissao_bytes_elf.rts" como emisbytes
 importe "emissao_listas_elf.rts" como emislistas
+importe "esquemas_registros_elf.rts" como esquemas
+importe "emissao_registros_elf.rts" como emisregistros
 
 publico tipo ResultadoCorposELF {
     arquivo: bytes
@@ -112,7 +114,11 @@ privado funcao validar_funcoes(fonte: emprestimo[bytes], unidades: emprestimo[li
     seja retorno: texto = "inteiro"
     seja palavra_funcao: texto = "funcao"
     seja palavra_retorne: texto = "retorne"
-    seja posicao = 0
+    seja tipos_registro = esquemas.analisar(fonte, unidades)
+    se tipos_registro.codigo_erro != 0 {
+        retorne tipos_registro.codigo_erro
+    }
+    seja posicao = tipos_registro.primeiro_corpo
     seja i = 0
     enquanto i < tamanho(grupo.funcoes) {
         seja atual: assinaturas.AssinaturaFuncao = grupo.funcoes[i]
@@ -219,6 +225,32 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         retorne mova(resposta)
     }
     seja primeiro_valor: lexico.UnidadeLexica = unidades[primeiro]
+    // Leitura registro.campo, com layout conhecido na compilacao.
+    se ultimo == primeiro + 3 {
+        seja ponto: lexico.UnidadeLexica = unidades[primeiro + 1]
+        seja campo_nome: lexico.UnidadeLexica = unidades[primeiro + 2]
+        se fluxo.simbolo(fonte, ponto, 46) e campo_nome.classe == 1 {
+            seja indice_registro = fluxo.resolver(fonte, nomes, primeiro_valor)
+            se indice_registro < 0 {
+                resposta.codigo_erro = 5
+                retorne mova(resposta)
+            }
+            se tipos[indice_registro] < 7 {
+                resposta.codigo_erro = 18
+                retorne mova(resposta)
+            }
+            seja descricoes = esquemas.analisar(fonte, unidades)
+            seja indice_tipo = tipos[indice_registro] - 7
+            seja indice_campo = esquemas.buscar_campo(fonte, unidades, empreste(descricoes), indice_tipo, campo_nome)
+            se indice_campo < 0 {
+                resposta.codigo_erro = 5
+                retorne mova(resposta)
+            }
+            seja leitura_registro = emisregistros.emitir_leitura(mova(codigo), indice_registro, indice_campo)
+            mova(resposta.codigo, leitura_registro)
+            retorne mova(resposta)
+        }
+    }
     // Intrinsecos de bytes imutaveis: tamanho(buffer) e buffer[indice].
     se primeiro + 3 < ultimo e primeiro_valor.classe == 1 {
         seja segundo_bytes: lexico.UnidadeLexica = unidades[primeiro + 1]
@@ -293,7 +325,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         seja atual_busca: lexico.UnidadeLexica = unidades[indice_busca]
         seja seguinte_busca: lexico.UnidadeLexica = unidades[indice_busca + 1]
         se atual_busca.classe == 1 {
-            se fluxo.simbolo(fonte, seguinte_busca, 40) ou fluxo.simbolo(fonte, seguinte_busca, 91) {
+            se fluxo.simbolo(fonte, seguinte_busca, 40) ou fluxo.simbolo(fonte, seguinte_busca, 91) ou fluxo.simbolo(fonte, seguinte_busca, 46) {
                 contem_chamada = verdadeiro
             }
         }
@@ -781,6 +813,7 @@ privado funcao emitir_limpeza_escopo(codigo: bytes, nomes: emprestimo[lista[lexi
 // Posicoes de call/jcc sao offsets absolutos no vetor 'codigo'.
 privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], assinadas: emprestimo[assinaturas.Assinaturas], plano_principal: emprestimo[instrucoes.Plano], parametros: emprestimo[lista[lexico.UnidadeLexica]], funcao_atual: inteiro) -> EstadoCorpo {
     seja resposta: EstadoCorpo
+    seja descricoes = esquemas.analisar(fonte, unidades)
     seja numero_locais = plano_principal.quantidade_locais
     seja nomes: lista[lexico.UnidadeLexica]
     seja tipos: lista[inteiro]
@@ -1026,7 +1059,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             posicao_ir = posicao_ir + 1
             continue
         }
-        se instrucao.categoria != 1 e instrucao.categoria != 2 e instrucao.categoria != 7 e instrucao.categoria != 11 {
+        se instrucao.categoria != 1 e instrucao.categoria != 2 e instrucao.categoria != 7 e instrucao.categoria != 11 e instrucao.categoria != 14 {
             resposta.codigo_erro = 3
             retorne mova(resposta)
         }
@@ -1063,6 +1096,36 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         }
         seja primeiro = instrucao.valor_inicio
         seja ultimo = instrucao.valor_fim
+        se instrucao.categoria == 14 {
+            // Apenas um campo inteiro de um registro proprietario local.
+            se tipos[indice_local] < 7 {
+                resposta.codigo_erro = 18
+                retorne mova(resposta)
+            }
+            seja campo_nome: lexico.UnidadeLexica = unidades[instrucao.campo_unidade]
+            seja indice_campo = esquemas.buscar_campo(fonte, unidades, empreste(descricoes), tipos[indice_local] - 7, campo_nome)
+            se indice_campo < 0 {
+                resposta.codigo_erro = 5
+                retorne mova(resposta)
+            }
+            seja calculado = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0)
+            se calculado.codigo_erro != 0 {
+                resposta.codigo_erro = calculado.codigo_erro
+                resposta.unidade_erro = calculado.unidade_erro
+                retorne mova(resposta)
+            }
+            mova(codigo, calculado.codigo)
+            seja indice_ligacao = 0
+            enquanto indice_ligacao < tamanho(calculado.ligacoes) {
+                seja nova_ligacao: Ligacao = calculado.ligacoes[indice_ligacao]
+                adicione(ligacoes, nova_ligacao)
+                indice_ligacao = indice_ligacao + 1
+            }
+            seja escrito = emisregistros.emitir_escrita(mova(codigo), indice_local, indice_campo)
+            mova(codigo, escrito)
+            posicao_ir = posicao_ir + 1
+            continue
+        }
         se instrucao.categoria == 11 {
             // dados[indice] = valor: as duas expressoes sao inteiras.
             // O buffer deve ter tipo local 2 ou dinamico 3.
@@ -1107,10 +1170,34 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             continue
         }
         se instrucao.categoria == 2 {
-            se tipos[indice_local] == 2 ou tipos[indice_local] == 3 ou tipos[indice_local] == 4 ou tipos[indice_local] == 5 {
+            se tipos[indice_local] == 2 ou tipos[indice_local] == 3 ou tipos[indice_local] == 4 ou tipos[indice_local] == 5 ou tipos[indice_local] >= 7 {
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
             }
+        }
+        se instrucao.categoria == 1 e instrucao.tipo_local >= 7 {
+            // Registro local com campos inteiros zerados no prologo.
+            seja indice_tipo = instrucao.tipo_local - 7
+            se indice_tipo >= tamanho(descricoes.tipos) {
+                resposta.codigo_erro = 2
+                retorne mova(resposta)
+            }
+            seja layout: esquemas.TipoRegistro = descricoes.tipos[indice_tipo]
+            seja criado = emisregistros.inicializar(mova(codigo), indice_local, layout.quantidade_campos)
+            mova(codigo, criado)
+            seja nome_registro: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
+            adicione(nomes, nome_registro)
+            adicione(tipos, instrucao.tipo_local)
+            seja indice_oculto = 1
+            enquanto indice_oculto < layout.quantidade_campos {
+                seja oculto_registro: lexico.UnidadeLexica
+                oculto_registro.classe = 0
+                adicione(nomes, oculto_registro)
+                adicione(tipos, 0)
+                indice_oculto = indice_oculto + 1
+            }
+            posicao_ir = posicao_ir + 1
+            continue
         }
         se instrucao.categoria == 1 e instrucao.tipo_local == 5 {
             // Lista dinamica: tres slots (ponteiro, comprimento e capacidade).
@@ -1315,6 +1402,12 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoCorposELF {
     }
     se tamanho(unidades) > 10000 {
         resposta.codigo_erro = 8
+        retorne mova(resposta)
+    }
+    seja layouts = esquemas.analisar(fonte, empreste(unidades))
+    se layouts.codigo_erro != 0 {
+        resposta.codigo_erro = layouts.codigo_erro
+        resposta.unidade_erro = layouts.unidade_erro
         retorne mova(resposta)
     }
     seja assinadas = assinaturas.analisar(fonte, empreste(unidades))
