@@ -87,6 +87,25 @@ privado funcao parametro_bytes_emprestado(fonte: emprestimo[bytes], unidades: em
     retorne fluxo.igual(fonte, marcador, empreste(palavra)) e fluxo.simbolo(fonte, abertura, 91) e fluxo.igual(fonte, unidade_tipo_bytes, empreste(tipo_bytes)) e fluxo.simbolo(fonte, fechamento, 93)
 }
 
+// Reconhece exatamente emprestimo[lista[inteiro]].
+// O emprestimo e temporario, sem transferencia de propriedade.
+privado funcao parametro_lista_emprestada(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], parametro: assinaturas.ParametroFuncao) -> logico {
+    se parametro.tipo_fim != parametro.tipo_inicio + 7 {
+        retorne falso
+    }
+    seja palavra: texto = "emprestimo"
+    seja tipo_lista: texto = "lista"
+    seja tipo_inteiro: texto = "inteiro"
+    seja t0: lexico.UnidadeLexica = unidades[parametro.tipo_inicio]
+    seja t1: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 1]
+    seja t2: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 2]
+    seja t3: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 3]
+    seja t4: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 4]
+    seja t5: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 5]
+    seja t6: lexico.UnidadeLexica = unidades[parametro.tipo_inicio + 6]
+    retorne fluxo.igual(fonte, t0, empreste(palavra)) e fluxo.simbolo(fonte, t1, 91) e fluxo.igual(fonte, t2, empreste(tipo_lista)) e fluxo.simbolo(fonte, t3, 91) e fluxo.igual(fonte, t4, empreste(tipo_inteiro)) e fluxo.simbolo(fonte, t5, 93) e fluxo.simbolo(fonte, t6, 93)
+}
+
 // Verifica a assinatura e o corpo inteiro: retorne expressao.
 // Diagnostico: 2 assinatura, 3 corpo, 4 duplicidade.
 privado funcao validar_funcoes(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], grupo: emprestimo[assinaturas.Assinaturas]) -> inteiro {
@@ -127,7 +146,7 @@ privado funcao validar_funcoes(fonte: emprestimo[bytes], unidades: emprestimo[li
         j = 0
         enquanto j < atual.quantidade_parametros {
             seja p: assinaturas.ParametroFuncao = grupo.parametros[atual.primeiro_parametro + j]
-            seja parametro_valido = parametro_bytes_emprestado(fonte, unidades, p)
+            seja parametro_valido = parametro_bytes_emprestado(fonte, unidades, p) ou parametro_lista_emprestada(fonte, unidades, p)
             se p.tipo_fim == p.tipo_inicio + 1 {
                 seja tipo_parametro: lexico.UnidadeLexica = unidades[p.tipo_inicio]
                 se fluxo.igual(fonte, tipo_parametro, empreste(retorno)) {
@@ -210,8 +229,8 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 seja nome_buffer: lexico.UnidadeLexica = unidades[primeiro + 2]
                 seja indice_buffer = fluxo.resolver(fonte, nomes, nome_buffer)
                 se indice_buffer >= 0 {
-                    se tipos[indice_buffer] == 5 {
-                        seja trecho_lista = emislistas.emitir_tamanho(mova(codigo), indice_buffer)
+                    se tipos[indice_buffer] == 5 ou tipos[indice_buffer] == 6 {
+                        seja trecho_lista = emislistas.emitir_tamanho(mova(codigo), indice_buffer, tipos[indice_buffer] == 6)
                         mova(resposta.codigo, trecho_lista)
                         retorne mova(resposta)
                     }
@@ -239,7 +258,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             se primeiro_fecho == ultimo - 1 {
                 seja indice_buffer = fluxo.resolver(fonte, nomes, primeiro_valor)
             se indice_buffer >= 0 {
-                se tipos[indice_buffer] == 2 ou tipos[indice_buffer] == 3 ou tipos[indice_buffer] == 4 ou tipos[indice_buffer] == 5 {
+                se tipos[indice_buffer] == 2 ou tipos[indice_buffer] == 3 ou tipos[indice_buffer] == 4 ou tipos[indice_buffer] == 5 ou tipos[indice_buffer] == 6 {
                     seja parte_indice = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 2, ultimo - 1, funcao_atual, nivel + 1)
                     se parte_indice.codigo_erro != 0 {
                         resposta.codigo_erro = parte_indice.codigo_erro
@@ -253,8 +272,8 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                         adicione(resposta.ligacoes, pendente)
                         k = k + 1
                     }
-                    se tipos[indice_buffer] == 5 {
-                        seja leitura_lista = emislistas.emitir_leitura(mova(codigo), indice_buffer)
+                    se tipos[indice_buffer] == 5 ou tipos[indice_buffer] == 6 {
+                        seja leitura_lista = emislistas.emitir_leitura(mova(codigo), indice_buffer, tipos[indice_buffer] == 6)
                         mova(resposta.codigo, leitura_lista)
                     } senao {
                         seja leitura = emisbytes.emitir_leitura(mova(codigo), indice_buffer, tipos[indice_buffer])
@@ -582,7 +601,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
     seja argumento = tamanho(inicios) - 1
     enquanto argumento >= 0 {
         seja p_alvo: assinaturas.ParametroFuncao = assinadas.parametros[funcao_alvo.primeiro_parametro + argumento]
-        se parametro_bytes_emprestado(fonte, unidades, p_alvo) {
+        se parametro_bytes_emprestado(fonte, unidades, p_alvo) ou parametro_lista_emprestada(fonte, unidades, p_alvo) {
             // O argumento deve ser exclusivamente um identificador
             // bytes fixo, dono dinamico ou emprestimo. Sem temporarios.
             resposta.unidade_erro = inicios[argumento]
@@ -596,11 +615,25 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 resposta.codigo_erro = 5
                 retorne mova(resposta)
             }
-            se tipos[indice_buffer] != 2 e tipos[indice_buffer] != 3 e tipos[indice_buffer] != 4 {
-                resposta.codigo_erro = 18
-                retorne mova(resposta)
+            seja modo_buffer = tipos[indice_buffer]
+            se parametro_lista_emprestada(fonte, unidades, p_alvo) {
+                // O proprietario lista (tipo 5) tem descritor mmap.
+                // O emprestimo lista (tipo 6) encaminha o mesmo descritor.
+                se modo_buffer != 5 e modo_buffer != 6 {
+                    resposta.codigo_erro = 18
+                    retorne mova(resposta)
+                }
+                modo_buffer = 3
+                se tipos[indice_buffer] == 6 {
+                    modo_buffer = 4
+                }
+            } senao {
+                se modo_buffer != 2 e modo_buffer != 3 e modo_buffer != 4 {
+                    resposta.codigo_erro = 18
+                    retorne mova(resposta)
+                }
             }
-            seja argumento_buffer = emisbytes.emitir_argumento_emprestado(mova(codigo), indice_buffer, tipos[indice_buffer])
+            seja argumento_buffer = emisbytes.emitir_argumento_emprestado(mova(codigo), indice_buffer, modo_buffer)
             mova(codigo, argumento_buffer)
         } senao {
             seja parte = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, inicios[argumento], finais[argumento], funcao_atual, nivel + 1)
@@ -762,6 +795,9 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             seja parametro_atual: assinaturas.ParametroFuncao = assinadas.parametros[assinatura_atual.primeiro_parametro + p]
             se parametro_bytes_emprestado(fonte, unidades, parametro_atual) {
                 tipo_parametro = 4
+            }
+            se parametro_lista_emprestada(fonte, unidades, parametro_atual) {
+                tipo_parametro = 6
             }
         }
         adicione(tipos, tipo_parametro)

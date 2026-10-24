@@ -50,37 +50,59 @@ publico funcao inicializar(codigo: bytes, indice_local: inteiro) -> bytes {
     retorne mova(codigo)
 }
 
-publico funcao emitir_tamanho(codigo: bytes, indice_local: inteiro) -> bytes {
+publico funcao emitir_tamanho(codigo: bytes, indice_local: inteiro, emprestado: logico) -> bytes {
+    se emprestado {
+        // A referencia aponta para o slot de ponteiro do descritor;
+        // o numero de elementos fica oito bytes antes.
+        retorne emisbytes.emitir_tamanho(mova(codigo), indice_local, 4)
+    }
     retorne emisbytes.emitir_tamanho(mova(codigo), indice_local, 3)
 }
 
 // Valida indice unsigned e signed contra comprimento real de ELEMENTOS.
 // rax=indice, preserva rcx/rdx ate o endereco ser carregado.
-privado funcao verificar_indice(codigo: bytes, indice_local: inteiro) -> bytes {
+privado funcao verificar_indice(codigo: bytes, indice_local: inteiro, emprestado: logico) -> bytes {
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 133)
     adicione_byte(codigo, 192) // test rax, rax
     seja nao_negativo = exigir(mova(codigo), 137, 23) // jns
     mova(codigo, nao_negativo)
-    adicione_byte(codigo, 72)
-    adicione_byte(codigo, 59)
-    adicione_byte(codigo, 133) // cmp rax, [rbp - comprimento]
-    seja endereco = deslocamento(mova(codigo), (indice_local + 2) * 8)
-    mova(codigo, endereco)
+    se emprestado {
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 139)
+        adicione_byte(codigo, 149) // mov rdx, [rbp - ref_descritor]
+        seja campo_ref = deslocamento(mova(codigo), (indice_local + 1) * 8)
+        mova(codigo, campo_ref)
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 59)
+        adicione_byte(codigo, 66)
+        adicione_byte(codigo, 248) // cmp rax, [rdx - 8]
+    } senao {
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 59)
+        adicione_byte(codigo, 133) // cmp rax, [rbp - comprimento]
+        seja endereco = deslocamento(mova(codigo), (indice_local + 2) * 8)
+        mova(codigo, endereco)
+    }
     seja dentro = exigir(mova(codigo), 130, 23) // jb
     mova(codigo, dentro)
     retorne mova(codigo)
 }
 
-publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro) -> bytes {
+publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro, emprestado: logico) -> bytes {
     adicione_byte(codigo, 88) // pop rax: indice
-    seja conferido = verificar_indice(mova(codigo), indice_local)
+    seja conferido = verificar_indice(mova(codigo), indice_local, emprestado)
     mova(codigo, conferido)
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 139)
-    adicione_byte(codigo, 149) // mov rdx, [rbp - ptr]
+    adicione_byte(codigo, 149) // mov rdx, [rbp - ptr ou ref_descritor]
     seja ponteiro = deslocamento(mova(codigo), (indice_local + 1) * 8)
     mova(codigo, ponteiro)
+    se emprestado {
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 139)
+        adicione_byte(codigo, 18) // mov rdx, [rdx], ponteiro real
+    }
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 139)
     adicione_byte(codigo, 4)
@@ -92,7 +114,7 @@ publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro) -> bytes {
 publico funcao emitir_escrita(codigo: bytes, indice_local: inteiro) -> bytes {
     adicione_byte(codigo, 89) // pop rcx: valor inteiro signed64
     adicione_byte(codigo, 88) // pop rax: indice
-    seja conferido = verificar_indice(mova(codigo), indice_local)
+    seja conferido = verificar_indice(mova(codigo), indice_local, falso)
     mova(codigo, conferido)
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 139)
