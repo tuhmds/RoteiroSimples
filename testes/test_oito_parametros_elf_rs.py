@@ -26,11 +26,11 @@ class TestesOitoParametrosELFRS(unittest.TestCase):
     def test_oito_inteiros_e_chamada_encadeada(self):
         fonte = (
             "funcao somar8(a: inteiro, b: inteiro, c: inteiro, d: inteiro, "
-            "e: inteiro, f: inteiro, g: inteiro, h: inteiro) -> inteiro {\n"
-            " retorne a + b + c + d + e + f + g + h\n}\n"
+            "quinto: inteiro, f: inteiro, g: inteiro, h: inteiro) -> inteiro {\n"
+            " retorne a + b + c + d + quinto + f + g + h\n}\n"
             "funcao passar8(a: inteiro, b: inteiro, c: inteiro, d: inteiro, "
-            "e: inteiro, f: inteiro, g: inteiro, h: inteiro) -> inteiro {\n"
-            " retorne somar8(a, b, c, d, e, f, g, h)\n}\n"
+            "quinto: inteiro, f: inteiro, g: inteiro, h: inteiro) -> inteiro {\n"
+            " retorne somar8(a, b, c, d, quinto, f, g, h)\n}\n"
             "inicio { seja r = passar8(1, 2, 3, 4, 5, 6, 7, 8) }"
         )
         for nivel in (0, 8):
@@ -44,11 +44,11 @@ class TestesOitoParametrosELFRS(unittest.TestCase):
     def test_emprestimo_na_quinta_posicao_e_reemprestimo(self):
         fonte = (
             "funcao ler8(a: inteiro, b: inteiro, c: inteiro, d: inteiro, "
-            "dados: emprestimo[bytes], e: inteiro, f: inteiro, g: inteiro) -> inteiro {\n"
-            " retorne a + b + c + d + dados[0] + e + f + g\n}\n"
+            "dados: emprestimo[bytes], sexto: inteiro, f: inteiro, g: inteiro) -> inteiro {\n"
+            " retorne a + b + c + d + dados[0] + sexto + f + g\n}\n"
             "funcao repassar8(a: inteiro, b: inteiro, c: inteiro, d: inteiro, "
-            "dados: emprestimo[bytes], e: inteiro, f: inteiro, g: inteiro) -> inteiro {\n"
-            " retorne ler8(a, b, c, d, dados, e, f, g)\n}\n"
+            "dados: emprestimo[bytes], sexto: inteiro, f: inteiro, g: inteiro) -> inteiro {\n"
+            " retorne ler8(a, b, c, d, dados, sexto, f, g)\n}\n"
             "inicio {\n"
             " seja dados: bytes = criar_bytes(32)\n"
             " dados[0] = 21\n"
@@ -66,7 +66,7 @@ class TestesOitoParametrosELFRS(unittest.TestCase):
     def test_nove_parametros_sao_rejeitados(self):
         fonte = (
             "funcao nove(a: inteiro, b: inteiro, c: inteiro, d: inteiro, "
-            "e: inteiro, f: inteiro, g: inteiro, h: inteiro, i: inteiro) -> inteiro {\n"
+            "quinto: inteiro, f: inteiro, g: inteiro, h: inteiro, i: inteiro) -> inteiro {\n"
             " retorne a\n}\n"
             "inicio { seja r = nove(1, 2, 3, 4, 5, 6, 7, 8, 9) }"
         )
@@ -80,7 +80,7 @@ class TestesOitoParametrosELFRS(unittest.TestCase):
     def test_oito_parametros_com_sete_argumentos_sao_rejeitados(self):
         fonte = (
             "funcao oito(a: inteiro, b: inteiro, c: inteiro, d: inteiro, "
-            "e: inteiro, f: inteiro, g: inteiro, h: inteiro) -> inteiro {\n"
+            "quinto: inteiro, f: inteiro, g: inteiro, h: inteiro) -> inteiro {\n"
             " retorne a\n}\n"
             "inicio { seja r = oito(1, 2, 3, 4, 5, 6, 7) }"
         )
