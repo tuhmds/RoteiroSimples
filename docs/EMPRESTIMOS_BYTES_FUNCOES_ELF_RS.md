@@ -27,8 +27,9 @@ ainda pode escrever, ler e desalocar o buffer.
 ## Contrato e ABI interna
 
 Assinaturas aceitam `inteiro` ou `emprestimo[bytes]` como parametro,
-ate o limite existente de quatro parametros por funcao. Retornos
-continuam obrigatoriamente `inteiro`.
+ate **oito parametros por funcao** no emissor de corpos ELF64.
+Retornos continuam obrigatoriamente `inteiro`. O limite de oito e
+especifico deste emissor experimental, nao dos demais backends.
 
 O argumento emprestado usa um slot de 8 bytes na ABI interna: ponteiro
 para o slot do descritor do proprietario. O descritor do buffer
@@ -73,3 +74,19 @@ Os testes cobrem chamadas diretas, encadeadas e com parametros mistos,
 preservacao de propriedade pelo chamador, erros de tipagem e leitura
 apos liberacao. Continuam sendo gerados arquivos ELF64 Linux x86-64;
 o emissor escrito em RS ainda e compilado pelo bootstrap atual.
+
+## Ampliacao incremental para oito parametros
+
+O emissor de corpos aceita agora ate oito parametros em assinaturas,
+incluindo combinacoes de `inteiro` e `emprestimo[bytes]` em quaisquer
+posicoes. Os argumentos continuam empilhados em ordem inversa;
+a funcao chamada copia seus slots para locais, sem alterar a ABI
+interna de um parametro. Nove ou mais parametros geram diagnostico 2;
+chamadas com aridade incorreta geram diagnostico 13.
+
+Os casos O0/O8 cobrem oito inteiros, reencaminhamento por outra funcao,
+emprestimo na quinta posicao, reemprestimo sem copia, rejeicao de nove
+parametros e rejeicao de sete argumentos para assinatura de oito.
+O teste de regressao esta em `testes/test_oito_parametros_elf_rs.py`.
+Este incremento reduz uma restricao da etapa de autocompilacao, mas
+**nao** significa que o compilador em RS ja consiga compilar a si proprio.
