@@ -1,6 +1,6 @@
 """Testes de listas locais lista[inteiro] no emissor ELF64 escrito em RS.
 
-Capacidade inicial controlada: oito elementos signed64 por lista, sem heap.
+Listas signed64 dinamicas via mmap/mremap: capacidade inicial de oito.
 O codigo do emissor e escrito em RS e construido por bootstrap Python.
 """
 import unittest
@@ -19,8 +19,8 @@ class TestesListasLocaisELFRS(unittest.TestCase):
     def tearDownClass(cls):
         base_corpos.TestesCorposFuncoesELFRS.tearDownClass()
 
-    def gerar(self, fonte, nivel):
-        return self.gerador.gerar(fonte, nivel)
+    def gerar(self, fonte, nivel, limite_memoria=None):
+        return self.gerador.gerar(fonte, nivel, limite_memoria=limite_memoria)
 
     def test_declaracao_adicao_leitura_e_comprimento(self):
         casos = (
@@ -112,8 +112,7 @@ class TestesListasLocaisELFRS(unittest.TestCase):
             " adicione(valores, 12)\n retorne valores[-1]",
             " adicione(valores, 12)\n retorne valores[1]",
             " adicione(valores, 12)\n valores[1] = 3\n retorne 0",
-            " seja indice = 0\n enquanto indice < 9 {\n"
-            " adicione(valores, indice)\n indice = indice + 1\n }\n retorne 0",
+
         )
         for nivel in (0, 8):
             for comandos in casos:
@@ -129,6 +128,154 @@ class TestesListasLocaisELFRS(unittest.TestCase):
                     self.assertIsNotNone(arquivo)
                     if status is not None:
                         self.assertEqual(status, 23)
+
+    def test_crescimento_geometrico_preserva_valores(self):
+        casos = (
+            (9, 8, 9),
+            (17, 16, 17),
+            (65, 64, 65),
+            (1000, 999, 1000),
+            (4097, 4096, 4097),
+        )
+        for nivel in (0, 8):
+            for tamanho, ultimo, esperado in casos:
+                fonte = (
+                    "funcao executar() -> inteiro {\n"
+                    " seja valores: lista[inteiro]\n"
+                    " seja indice = 0\n"
+                    f" enquanto indice < {tamanho} {{\n"
+                    " adicione(valores, indice)\n"
+                    " indice = indice + 1\n"
+                    " }\n"
+                    f" retorne valores[{ultimo}] + tamanho(valores) - {tamanho - 1}\n"
+                    "}\n inicio { seja r = executar() }"
+                )
+                with self.subTest(nivel=nivel, tamanho=tamanho):
+                    codigo, arquivo, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(arquivo)
+                    if status is not None:
+                        self.assertEqual(status, esperado % 256)
+
+    def test_inspecao_do_remapeamento_em_indice_de_fronteira(self):
+        casos = (
+            (9, "valores[8]", 8),
+            (9, "valores[7]", 7),
+            (9, "tamanho(valores)", 9),
+            (17, "valores[16]", 16),
+            (17, "valores[8]", 8),
+            (17, "tamanho(valores)", 17),
+        )
+        for nivel in (0, 8):
+            for quantidade, retorno, esperado in casos:
+                fonte = (
+                    "funcao executar() -> inteiro {\n"
+                    " seja valores: lista[inteiro]\n"
+                    " seja indice = 0\n"
+                    f" enquanto indice < {quantidade} {{\n"
+                    " adicione(valores, indice)\n"
+                    " indice = indice + 1\n"
+                    " }\n"
+                    f" retorne {retorno}\n"
+                    "}\n inicio { seja r = executar() }"
+                )
+                with self.subTest(nivel=nivel, quantidade=quantidade, retorno=retorno):
+                    codigo, arquivo, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(arquivo)
+                    if status is not None:
+                        self.assertEqual(status, esperado)
+
+    def test_escrita_em_posicao_apos_remapeamento(self):
+        fonte = (
+            "funcao executar() -> inteiro {\n"
+            " seja valores: lista[inteiro]\n"
+            " seja indice = 0\n"
+            " enquanto indice < 260 {\n"
+            " adicione(valores, indice)\n"
+            " indice = indice + 1\n"
+            " }\n"
+            " valores[0] = 55\n"
+            " valores[129] = -70\n"
+            " valores[259] = 99\n"
+            " retorne valores[0] - valores[129] + valores[259]\n"
+            "}\n inicio { seja r = executar() }"
+        )
+        for nivel in (0, 8):
+            codigo, arquivo, status = self.gerar(fonte, nivel)
+            self.assertEqual(codigo, 0)
+            self.assertIsNotNone(arquivo)
+            if status is not None:
+                self.assertEqual(status, 224)
+
+    def test_limite_de_um_mebibyte_por_lista(self):
+        fonte = (
+            "funcao executar() -> inteiro {\n"
+            " seja valores: lista[inteiro]\n"
+            " seja indice = 0\n"
+            " enquanto indice < 131073 {\n"
+            " adicione(valores, indice)\n"
+            " indice = indice + 1\n"
+            " }\n retorne tamanho(valores)\n"
+            "}\n inicio { seja r = executar() }"
+        )
+        for nivel in (0, 8):
+            with self.subTest(nivel=nivel):
+                codigo, arquivo, status = self.gerar(fonte, nivel)
+                self.assertEqual(codigo, 0)
+                self.assertIsNotNone(arquivo)
+                if status is not None:
+                    self.assertEqual(status, 24)
+
+    def test_liberacao_automatica_dentro_de_lacos(self):
+        # A mesma posicao de pilha e ocupada muitas vezes: qualquer
+        # mmap esquecido apos o fim da iteracao deve ser detectado
+        # pelo limite de memoria virtual do processo nativo.
+        fonte = (
+            "funcao executar() -> inteiro {\n"
+            " seja repeticao = 0\n"
+            " seja soma = 0\n"
+            " enquanto repeticao < 1500 {\n"
+            " seja valores: lista[inteiro]\n"
+            " seja indice = 0\n"
+            " enquanto indice < 8192 {\n"
+            " adicione(valores, indice)\n"
+            " indice = indice + 1\n"
+            " }\n"
+            " soma = soma + valores[8191]\n"
+            " repeticao = repeticao + 1\n"
+            " }\n"
+            " retorne soma\n"
+            "}\n inicio { seja r = executar() }"
+        )
+        for nivel in (0, 8):
+            codigo, arquivo, status = self.gerar(
+                fonte, nivel, limite_memoria=80 * 1024 * 1024
+            )
+            self.assertEqual(codigo, 0)
+            self.assertIsNotNone(arquivo)
+            if status is not None:
+                self.assertEqual(status, (1500 * 8191) % 256)
+
+    def test_crescimento_e_escopos_com_pare_e_continue(self):
+        fonte = (
+            "funcao executar() -> inteiro {\n"
+            " seja contador = 0\n"
+            " enquanto contador < 20 {\n"
+            " seja valores: lista[inteiro]\n"
+            " adicione(valores, contador)\n"
+            " contador = contador + 1\n"
+            " se contador < 15 {\n continue\n }\n"
+            " pare\n"
+            " }\n retorne contador\n"
+            "}\n inicio { seja r = executar() }"
+        )
+        for nivel in (0, 8):
+            codigo, arquivo, status = self.gerar(fonte, nivel)
+            self.assertEqual(codigo, 0)
+            self.assertIsNotNone(arquivo)
+            if status is not None:
+                self.assertEqual(status, 15)
 
     def test_diagnosticos_tipagem_e_escopo(self):
         casos = (

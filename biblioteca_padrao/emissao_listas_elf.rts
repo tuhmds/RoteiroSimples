@@ -1,37 +1,49 @@
-// Primeiro subconjunto de lista[inteiro] no emissor ELF64 escrito em RS.
-// Capacidade fixa de 8 inteiros, sem heap ou copia; erro 23 em limites.
-// Layout: qword de comprimento seguida por 8 qwords de dados na pilha.
+// Lista dinamica de inteiros signed64 no emissor ELF64 escrito em RS.
+// Descritor identico ao de bytes mmap: ponteiro, tamanho, capacidade.
+// A capacidade da lista e em BYTES; seu comprimento e em ELEMENTOS.
+// Inicia com oito inteiros, cresce geometricamente com Linux mremap(25).
+// Limite explicito: 131072 elementos (1 MiB); erro 24 quando excedido.
+// Leitura/escrita invalida: exit(23). Escopo libera memoria via munmap.
 importe "emissao_elf_minima.rts" como elf
 importe "emissao_fluxo_elf.rts" como fluxo
+importe "emissao_bytes_elf.rts" como emisbytes
 
 privado funcao deslocamento(codigo: bytes, distancia: inteiro) -> bytes {
     retorne elf.anexar_inteiro(mova(codigo), 4294967296 - distancia, 4)
 }
 
-// Branch curto com rel32 sobre exit(23). O opcode salta quando e valido.
-privado funcao exigir(codigo: bytes, condicao: inteiro) -> bytes {
+// Branch rel32 sobre exit(status). Opcode jcc salta quando validado.
+privado funcao exigir(codigo: bytes, condicao: inteiro, status: inteiro) -> bytes {
     adicione_byte(codigo, 15)
     adicione_byte(codigo, condicao)
     seja salto = elf.anexar_inteiro(mova(codigo), 12, 4)
     mova(codigo, salto)
-    adicione_byte(codigo, 184) // mov eax, sys_exit
+    adicione_byte(codigo, 184)
     seja chamada = elf.anexar_inteiro(mova(codigo), 60, 4)
     mova(codigo, chamada)
     adicione_byte(codigo, 191)
-    seja erro = elf.anexar_inteiro(mova(codigo), 23, 4)
+    seja erro = elf.anexar_inteiro(mova(codigo), status, 4)
     mova(codigo, erro)
     adicione_byte(codigo, 15)
     adicione_byte(codigo, 5)
     retorne mova(codigo)
 }
 
-// A lista nasce vazia. Os oito elementos nao inicializados sao
-// inacessiveis ate que adicione atribua cada um deles.
+// Aloca 64 bytes. Reutiliza mmap seguro do emissor de bytes,
+// que recebe na pilha o tamanho logico e aloca tamanho+1.
+// Com 63 bytes, recebe 64 bytes fisicos; apos alocar, zera tamanho
+// porque a nova lista nao contem nenhum elemento.
 publico funcao inicializar(codigo: bytes, indice_local: inteiro) -> bytes {
+    adicione_byte(codigo, 184) // mov eax, 63
+    seja tamanho_inicial = elf.anexar_inteiro(mova(codigo), 63, 4)
+    mova(codigo, tamanho_inicial)
+    adicione_byte(codigo, 80) // push rax
+    seja alocado = emisbytes.emitir_alocacao(mova(codigo), indice_local)
+    mova(codigo, alocado)
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 199)
-    adicione_byte(codigo, 133) // mov qword [rbp-disp32], imm32
-    seja endereco = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    adicione_byte(codigo, 133) // mov qword [rbp - tamanho], 0
+    seja endereco = deslocamento(mova(codigo), (indice_local + 2) * 8)
     mova(codigo, endereco)
     seja zero = elf.anexar_inteiro(mova(codigo), 0, 4)
     mova(codigo, zero)
@@ -39,29 +51,23 @@ publico funcao inicializar(codigo: bytes, indice_local: inteiro) -> bytes {
 }
 
 publico funcao emitir_tamanho(codigo: bytes, indice_local: inteiro) -> bytes {
-    adicione_byte(codigo, 72)
-    adicione_byte(codigo, 139)
-    adicione_byte(codigo, 133) // mov rax, [rbp - comprimento]
-    seja endereco = deslocamento(mova(codigo), (indice_local + 1) * 8)
-    mova(codigo, endereco)
-    adicione_byte(codigo, 80) // push rax
-    retorne mova(codigo)
+    retorne emisbytes.emitir_tamanho(mova(codigo), indice_local, 3)
 }
 
-// Valida indice em rax, preserva rcx (valor da escrita) e rdi.
-// Indices negativos ou >= comprimento encerram com exit(23).
+// Valida indice unsigned e signed contra comprimento real de ELEMENTOS.
+// rax=indice, preserva rcx/rdx ate o endereco ser carregado.
 privado funcao verificar_indice(codigo: bytes, indice_local: inteiro) -> bytes {
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 133)
     adicione_byte(codigo, 192) // test rax, rax
-    seja valido = exigir(mova(codigo), 137) // jns
-    mova(codigo, valido)
+    seja nao_negativo = exigir(mova(codigo), 137, 23) // jns
+    mova(codigo, nao_negativo)
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 59)
     adicione_byte(codigo, 133) // cmp rax, [rbp - comprimento]
-    seja campo = deslocamento(mova(codigo), (indice_local + 1) * 8)
-    mova(codigo, campo)
-    seja dentro = exigir(mova(codigo), 130) // jb
+    seja endereco = deslocamento(mova(codigo), (indice_local + 2) * 8)
+    mova(codigo, endereco)
+    seja dentro = exigir(mova(codigo), 130, 23) // jb
     mova(codigo, dentro)
     retorne mova(codigo)
 }
@@ -71,62 +77,138 @@ publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro) -> bytes {
     seja conferido = verificar_indice(mova(codigo), indice_local)
     mova(codigo, conferido)
     adicione_byte(codigo, 72)
-    adicione_byte(codigo, 247)
-    adicione_byte(codigo, 216) // neg rax: elementos crescem para baixo
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 149) // mov rdx, [rbp - ptr]
+    seja ponteiro = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    mova(codigo, ponteiro)
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 139)
-    adicione_byte(codigo, 132)
-    adicione_byte(codigo, 197) // mov rax, [rbp + rax*8 + disp32]
-    seja endereco = deslocamento(mova(codigo), (indice_local + 2) * 8)
-    mova(codigo, endereco)
-    adicione_byte(codigo, 80) // push rax
+    adicione_byte(codigo, 4)
+    adicione_byte(codigo, 194) // mov rax, [rdx + rax * 8]
+    adicione_byte(codigo, 80)
     retorne mova(codigo)
 }
 
 publico funcao emitir_escrita(codigo: bytes, indice_local: inteiro) -> bytes {
-    adicione_byte(codigo, 89) // pop rcx: novo valor inteiro signed64
+    adicione_byte(codigo, 89) // pop rcx: valor inteiro signed64
     adicione_byte(codigo, 88) // pop rax: indice
     seja conferido = verificar_indice(mova(codigo), indice_local)
     mova(codigo, conferido)
     adicione_byte(codigo, 72)
-    adicione_byte(codigo, 247)
-    adicione_byte(codigo, 216) // neg rax
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 149) // mov rdx, [rbp - ptr]
+    seja ponteiro = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    mova(codigo, ponteiro)
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 137)
-    adicione_byte(codigo, 140)
-    adicione_byte(codigo, 197) // mov [rbp + rax*8 + disp32], rcx
-    seja endereco = deslocamento(mova(codigo), (indice_local + 2) * 8)
-    mova(codigo, endereco)
+    adicione_byte(codigo, 12)
+    adicione_byte(codigo, 194) // mov [rdx + rax * 8], rcx
     retorne mova(codigo)
 }
 
+// Recebe um novo inteiro no topo da pilha, usa mremap(MAYMOVE)
+// quando a lista estiver cheia, preservando seu conteudo e descriptor.
+// Erro 24 ao tentar ultrapassar 1 MiB ou caso mremap falhe.
 publico funcao emitir_adicionar(codigo: bytes, indice_local: inteiro) -> bytes {
-    adicione_byte(codigo, 88) // pop rax: valor inteiro
+    adicione_byte(codigo, 88) // pop rax: valor
+    adicione_byte(codigo, 80) // push rax: preservar em syscall
+
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 139)
     adicione_byte(codigo, 141) // mov rcx, [rbp - comprimento]
-    seja endereco = deslocamento(mova(codigo), (indice_local + 1) * 8)
-    mova(codigo, endereco)
+    seja campo_comprimento = deslocamento(mova(codigo), (indice_local + 2) * 8)
+    mova(codigo, campo_comprimento)
     adicione_byte(codigo, 72)
-    adicione_byte(codigo, 131)
-    adicione_byte(codigo, 249)
-    adicione_byte(codigo, 8) // cmp rcx, 8
-    seja limite_lista = exigir(mova(codigo), 130) // jb
-    mova(codigo, limite_lista)
+    adicione_byte(codigo, 193)
+    adicione_byte(codigo, 225)
+    adicione_byte(codigo, 3) // shl rcx, 3: bytes usados
     adicione_byte(codigo, 72)
-    adicione_byte(codigo, 247)
-    adicione_byte(codigo, 217) // neg rcx
+    adicione_byte(codigo, 59)
+    adicione_byte(codigo, 141) // cmp rcx, [rbp - capacidade_em_bytes]
+    seja campo_capacidade = deslocamento(mova(codigo), (indice_local + 3) * 8)
+    mova(codigo, campo_capacidade)
+    // jb apos crescimento se ainda cabe outro elemento
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 130)
+    seja pular_crescimento = tamanho(codigo)
+    seja lacuna = elf.anexar_inteiro(mova(codigo), 0, 4)
+    mova(codigo, lacuna)
+
+    adicione_byte(codigo, 87) // push rdi: preservar resultado de inicio
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 189) // mov rdi, [rbp - ptr]
+    seja ponteiro = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    mova(codigo, ponteiro)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 181) // mov rsi, [rbp - capacidade]
+    seja tamanho_antigo = deslocamento(mova(codigo), (indice_local + 3) * 8)
+    mova(codigo, tamanho_antigo)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 129)
+    adicione_byte(codigo, 254) // cmp rsi, 1048576
+    seja limite = elf.anexar_inteiro(mova(codigo), 1048576, 4)
+    mova(codigo, limite)
+    seja menor = exigir(mova(codigo), 130, 24) // jb: nao exceder 1 MiB
+    mova(codigo, menor)
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 137)
-    adicione_byte(codigo, 132)
-    adicione_byte(codigo, 205) // mov [rbp + rcx*8 + disp32], rax
-    seja posicao = deslocamento(mova(codigo), (indice_local + 2) * 8)
-    mova(codigo, posicao)
+    adicione_byte(codigo, 242) // mov rdx, rsi
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 209)
+    adicione_byte(codigo, 226) // shl rdx,1
+    adicione_byte(codigo, 65)
+    adicione_byte(codigo, 186) // mov r10d, MREMAP_MAYMOVE (1)
+    seja opcoes = elf.anexar_inteiro(mova(codigo), 1, 4)
+    mova(codigo, opcoes)
+    adicione_byte(codigo, 184)
+    seja chamada = elf.anexar_inteiro(mova(codigo), 25, 4)
+    mova(codigo, chamada)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 5) // syscall mremap
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 133)
+    adicione_byte(codigo, 192) // test rax, rax
+    seja remapeado = exigir(mova(codigo), 137, 24) // jns: sucesso
+    mova(codigo, remapeado)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 133) // mov [rbp - ptr], rax
+    seja endereco_novo = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    mova(codigo, endereco_novo)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 149) // mov [rbp - capacidade], rdx
+    seja capacidade_nova = deslocamento(mova(codigo), (indice_local + 3) * 8)
+    mova(codigo, capacidade_nova)
+    adicione_byte(codigo, 95) // pop rdi
+
+    // Reunir os caminhos com e sem crescimento.
+    seja depois_crescer = tamanho(codigo)
+    seja remendo = fluxo.corrigir(mova(codigo), pular_crescimento, depois_crescer)
+    mova(codigo, remendo)
+
+    adicione_byte(codigo, 88) // pop rax: valor preservado
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 149) // mov rdx, [rbp - ptr]
+    seja destino = deslocamento(mova(codigo), (indice_local + 1) * 8)
+    mova(codigo, destino)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 141) // mov rcx, [rbp - comprimento]
+    seja indice = deslocamento(mova(codigo), (indice_local + 2) * 8)
+    mova(codigo, indice)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 4)
+    adicione_byte(codigo, 202) // mov [rdx + rcx * 8], rax
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 131)
     adicione_byte(codigo, 133) // add qword [rbp - comprimento], 1
-    seja tamanho_atual = deslocamento(mova(codigo), (indice_local + 1) * 8)
-    mova(codigo, tamanho_atual)
+    seja contador = deslocamento(mova(codigo), (indice_local + 2) * 8)
+    mova(codigo, contador)
     adicione_byte(codigo, 1)
     retorne mova(codigo)
 }
