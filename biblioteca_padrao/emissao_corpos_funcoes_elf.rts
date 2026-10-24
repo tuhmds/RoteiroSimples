@@ -571,8 +571,8 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
     enquanto argumento >= 0 {
         seja p_alvo: assinaturas.ParametroFuncao = assinadas.parametros[funcao_alvo.primeiro_parametro + argumento]
         se parametro_bytes_emprestado(fonte, unidades, p_alvo) {
-            // O argumento deve ser exclusivamente um identificador dono
-            // dinamico ou um emprestimo recebido. Sem temporarios.
+            // O argumento deve ser exclusivamente um identificador
+            // bytes fixo, dono dinamico ou emprestimo. Sem temporarios.
             resposta.unidade_erro = inicios[argumento]
             se finais[argumento] != inicios[argumento] + 1 {
                 resposta.codigo_erro = 18
@@ -584,7 +584,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 resposta.codigo_erro = 5
                 retorne mova(resposta)
             }
-            se tipos[indice_buffer] != 3 e tipos[indice_buffer] != 4 {
+            se tipos[indice_buffer] != 2 e tipos[indice_buffer] != 3 e tipos[indice_buffer] != 4 {
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
             }
@@ -1075,7 +1075,13 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             adicione(nomes, nome_buffer)
             adicione(tipos, instrucao.tipo_local)
             seja reserva = 0
-            enquanto reserva < 4 {
+            seja quantidade_reserva = 4
+            se instrucao.tipo_local == 2 {
+                // Dois slots extras para emprestar bytes fixos
+                // sem modificar seu comprimento nem seus dados.
+                quantidade_reserva = 6
+            }
+            enquanto reserva < quantidade_reserva {
                 seja oculto: lexico.UnidadeLexica
                 oculto.classe = 0
                 adicione(nomes, oculto)
