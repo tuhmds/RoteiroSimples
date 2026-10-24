@@ -1,6 +1,7 @@
 // Emissor unificado ELF64 para chamadas, declaracoes, atribuicoes,
 // condicionais e lacos, com plano intermediario de instrucoes escrito em RS.
-// Funcoes com parametros inteiros, locais, condicionais, lacos e retornos.
+// Funcoes com ate oito parametros inteiros ou emprestimo[bytes],
+// locais, condicionais, lacos e retornos.
 // Erros de chamada: 12 nome inexistente, 13 quantidade de argumentos,
 // 14 ciclo de chamadas (recursao), 15 delimitadores/argumentos malformados.
 // Permite referencias a funcoes posteriores, mas rejeita recursao.
@@ -102,7 +103,7 @@ privado funcao validar_funcoes(fonte: emprestimo[bytes], unidades: emprestimo[li
         se nao fluxo.igual(fonte, inicio_token, empreste(palavra_funcao)) {
             retorne 2
         }
-        se atual.quantidade_parametros < 0 ou atual.quantidade_parametros > 4 {
+        se atual.quantidade_parametros < 0 ou atual.quantidade_parametros > 8 {
             retorne 2
         }
         se atual.retorno_fim != atual.retorno_inicio + 1 {
