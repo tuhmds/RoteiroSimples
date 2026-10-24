@@ -13,7 +13,7 @@ publico tipo Instrucao {
     valor_inicio: inteiro
     valor_fim: inteiro
     profundidade: inteiro
-    tipo_local: inteiro // 1 inteiro, 2 bytes local, 3 bytes dinamico
+    tipo_local: inteiro // 1 inteiro, 2 bytes local, 3 bytes dinamico, 5 lista local
     indice_inicio: inteiro
     indice_fim: inteiro
 }
@@ -39,6 +39,8 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
     seja texto_seja: texto = "seja"
     seja texto_inteiro: texto = "inteiro"
     seja texto_bytes: texto = "bytes"
+    seja texto_lista: texto = "lista"
+    seja texto_adicione: texto = "adicione"
     seja texto_criar: texto = "criar_bytes"
     seja texto_liberar: texto = "liberar_bytes"
     seja texto_se: texto = "se"
@@ -203,6 +205,60 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
             plano.codigo_erro = 3
             retorne mova(plano)
         }
+        // adicione(lista, expressao): o tamanho e atualizado no emissor.
+        se fluxo.igual(fonte, token, empreste(texto_adicione)) {
+            se i + 5 >= total {
+                plano.codigo_erro = 3
+                retorne mova(plano)
+            }
+            seja abertura_adicionar: lexico.UnidadeLexica = unidades[i + 1]
+            seja nome_adicionar: lexico.UnidadeLexica = unidades[i + 2]
+            seja virgula_adicionar: lexico.UnidadeLexica = unidades[i + 3]
+            se nao fluxo.simbolo(fonte, abertura_adicionar, 40) ou nome_adicionar.classe != 1 ou nao fluxo.simbolo(fonte, virgula_adicionar, 44) {
+                plano.codigo_erro = 3
+                retorne mova(plano)
+            }
+            seja cursor_adicionar = i + 4
+            seja nivel_adicionar = 0
+            enquanto cursor_adicionar < total {
+                seja atual_adicionar: lexico.UnidadeLexica = unidades[cursor_adicionar]
+                se fluxo.simbolo(fonte, atual_adicionar, 40) {
+                    nivel_adicionar = nivel_adicionar + 1
+                }
+                se fluxo.simbolo(fonte, atual_adicionar, 41) {
+                    se nivel_adicionar == 0 {
+                        pare
+                    }
+                    nivel_adicionar = nivel_adicionar - 1
+                }
+                se fluxo.simbolo(fonte, atual_adicionar, 125) {
+                    pare
+                }
+                cursor_adicionar = cursor_adicionar + 1
+            }
+            se cursor_adicionar >= total ou cursor_adicionar == i + 4 {
+                plano.codigo_erro = 3
+                retorne mova(plano)
+            }
+            seja fecho_adicionar: lexico.UnidadeLexica = unidades[cursor_adicionar]
+            se nao fluxo.simbolo(fonte, fecho_adicionar, 41) {
+                plano.codigo_erro = 3
+                retorne mova(plano)
+            }
+            instrucao.categoria = 13
+            instrucao.unidade_nome = i + 2
+            instrucao.valor_inicio = i + 4
+            instrucao.valor_fim = cursor_adicionar
+            adicione(plano.instrucoes, instrucao)
+            i = cursor_adicionar + 1
+            se i < total {
+                seja separador_adicionar: lexico.UnidadeLexica = unidades[i]
+                se fluxo.simbolo(fonte, separador_adicionar, 59) {
+                    i = i + 1
+                }
+            }
+            continue
+        }
         // liberar_bytes(nome) e uma instrucao explicita de ciclo de vida.
         se fluxo.igual(fonte, token, empreste(texto_liberar)) {
             se i + 3 >= total {
@@ -294,9 +350,27 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
                 instrucao.tipo_local = 2
                 plano.quantidade_locais = plano.quantidade_locais + 4
             } senao {
-                se nao fluxo.igual(fonte, unidade_tipo, empreste(texto_inteiro)) {
-                    plano.codigo_erro = 2
-                    retorne mova(plano)
+                se fluxo.igual(fonte, unidade_tipo, empreste(texto_lista)) {
+                    // lista[inteiro]: qword de tamanho e oito inteiros.
+                    se indice_igual + 5 >= total {
+                        plano.codigo_erro = 2
+                        retorne mova(plano)
+                    }
+                    seja abre_lista: lexico.UnidadeLexica = unidades[indice_igual + 2]
+                    seja item_lista: lexico.UnidadeLexica = unidades[indice_igual + 3]
+                    seja fecha_lista: lexico.UnidadeLexica = unidades[indice_igual + 4]
+                    se nao fluxo.simbolo(fonte, abre_lista, 91) ou nao fluxo.igual(fonte, item_lista, empreste(texto_inteiro)) ou nao fluxo.simbolo(fonte, fecha_lista, 93) {
+                        plano.codigo_erro = 2
+                        retorne mova(plano)
+                    }
+                    instrucao.tipo_local = 5
+                    plano.quantidade_locais = plano.quantidade_locais + 8
+                    indice_igual = indice_igual + 3
+                } senao {
+                    se nao fluxo.igual(fonte, unidade_tipo, empreste(texto_inteiro)) {
+                        plano.codigo_erro = 2
+                        retorne mova(plano)
+                    }
                 }
             }
             se plano.quantidade_locais > 128 {
@@ -304,6 +378,26 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
                 retorne mova(plano)
             }
             indice_igual = indice_igual + 2
+        }
+        se declaracao e instrucao.tipo_local == 5 {
+            // O tipo lista[inteiro] nasce vazio e nao recebe inicializador.
+            // O indice ja aponta para a proxima instrucao, ou para ';'.
+            seja apos_lista: lexico.UnidadeLexica = unidades[indice_igual]
+            se fluxo.simbolo(fonte, apos_lista, 61) {
+                plano.codigo_erro = 2
+                retorne mova(plano)
+            }
+            instrucao.categoria = 1
+            instrucao.unidade_nome = posicao_nome
+            adicione(plano.instrucoes, instrucao)
+            i = indice_igual
+            se i < total {
+                seja fim_lista: lexico.UnidadeLexica = unidades[i]
+                se fluxo.simbolo(fonte, fim_lista, 59) {
+                    i = i + 1
+                }
+            }
+            continue
         }
         seja atribuicao: lexico.UnidadeLexica = unidades[indice_igual]
         se nao fluxo.simbolo(fonte, atribuicao, 61) ou indice_igual + 1 >= total {
@@ -476,6 +570,8 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
     seja texto_seja: texto = "seja"
     seja texto_inteiro: texto = "inteiro"
     seja texto_bytes: texto = "bytes"
+    seja texto_lista: texto = "lista"
+    seja texto_adicione: texto = "adicione"
     seja texto_criar: texto = "criar_bytes"
     seja texto_liberar: texto = "liberar_bytes"
     seja texto_se: texto = "se"
@@ -660,6 +756,60 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
             plano.codigo_erro = 3
             retorne mova(plano)
         }
+        // adicione(lista, expressao): o tamanho e atualizado no emissor.
+        se fluxo.igual(fonte, token, empreste(texto_adicione)) {
+            se i + 5 >= total {
+                plano.codigo_erro = 3
+                retorne mova(plano)
+            }
+            seja abertura_adicionar: lexico.UnidadeLexica = unidades[i + 1]
+            seja nome_adicionar: lexico.UnidadeLexica = unidades[i + 2]
+            seja virgula_adicionar: lexico.UnidadeLexica = unidades[i + 3]
+            se nao fluxo.simbolo(fonte, abertura_adicionar, 40) ou nome_adicionar.classe != 1 ou nao fluxo.simbolo(fonte, virgula_adicionar, 44) {
+                plano.codigo_erro = 3
+                retorne mova(plano)
+            }
+            seja cursor_adicionar = i + 4
+            seja nivel_adicionar = 0
+            enquanto cursor_adicionar < total {
+                seja atual_adicionar: lexico.UnidadeLexica = unidades[cursor_adicionar]
+                se fluxo.simbolo(fonte, atual_adicionar, 40) {
+                    nivel_adicionar = nivel_adicionar + 1
+                }
+                se fluxo.simbolo(fonte, atual_adicionar, 41) {
+                    se nivel_adicionar == 0 {
+                        pare
+                    }
+                    nivel_adicionar = nivel_adicionar - 1
+                }
+                se fluxo.simbolo(fonte, atual_adicionar, 125) {
+                    pare
+                }
+                cursor_adicionar = cursor_adicionar + 1
+            }
+            se cursor_adicionar >= total ou cursor_adicionar == i + 4 {
+                plano.codigo_erro = 3
+                retorne mova(plano)
+            }
+            seja fecho_adicionar: lexico.UnidadeLexica = unidades[cursor_adicionar]
+            se nao fluxo.simbolo(fonte, fecho_adicionar, 41) {
+                plano.codigo_erro = 3
+                retorne mova(plano)
+            }
+            instrucao.categoria = 13
+            instrucao.unidade_nome = i + 2
+            instrucao.valor_inicio = i + 4
+            instrucao.valor_fim = cursor_adicionar
+            adicione(plano.instrucoes, instrucao)
+            i = cursor_adicionar + 1
+            se i < total {
+                seja separador_adicionar: lexico.UnidadeLexica = unidades[i]
+                se fluxo.simbolo(fonte, separador_adicionar, 59) {
+                    i = i + 1
+                }
+            }
+            continue
+        }
         // liberar_bytes(nome) e uma instrucao explicita de ciclo de vida.
         se fluxo.igual(fonte, token, empreste(texto_liberar)) {
             se i + 3 >= total {
@@ -751,9 +901,27 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
                 instrucao.tipo_local = 2
                 plano.quantidade_locais = plano.quantidade_locais + 4
             } senao {
-                se nao fluxo.igual(fonte, unidade_tipo, empreste(texto_inteiro)) {
-                    plano.codigo_erro = 2
-                    retorne mova(plano)
+                se fluxo.igual(fonte, unidade_tipo, empreste(texto_lista)) {
+                    // lista[inteiro]: qword de tamanho e oito inteiros.
+                    se indice_igual + 5 >= total {
+                        plano.codigo_erro = 2
+                        retorne mova(plano)
+                    }
+                    seja abre_lista: lexico.UnidadeLexica = unidades[indice_igual + 2]
+                    seja item_lista: lexico.UnidadeLexica = unidades[indice_igual + 3]
+                    seja fecha_lista: lexico.UnidadeLexica = unidades[indice_igual + 4]
+                    se nao fluxo.simbolo(fonte, abre_lista, 91) ou nao fluxo.igual(fonte, item_lista, empreste(texto_inteiro)) ou nao fluxo.simbolo(fonte, fecha_lista, 93) {
+                        plano.codigo_erro = 2
+                        retorne mova(plano)
+                    }
+                    instrucao.tipo_local = 5
+                    plano.quantidade_locais = plano.quantidade_locais + 8
+                    indice_igual = indice_igual + 3
+                } senao {
+                    se nao fluxo.igual(fonte, unidade_tipo, empreste(texto_inteiro)) {
+                        plano.codigo_erro = 2
+                        retorne mova(plano)
+                    }
                 }
             }
             se plano.quantidade_locais > 128 {
@@ -761,6 +929,26 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
                 retorne mova(plano)
             }
             indice_igual = indice_igual + 2
+        }
+        se declaracao e instrucao.tipo_local == 5 {
+            // O tipo lista[inteiro] nasce vazio e nao recebe inicializador.
+            // O indice ja aponta para a proxima instrucao, ou para ';'.
+            seja apos_lista: lexico.UnidadeLexica = unidades[indice_igual]
+            se fluxo.simbolo(fonte, apos_lista, 61) {
+                plano.codigo_erro = 2
+                retorne mova(plano)
+            }
+            instrucao.categoria = 1
+            instrucao.unidade_nome = posicao_nome
+            adicione(plano.instrucoes, instrucao)
+            i = indice_igual
+            se i < total {
+                seja fim_lista: lexico.UnidadeLexica = unidades[i]
+                se fluxo.simbolo(fonte, fim_lista, 59) {
+                    i = i + 1
+                }
+            }
+            continue
         }
         seja atribuicao: lexico.UnidadeLexica = unidades[indice_igual]
         se nao fluxo.simbolo(fonte, atribuicao, 61) ou indice_igual + 1 >= total {

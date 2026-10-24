@@ -13,6 +13,7 @@ importe "emissao_fluxo_elf.rts" como fluxo
 importe "expressoes_compilador.rts" como expressoes
 importe "instrucoes_integradas_elf.rts" como instrucoes
 importe "emissao_bytes_elf.rts" como emisbytes
+importe "emissao_listas_elf.rts" como emislistas
 
 publico tipo ResultadoCorposELF {
     arquivo: bytes
@@ -209,6 +210,11 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 seja nome_buffer: lexico.UnidadeLexica = unidades[primeiro + 2]
                 seja indice_buffer = fluxo.resolver(fonte, nomes, nome_buffer)
                 se indice_buffer >= 0 {
+                    se tipos[indice_buffer] == 5 {
+                        seja trecho_lista = emislistas.emitir_tamanho(mova(codigo), indice_buffer)
+                        mova(resposta.codigo, trecho_lista)
+                        retorne mova(resposta)
+                    }
                     se tipos[indice_buffer] == 2 ou tipos[indice_buffer] == 3 ou tipos[indice_buffer] == 4 {
                         seja trecho_tamanho = emisbytes.emitir_tamanho(mova(codigo), indice_buffer, tipos[indice_buffer])
                         mova(resposta.codigo, trecho_tamanho)
@@ -233,7 +239,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             se primeiro_fecho == ultimo - 1 {
                 seja indice_buffer = fluxo.resolver(fonte, nomes, primeiro_valor)
             se indice_buffer >= 0 {
-                se tipos[indice_buffer] == 2 ou tipos[indice_buffer] == 3 ou tipos[indice_buffer] == 4 {
+                se tipos[indice_buffer] == 2 ou tipos[indice_buffer] == 3 ou tipos[indice_buffer] == 4 ou tipos[indice_buffer] == 5 {
                     seja parte_indice = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 2, ultimo - 1, funcao_atual, nivel + 1)
                     se parte_indice.codigo_erro != 0 {
                         resposta.codigo_erro = parte_indice.codigo_erro
@@ -247,8 +253,13 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                         adicione(resposta.ligacoes, pendente)
                         k = k + 1
                     }
-                    seja leitura = emisbytes.emitir_leitura(mova(codigo), indice_buffer, tipos[indice_buffer])
-                    mova(resposta.codigo, leitura)
+                    se tipos[indice_buffer] == 5 {
+                        seja leitura_lista = emislistas.emitir_leitura(mova(codigo), indice_buffer)
+                        mova(resposta.codigo, leitura_lista)
+                    } senao {
+                        seja leitura = emisbytes.emitir_leitura(mova(codigo), indice_buffer, tipos[indice_buffer])
+                        mova(resposta.codigo, leitura)
+                    }
                     retorne mova(resposta)
                 }
             }
@@ -932,6 +943,36 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             posicao_ir = posicao_ir + 1
             continue
         }
+        se instrucao.categoria == 13 {
+            // adicione(lista, valor): somente listas locais de inteiros.
+            seja token_lista: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
+            seja indice_lista = fluxo.resolver(fonte, empreste(nomes), token_lista)
+            se indice_lista < 0 {
+                resposta.codigo_erro = 5
+                retorne mova(resposta)
+            }
+            se tipos[indice_lista] != 5 {
+                resposta.codigo_erro = 18
+                retorne mova(resposta)
+            }
+            seja elemento_lista = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, instrucao.valor_inicio, instrucao.valor_fim, funcao_atual, 0)
+            se elemento_lista.codigo_erro != 0 {
+                resposta.codigo_erro = elemento_lista.codigo_erro
+                resposta.unidade_erro = elemento_lista.unidade_erro
+                retorne mova(resposta)
+            }
+            mova(codigo, elemento_lista.codigo)
+            seja indice_ligacao_lista = 0
+            enquanto indice_ligacao_lista < tamanho(elemento_lista.ligacoes) {
+                seja destino_elemento: Ligacao = elemento_lista.ligacoes[indice_ligacao_lista]
+                adicione(ligacoes, destino_elemento)
+                indice_ligacao_lista = indice_ligacao_lista + 1
+            }
+            seja inserido = emislistas.emitir_adicionar(mova(codigo), indice_lista)
+            mova(codigo, inserido)
+            posicao_ir = posicao_ir + 1
+            continue
+        }
         se instrucao.categoria == 12 {
             // liberar_bytes(dados): transferencia de propriedade final.
             seja token_liberar: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
@@ -989,7 +1030,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         se instrucao.categoria == 11 {
             // dados[indice] = valor: as duas expressoes sao inteiras.
             // O buffer deve ter tipo local 2 ou dinamico 3.
-            se tipos[indice_local] != 2 e tipos[indice_local] != 3 {
+            se tipos[indice_local] != 2 e tipos[indice_local] != 3 e tipos[indice_local] != 5 {
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
             }
@@ -1019,16 +1060,39 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 adicione(ligacoes, pendente_valor)
                 l = l + 1
             }
-            seja escrita = emisbytes.emitir_escrita(mova(codigo), indice_local, tipos[indice_local] == 3)
-            mova(codigo, escrita)
+            se tipos[indice_local] == 5 {
+                seja escrita_lista = emislistas.emitir_escrita(mova(codigo), indice_local)
+                mova(codigo, escrita_lista)
+            } senao {
+                seja escrita = emisbytes.emitir_escrita(mova(codigo), indice_local, tipos[indice_local] == 3)
+                mova(codigo, escrita)
+            }
             posicao_ir = posicao_ir + 1
             continue
         }
         se instrucao.categoria == 2 {
-            se tipos[indice_local] == 2 ou tipos[indice_local] == 3 ou tipos[indice_local] == 4 {
+            se tipos[indice_local] == 2 ou tipos[indice_local] == 3 ou tipos[indice_local] == 4 ou tipos[indice_local] == 5 {
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
             }
+        }
+        se instrucao.categoria == 1 e instrucao.tipo_local == 5 {
+            // Uma lista local usa tamanho + oito elementos signed64.
+            seja lista_vazia = emislistas.inicializar(mova(codigo), indice_local)
+            mova(codigo, lista_vazia)
+            seja nome_lista: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
+            adicione(nomes, nome_lista)
+            adicione(tipos, 5)
+            seja reservado_lista = 0
+            enquanto reservado_lista < 8 {
+                seja oculto_lista: lexico.UnidadeLexica
+                oculto_lista.classe = 0
+                adicione(nomes, oculto_lista)
+                adicione(tipos, 0)
+                reservado_lista = reservado_lista + 1
+            }
+            posicao_ir = posicao_ir + 1
+            continue
         }
         se instrucao.categoria == 1 e (instrucao.tipo_local == 2 ou instrucao.tipo_local == 3) {
             se instrucao.tipo_local == 2 {
