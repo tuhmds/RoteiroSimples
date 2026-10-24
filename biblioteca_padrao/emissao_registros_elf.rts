@@ -42,3 +42,21 @@ publico funcao emitir_escrita(codigo: bytes, indice_local: inteiro, campo: intei
     mova(codigo, endereco)
     retorne mova(codigo)
 }
+
+// Leitura readonly por referencia a um registro local (incluindo campos
+// achatados de sub-registros). O endereco referencia o primeiro slot
+// do registro dono no quadro da funcao chamadora.
+publico funcao emitir_leitura_emprestada(codigo: bytes, indice_local: inteiro, campo: inteiro) -> bytes {
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 149) // mov rdx, [rbp - referencia]
+    seja referencia = fluxo.endereco(mova(codigo), indice_local)
+    mova(codigo, referencia)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 130) // mov rax, [rdx + disp32]
+    seja endereco_campo = elf.anexar_inteiro(mova(codigo), 4294967296 - campo * 8, 4)
+    mova(codigo, endereco_campo)
+    adicione_byte(codigo, 80)
+    retorne mova(codigo)
+}
