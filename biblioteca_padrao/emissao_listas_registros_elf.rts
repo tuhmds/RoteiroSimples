@@ -23,26 +23,40 @@ privado funcao exigir(codigo: bytes, condicao: inteiro, status: inteiro) -> byte
 }
 
 // Valida indice signed64; recupera o ponteiro apenas depois do teste.
-privado funcao verificar_indice(codigo: bytes, indice_lista: inteiro) -> bytes {
+privado funcao verificar_indice(codigo: bytes, indice_lista: inteiro, emprestado: logico) -> bytes {
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 133)
     adicione_byte(codigo, 192) // test rax,rax
     seja valido = exigir(mova(codigo), 137, 23) // jns
     mova(codigo, valido)
-    adicione_byte(codigo, 72)
-    adicione_byte(codigo, 59)
-    adicione_byte(codigo, 133) // cmp rax,[rbp - length]
-    seja campo_comprimento = fluxo.endereco(mova(codigo), indice_lista + 1)
-    mova(codigo, campo_comprimento)
+    se emprestado {
+        // O parametro aponta para o primeiro slot do descritor dono.
+        // Tamanho em elementos: qword imediatamente anterior ao ponteiro.
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 139)
+        adicione_byte(codigo, 149) // mov rdx, [rbp - referencia]
+        seja campo_referencia = fluxo.endereco(mova(codigo), indice_lista)
+        mova(codigo, campo_referencia)
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 59)
+        adicione_byte(codigo, 66)
+        adicione_byte(codigo, 248) // cmp rax, [rdx - 8]
+    } senao {
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 59)
+        adicione_byte(codigo, 133) // cmp rax, [rbp - length]
+        seja campo_comprimento = fluxo.endereco(mova(codigo), indice_lista + 1)
+        mova(codigo, campo_comprimento)
+    }
     seja dentro = exigir(mova(codigo), 130, 23) // jb
     mova(codigo, dentro)
     retorne mova(codigo)
 }
 
 // indice de registro no topo da pilha; retorna campo inteiro.
-publico funcao emitir_leitura(codigo: bytes, indice_lista: inteiro, campo: inteiro, largura: inteiro) -> bytes {
+publico funcao emitir_leitura(codigo: bytes, indice_lista: inteiro, campo: inteiro, largura: inteiro, emprestado: logico) -> bytes {
     adicione_byte(codigo, 88) // pop rax: indice
-    seja verificado = verificar_indice(mova(codigo), indice_lista)
+    seja verificado = verificar_indice(mova(codigo), indice_lista, emprestado)
     mova(codigo, verificado)
     // imul rax,rax,largura: indice linear em qwords.
     adicione_byte(codigo, 72)
@@ -59,6 +73,11 @@ publico funcao emitir_leitura(codigo: bytes, indice_lista: inteiro, campo: intei
     adicione_byte(codigo, 149)
     seja ponteiro = fluxo.endereco(mova(codigo), indice_lista)
     mova(codigo, ponteiro)
+    se emprestado {
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 139)
+        adicione_byte(codigo, 18) // mov rdx, [rdx]: base atual da lista
+    }
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 139)
     adicione_byte(codigo, 4)
@@ -71,7 +90,7 @@ publico funcao emitir_leitura(codigo: bytes, indice_lista: inteiro, campo: intei
 publico funcao emitir_escrita(codigo: bytes, indice_lista: inteiro, campo: inteiro, largura: inteiro) -> bytes {
     adicione_byte(codigo, 89) // pop rcx: valor
     adicione_byte(codigo, 88) // pop rax: indice
-    seja verificado = verificar_indice(mova(codigo), indice_lista)
+    seja verificado = verificar_indice(mova(codigo), indice_lista, falso)
     mova(codigo, verificado)
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 105)
