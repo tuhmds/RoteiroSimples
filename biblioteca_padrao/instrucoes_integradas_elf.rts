@@ -358,6 +358,21 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
                     plano.codigo_erro = 3
                     retorne mova(plano)
                 }
+                // lista_registros[indice].campo = expressao.
+                seja talvez_ponto: lexico.UnidadeLexica = unidades[indice_igual]
+                se fluxo.simbolo(fonte, talvez_ponto, 46) {
+                    se indice_igual + 2 >= total {
+                        plano.codigo_erro = 3
+                        retorne mova(plano)
+                    }
+                    seja campo_indexado: lexico.UnidadeLexica = unidades[indice_igual + 1]
+                    se campo_indexado.classe != 1 {
+                        plano.codigo_erro = 3
+                        retorne mova(plano)
+                    }
+                    instrucao.campo_unidade = indice_igual + 1
+                    indice_igual = indice_igual + 2
+                }
             }
         }
         // Bytes locais usam 7 slots: comprimento, 32 bytes de dados e
@@ -385,11 +400,20 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
                     seja abre_lista: lexico.UnidadeLexica = unidades[indice_igual + 2]
                     seja item_lista: lexico.UnidadeLexica = unidades[indice_igual + 3]
                     seja fecha_lista: lexico.UnidadeLexica = unidades[indice_igual + 4]
-                    se nao fluxo.simbolo(fonte, abre_lista, 91) ou nao fluxo.igual(fonte, item_lista, empreste(texto_inteiro)) ou nao fluxo.simbolo(fonte, fecha_lista, 93) {
+                    se nao fluxo.simbolo(fonte, abre_lista, 91) ou nao fluxo.simbolo(fonte, fecha_lista, 93) {
                         plano.codigo_erro = 2
                         retorne mova(plano)
                     }
-                    instrucao.tipo_local = 5
+                    se fluxo.igual(fonte, item_lista, empreste(texto_inteiro)) {
+                        instrucao.tipo_local = 5
+                    } senao {
+                        seja tipo_elemento = esquemas.buscar_tipo(fonte, unidades, empreste(registros), item_lista)
+                        se tipo_elemento < 0 {
+                            plano.codigo_erro = 2
+                            retorne mova(plano)
+                        }
+                        instrucao.tipo_local = 20 + tipo_elemento
+                    }
                     plano.quantidade_locais = plano.quantidade_locais + 2
                     indice_igual = indice_igual + 3
                 } senao {
@@ -447,6 +471,9 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
         }
         se instrucao.campo_unidade >= 0 {
             instrucao.categoria = 14
+            se indexado {
+                instrucao.categoria = 15
+            }
         }
         instrucao.unidade_nome = posicao_nome
         instrucao.valor_inicio = indice_igual + 1
@@ -942,6 +969,21 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
                     plano.codigo_erro = 3
                     retorne mova(plano)
                 }
+                // lista_registros[indice].campo = expressao.
+                seja talvez_ponto: lexico.UnidadeLexica = unidades[indice_igual]
+                se fluxo.simbolo(fonte, talvez_ponto, 46) {
+                    se indice_igual + 2 >= total {
+                        plano.codigo_erro = 3
+                        retorne mova(plano)
+                    }
+                    seja campo_indexado: lexico.UnidadeLexica = unidades[indice_igual + 1]
+                    se campo_indexado.classe != 1 {
+                        plano.codigo_erro = 3
+                        retorne mova(plano)
+                    }
+                    instrucao.campo_unidade = indice_igual + 1
+                    indice_igual = indice_igual + 2
+                }
             }
         }
         // Bytes locais usam 7 slots: comprimento, 32 bytes de dados e
@@ -969,11 +1011,20 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
                     seja abre_lista: lexico.UnidadeLexica = unidades[indice_igual + 2]
                     seja item_lista: lexico.UnidadeLexica = unidades[indice_igual + 3]
                     seja fecha_lista: lexico.UnidadeLexica = unidades[indice_igual + 4]
-                    se nao fluxo.simbolo(fonte, abre_lista, 91) ou nao fluxo.igual(fonte, item_lista, empreste(texto_inteiro)) ou nao fluxo.simbolo(fonte, fecha_lista, 93) {
+                    se nao fluxo.simbolo(fonte, abre_lista, 91) ou nao fluxo.simbolo(fonte, fecha_lista, 93) {
                         plano.codigo_erro = 2
                         retorne mova(plano)
                     }
-                    instrucao.tipo_local = 5
+                    se fluxo.igual(fonte, item_lista, empreste(texto_inteiro)) {
+                        instrucao.tipo_local = 5
+                    } senao {
+                        seja tipo_elemento = esquemas.buscar_tipo(fonte, unidades, empreste(registros), item_lista)
+                        se tipo_elemento < 0 {
+                            plano.codigo_erro = 2
+                            retorne mova(plano)
+                        }
+                        instrucao.tipo_local = 20 + tipo_elemento
+                    }
                     plano.quantidade_locais = plano.quantidade_locais + 2
                     indice_igual = indice_igual + 3
                 } senao {
@@ -1031,6 +1082,9 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
         }
         se instrucao.campo_unidade >= 0 {
             instrucao.categoria = 14
+            se indexado {
+                instrucao.categoria = 15
+            }
         }
         instrucao.unidade_nome = posicao_nome
         instrucao.valor_inicio = indice_igual + 1

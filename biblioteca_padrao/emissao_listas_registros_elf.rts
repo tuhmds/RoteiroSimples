@@ -1,0 +1,219 @@
+// Listas dinamicas de registros com campos inteiro no ELF64.
+ // Elementos contiguos (AoS): [e0.c0, e0.c1, ..., e1.c0, ...].
+ // Descritor: ponteiro, quantidade de REGISTROS e capacidade em bytes.
+ // A largura por elemento e derivada do esquema estatico (1..8 qwords).
+importe "emissao_elf_minima.rts" como elf
+importe "emissao_fluxo_elf.rts" como fluxo
+
+// Salta 12 bytes do exit(status) quando o predicado e verdadeiro.
+privado funcao exigir(codigo: bytes, condicao: inteiro, status: inteiro) -> bytes {
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, condicao)
+    seja salto = elf.anexar_inteiro(mova(codigo), 12, 4)
+    mova(codigo, salto)
+    adicione_byte(codigo, 184)
+    seja chamada = elf.anexar_inteiro(mova(codigo), 60, 4)
+    mova(codigo, chamada)
+    adicione_byte(codigo, 191)
+    seja status_erro = elf.anexar_inteiro(mova(codigo), status, 4)
+    mova(codigo, status_erro)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 5)
+    retorne mova(codigo)
+}
+
+// Valida indice signed64; recupera o ponteiro apenas depois do teste.
+privado funcao verificar_indice(codigo: bytes, indice_lista: inteiro) -> bytes {
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 133)
+    adicione_byte(codigo, 192) // test rax,rax
+    seja valido = exigir(mova(codigo), 137, 23) // jns
+    mova(codigo, valido)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 59)
+    adicione_byte(codigo, 133) // cmp rax,[rbp - length]
+    seja campo_comprimento = fluxo.endereco(mova(codigo), indice_lista + 1)
+    mova(codigo, campo_comprimento)
+    seja dentro = exigir(mova(codigo), 130, 23) // jb
+    mova(codigo, dentro)
+    retorne mova(codigo)
+}
+
+// indice de registro no topo da pilha; retorna campo inteiro.
+publico funcao emitir_leitura(codigo: bytes, indice_lista: inteiro, campo: inteiro, largura: inteiro) -> bytes {
+    adicione_byte(codigo, 88) // pop rax: indice
+    seja verificado = verificar_indice(mova(codigo), indice_lista)
+    mova(codigo, verificado)
+    // imul rax,rax,largura: indice linear em qwords.
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 105)
+    adicione_byte(codigo, 192)
+    seja multiplicador = elf.anexar_inteiro(mova(codigo), largura, 4)
+    mova(codigo, multiplicador)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 131)
+    adicione_byte(codigo, 192)
+    adicione_byte(codigo, campo) // add rax,numero do campo
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 149)
+    seja ponteiro = fluxo.endereco(mova(codigo), indice_lista)
+    mova(codigo, ponteiro)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 4)
+    adicione_byte(codigo, 194) // mov rax,[rdx+rax*8]
+    adicione_byte(codigo, 80) // push rax
+    retorne mova(codigo)
+}
+
+// pilha: indice, valor. Valida indice antes de gravar a qword.
+publico funcao emitir_escrita(codigo: bytes, indice_lista: inteiro, campo: inteiro, largura: inteiro) -> bytes {
+    adicione_byte(codigo, 89) // pop rcx: valor
+    adicione_byte(codigo, 88) // pop rax: indice
+    seja verificado = verificar_indice(mova(codigo), indice_lista)
+    mova(codigo, verificado)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 105)
+    adicione_byte(codigo, 192)
+    seja multiplicador = elf.anexar_inteiro(mova(codigo), largura, 4)
+    mova(codigo, multiplicador)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 131)
+    adicione_byte(codigo, 192)
+    adicione_byte(codigo, campo)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 149)
+    seja ponteiro = fluxo.endereco(mova(codigo), indice_lista)
+    mova(codigo, ponteiro)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 12)
+    adicione_byte(codigo, 194) // mov [rdx+rax*8],rcx
+    retorne mova(codigo)
+}
+
+// Copia N campos do registro local para uma NOVA posicao no vetor.
+// Nao movimenta o registro fonte, pois os campos sao tipos inteiros.
+publico funcao emitir_adicionar(codigo: bytes, indice_lista: inteiro, indice_registro: inteiro, largura: inteiro) -> bytes {
+    // Precisamos de (comprimento + 1) * largura * 8 bytes.
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 141) // mov rcx,[rbp-length]
+    seja comprimento = fluxo.endereco(mova(codigo), indice_lista + 1)
+    mova(codigo, comprimento)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 131)
+    adicione_byte(codigo, 193)
+    adicione_byte(codigo, 1) // inc rcx
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 105)
+    adicione_byte(codigo, 201) // imul rcx,rcx,imm32
+    seja total_bytes = elf.anexar_inteiro(mova(codigo), largura * 8, 4)
+    mova(codigo, total_bytes)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 59)
+    adicione_byte(codigo, 141) // cmp rcx,[rbp-capacidade]
+    seja capacidade_atual = fluxo.endereco(mova(codigo), indice_lista + 2)
+    mova(codigo, capacidade_atual)
+    // jbe: ja cabe
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 134)
+    seja salto_sem_crescer = tamanho(codigo)
+    seja lacuna = elf.anexar_inteiro(mova(codigo), 0, 4)
+    mova(codigo, lacuna)
+
+    // Crescimento geometrico de capacidade, na mesma ABI de lista[inteiro].
+    adicione_byte(codigo, 87) // push rdi, preservar resultado de inicio
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 189) // mov rdi,[rbp-ptr]
+    seja ptr = fluxo.endereco(mova(codigo), indice_lista)
+    mova(codigo, ptr)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 181) // mov rsi,[rbp-capacidade]
+    seja capacidade_antiga = fluxo.endereco(mova(codigo), indice_lista + 2)
+    mova(codigo, capacidade_antiga)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 129)
+    adicione_byte(codigo, 254) // cmp rsi,1048576
+    seja maximo = elf.anexar_inteiro(mova(codigo), 1048576, 4)
+    mova(codigo, maximo)
+    seja ainda_pode = exigir(mova(codigo), 130, 24) // jb
+    mova(codigo, ainda_pode)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 242) // mov rdx,rsi
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 209)
+    adicione_byte(codigo, 226) // shl rdx, 1
+    adicione_byte(codigo, 65)
+    adicione_byte(codigo, 186) // mov r10d,1 MREMAP_MAYMOVE
+    seja opcoes = elf.anexar_inteiro(mova(codigo), 1, 4)
+    mova(codigo, opcoes)
+    adicione_byte(codigo, 184)
+    seja numero = elf.anexar_inteiro(mova(codigo), 25, 4)
+    mova(codigo, numero)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 5) // syscall
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 133)
+    adicione_byte(codigo, 192)
+    seja remapeado = exigir(mova(codigo), 137, 24) // jns
+    mova(codigo, remapeado)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 133) // mov [rbp-ptr],rax
+    seja nova_base = fluxo.endereco(mova(codigo), indice_lista)
+    mova(codigo, nova_base)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 149) // mov [rbp-capacidade],rdx
+    seja nova_capacidade = fluxo.endereco(mova(codigo), indice_lista + 2)
+    mova(codigo, nova_capacidade)
+    adicione_byte(codigo, 95) // pop rdi
+    seja depois = tamanho(codigo)
+    seja corrigido = fluxo.corrigir(mova(codigo), salto_sem_crescer, depois)
+    mova(codigo, corrigido)
+
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 149) // mov rdx,[rbp-ptr]
+    seja endereco_ptr = fluxo.endereco(mova(codigo), indice_lista)
+    mova(codigo, endereco_ptr)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 141) // mov rcx,[rbp-length]
+    seja endereco_comprimento = fluxo.endereco(mova(codigo), indice_lista + 1)
+    mova(codigo, endereco_comprimento)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 105)
+    adicione_byte(codigo, 201) // imul rcx,rcx,largura
+    seja fator = elf.anexar_inteiro(mova(codigo), largura, 4)
+    mova(codigo, fator)
+    seja campo = 0
+    enquanto campo < largura {
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 139)
+        adicione_byte(codigo, 133) // mov rax,[rbp-registro.campo]
+        seja origem = fluxo.endereco(mova(codigo), indice_registro + campo)
+        mova(codigo, origem)
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 137)
+        adicione_byte(codigo, 4)
+        adicione_byte(codigo, 202) // mov [rdx+rcx*8],rax
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 255)
+        adicione_byte(codigo, 193) // inc rcx
+        campo = campo + 1
+    }
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 131)
+    adicione_byte(codigo, 133) // add qword [rbp-length],1
+    seja campo_tamanho = fluxo.endereco(mova(codigo), indice_lista + 1)
+    mova(codigo, campo_tamanho)
+    adicione_byte(codigo, 1)
+    retorne mova(codigo)
+}
