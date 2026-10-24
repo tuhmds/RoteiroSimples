@@ -66,7 +66,7 @@ class TestesEscapesBytesFixosELF(unittest.TestCase):
                     self.assertEqual(status, 42)
 
     def test_escapes_invalidos_ou_buffer_maior_rejeitados(self):
-        casos = (r"A\qB", r"A\u00E9", r"\n" * 33)
+        casos = (r"A\qB", r"A\u00GZ", r"\n" * 33)
         for nivel in (0, 8):
             for literal in casos:
                 fonte = (
