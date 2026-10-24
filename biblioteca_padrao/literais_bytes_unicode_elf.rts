@@ -1,0 +1,169 @@
+// Decodificador de literais bytes para o emissor ELF64 escrito em RS.
+// Aceita escapes ASCII JSON e Unicode \uXXXX, incluindo pares UTF-16.
+// Mantem os bytes UTF-8 ja presentes na fonte sem conversao ou copia extra.
+// Falha 17 para escapes invalidos, substitutos isolados e mais de 32 bytes.
+importe "lexico.rts" como lexico
+
+publico tipo LiteralDecodificado {
+    valores: lista[inteiro]
+    codigo_erro: inteiro
+}
+
+privado funcao valor_hexadecimal(valor: inteiro) -> inteiro {
+    se valor >= 48 e valor <= 57 {
+        retorne valor - 48
+    }
+    se valor >= 65 e valor <= 70 {
+        retorne valor - 65 + 10
+    }
+    se valor >= 97 e valor <= 102 {
+        retorne valor - 97 + 10
+    }
+    retorne -1
+}
+
+// 'primeiro' aponta para o primeiro dos quatro digitos depois de \u.
+privado funcao ler_quatro_hex(fonte: emprestimo[bytes], primeiro: inteiro, fim: inteiro) -> inteiro {
+    se primeiro < 0 ou primeiro + 4 > fim {
+        retorne -1
+    }
+    seja valor = 0
+    seja i = 0
+    enquanto i < 4 {
+        seja digito = valor_hexadecimal(fonte[primeiro + i])
+        se digito < 0 {
+            retorne -1
+        }
+        valor = valor * 16 + digito
+        i = i + 1
+    }
+    retorne valor
+}
+
+privado funcao valor_escape(valor: inteiro) -> inteiro {
+    se valor == 34 {
+        retorne 34
+    }
+    se valor == 92 {
+        retorne 92
+    }
+    se valor == 47 {
+        retorne 47
+    }
+    se valor == 98 {
+        retorne 8
+    }
+    se valor == 102 {
+        retorne 12
+    }
+    se valor == 110 {
+        retorne 10
+    }
+    se valor == 114 {
+        retorne 13
+    }
+    se valor == 116 {
+        retorne 9
+    }
+    retorne -1
+}
+
+// Valida o literal completo antes da emissao de qualquer byte de maquina.
+// O limite de 32 se aplica aos bytes finais, nao ao comprimento da fonte.
+publico funcao decodificar(fonte: emprestimo[bytes], literal: lexico.UnidadeLexica) -> LiteralDecodificado {
+    seja resposta: LiteralDecodificado
+    se literal.classe != 3 ou literal.comprimento_byte < 2 {
+        resposta.codigo_erro = 17
+        retorne mova(resposta)
+    }
+    se literal.inicio_byte < 0 ou literal.comprimento_byte > tamanho(fonte) - literal.inicio_byte {
+        resposta.codigo_erro = 17
+        retorne mova(resposta)
+    }
+    seja cursor = literal.inicio_byte + 1
+    seja fim = literal.inicio_byte + literal.comprimento_byte - 1
+    enquanto cursor < fim {
+        seja valor = fonte[cursor]
+        se valor < 32 {
+            resposta.codigo_erro = 17
+            retorne mova(resposta)
+        }
+        se valor == 92 {
+            cursor = cursor + 1
+            se cursor >= fim {
+                resposta.codigo_erro = 17
+                retorne mova(resposta)
+            }
+            seja escape = fonte[cursor]
+            se escape == 117 {
+                // O primeiro \uXXXX pode representar um escalar ou um
+                // substituto alto que exige obrigatoriamente um baixo.
+                valor = ler_quatro_hex(fonte, cursor + 1, fim)
+                se valor < 0 {
+                    resposta.codigo_erro = 17
+                    retorne mova(resposta)
+                }
+                cursor = cursor + 4
+                se valor >= 55296 e valor <= 56319 {
+                    // Exige segunda sequencia \uDC00..\uDFFF completa.
+                    se cursor + 6 >= fim {
+                        resposta.codigo_erro = 17
+                        retorne mova(resposta)
+                    }
+                    se fonte[cursor + 1] != 92 ou fonte[cursor + 2] != 117 {
+                        resposta.codigo_erro = 17
+                        retorne mova(resposta)
+                    }
+                    seja baixo = ler_quatro_hex(fonte, cursor + 3, fim)
+                    se baixo < 56320 ou baixo > 57343 {
+                        resposta.codigo_erro = 17
+                        retorne mova(resposta)
+                    }
+                    valor = 65536 + (valor - 55296) * 1024 + (baixo - 56320)
+                    cursor = cursor + 6
+                } senao {
+                    se valor >= 56320 e valor <= 57343 {
+                        resposta.codigo_erro = 17
+                        retorne mova(resposta)
+                    }
+                }
+                // Codificacao UTF-8 padrao, apenas escalares validos.
+                se valor <= 127 {
+                    adicione(resposta.valores, valor)
+                } senao {
+                    se valor <= 2047 {
+                        adicione(resposta.valores, 192 + valor / 64)
+                        adicione(resposta.valores, 128 + valor % 64)
+                    } senao {
+                        se valor <= 65535 {
+                            adicione(resposta.valores, 224 + valor / 4096)
+                            adicione(resposta.valores, 128 + (valor / 64) % 64)
+                            adicione(resposta.valores, 128 + valor % 64)
+                        } senao {
+                            adicione(resposta.valores, 240 + valor / 262144)
+                            adicione(resposta.valores, 128 + (valor / 4096) % 64)
+                            adicione(resposta.valores, 128 + (valor / 64) % 64)
+                            adicione(resposta.valores, 128 + valor % 64)
+                        }
+                    }
+                }
+            } senao {
+                valor = valor_escape(escape)
+                se valor < 0 {
+                    resposta.codigo_erro = 17
+                    retorne mova(resposta)
+                }
+                adicione(resposta.valores, valor)
+            }
+        } senao {
+            // UTF-8 presente diretamente no fonte permanece byte a byte.
+            adicione(resposta.valores, valor)
+        }
+        se tamanho(resposta.valores) > 32 {
+            resposta.codigo_erro = 17
+            retorne mova(resposta)
+        }
+        cursor = cursor + 1
+    }
+    retorne mova(resposta)
+}
