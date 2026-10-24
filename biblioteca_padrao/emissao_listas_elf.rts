@@ -111,8 +111,8 @@ publico funcao emitir_adicionar(codigo: bytes, indice_local: inteiro) -> bytes {
     adicione_byte(codigo, 131)
     adicione_byte(codigo, 249)
     adicione_byte(codigo, 8) // cmp rcx, 8
-    seja capacidade = exigir(mova(codigo), 130) // jb
-    mova(codigo, capacidade)
+    seja limite_lista = exigir(mova(codigo), 130) // jb
+    mova(codigo, limite_lista)
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 247)
     adicione_byte(codigo, 217) // neg rcx
