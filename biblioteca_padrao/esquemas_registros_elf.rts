@@ -1,17 +1,20 @@
 // Esquemas minimos de registros de inteiros no emissor ELF64 escrito em RS.
 // Declaracoes no inicio da unidade: tipo Nome { campo: inteiro ... }
-// Nao aceita registros aninhados nem campos proprietarios nesta etapa.
+// Suporta registros aninhados achatados, declarados antes dos tipos pais.
 importe "lexico.rts" como lexico
 importe "emissao_fluxo_elf.rts" como fluxo
 
 publico tipo CampoRegistro {
     unidade_nome: inteiro
+    deslocamento: inteiro
+    tipo_filho: inteiro // -1 para inteiro, indice do esquema para registro
 }
 
 publico tipo TipoRegistro {
     unidade_nome: inteiro
     primeiro_campo: inteiro
     quantidade_campos: inteiro
+    quantidade_slots: inteiro // soma dos tamanhos de campos achatados
 }
 
 publico tipo EsquemasRegistros {
@@ -45,14 +48,66 @@ publico funcao buscar_campo(fonte: emprestimo[bytes], unidades: emprestimo[lista
         seja campo: CampoRegistro = descricoes.campos[registro.primeiro_campo + indice]
         seja declarado: lexico.UnidadeLexica = unidades[campo.unidade_nome]
         se fluxo.mesmo_nome(fonte, declarado, nome) {
-            retorne indice
+            se campo.tipo_filho >= 0 {
+                retorne -2 // nao se pode usar um registro inteiro como escalar
+            }
+            retorne campo.deslocamento
         }
         indice = indice + 1
     }
     retorne -1
 }
 
-// Limite: 8 tipos; 1 a 8 campos inteiros cada, 64 campos por unidade.
+// Resolve um caminho nome.subcampo[.outro] em slots do registro raiz.
+// inicio/fim abrangem os nomes e os pontos; sem incluir a variavel raiz.
+publico funcao buscar_caminho(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], descricoes: emprestimo[EsquemasRegistros], tipo_indice: inteiro, inicio: inteiro, fim: inteiro) -> inteiro {
+    seja atual_tipo = tipo_indice
+    seja posicao = inicio
+    seja deslocamento_final = 0
+    enquanto posicao < fim {
+        se atual_tipo < 0 ou atual_tipo >= tamanho(descricoes.tipos) {
+            retorne -2
+        }
+        seja nome: lexico.UnidadeLexica = unidades[posicao]
+        se nome.classe != 1 {
+            retorne -1
+        }
+        seja esquema: TipoRegistro = descricoes.tipos[atual_tipo]
+        seja encontrado = falso
+        seja campo_atual: CampoRegistro
+        seja indice = 0
+        enquanto indice < esquema.quantidade_campos {
+            seja candidato: CampoRegistro = descricoes.campos[esquema.primeiro_campo + indice]
+            seja nome_candidato: lexico.UnidadeLexica = unidades[candidato.unidade_nome]
+            se fluxo.mesmo_nome(fonte, nome_candidato, nome) {
+                campo_atual = candidato
+                encontrado = verdadeiro
+                pare
+            }
+            indice = indice + 1
+        }
+        se nao encontrado {
+            retorne -1
+        }
+        deslocamento_final = deslocamento_final + campo_atual.deslocamento
+        posicao = posicao + 1
+        se posicao == fim {
+            se campo_atual.tipo_filho >= 0 {
+                retorne -2
+            }
+            retorne deslocamento_final
+        }
+        seja ponto: lexico.UnidadeLexica = unidades[posicao]
+        se nao fluxo.simbolo(fonte, ponto, 46) ou campo_atual.tipo_filho < 0 {
+            retorne -2
+        }
+        atual_tipo = campo_atual.tipo_filho
+        posicao = posicao + 1
+    }
+    retorne -1
+}
+
+// Limite: 8 tipos; 1 a 8 campos cada, ate 32 qwords achatadas por tipo.
 // As definicoes devem preceder todas as funcoes e o bloco inicio.
 publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]]) -> EsquemasRegistros {
     seja resposta: EsquemasRegistros
@@ -98,8 +153,27 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
             seja nome_campo: lexico.UnidadeLexica = unidades[cursor]
             seja dois_pontos: lexico.UnidadeLexica = unidades[cursor + 1]
             seja tipo_campo: lexico.UnidadeLexica = unidades[cursor + 2]
-            se nome_campo.classe != 1 ou nao fluxo.simbolo(fonte, dois_pontos, 58) ou nao fluxo.igual(fonte, tipo_campo, empreste(palavra_inteiro)) {
+            se nome_campo.classe != 1 ou nao fluxo.simbolo(fonte, dois_pontos, 58) {
                 resposta.codigo_erro = 2
+                resposta.unidade_erro = cursor
+                retorne mova(resposta)
+            }
+            seja tipo_filho = -1
+            seja tamanho_campo = 1
+            se nao fluxo.igual(fonte, tipo_campo, empreste(palavra_inteiro)) {
+                // Somente tipos ja declarados. Isso proibe ciclos e
+                // referencias a tipos ainda incompletos.
+                tipo_filho = buscar_tipo(fonte, unidades, empreste(resposta), tipo_campo)
+                se tipo_filho < 0 {
+                    resposta.codigo_erro = 2
+                    resposta.unidade_erro = cursor + 2
+                    retorne mova(resposta)
+                }
+                seja filho: TipoRegistro = resposta.tipos[tipo_filho]
+                tamanho_campo = filho.quantidade_slots
+            }
+            se registro.quantidade_slots + tamanho_campo > 32 {
+                resposta.codigo_erro = 8
                 resposta.unidade_erro = cursor
                 retorne mova(resposta)
             }
@@ -116,8 +190,11 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
             }
             seja campo: CampoRegistro
             campo.unidade_nome = cursor
+            campo.deslocamento = registro.quantidade_slots
+            campo.tipo_filho = tipo_filho
             adicione(resposta.campos, campo)
             registro.quantidade_campos = registro.quantidade_campos + 1
+            registro.quantidade_slots = registro.quantidade_slots + tamanho_campo
             cursor = cursor + 3
             se cursor < tamanho(unidades) {
                 seja separador: lexico.UnidadeLexica = unidades[cursor]
