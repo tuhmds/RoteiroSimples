@@ -300,7 +300,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                     adicione(resposta.ligacoes, ligacao)
                     indice_ligacao = indice_ligacao + 1
                 }
-                seja acesso = emisreglistas.emitir_leitura(mova(codigo), lista_local, campo_lista, layout_lista.quantidade_campos)
+                seja acesso = emisreglistas.emitir_leitura(mova(codigo), lista_local, campo_lista, layout_lista.quantidade_campos, tipos[lista_local] >= 30)
                 mova(resposta.codigo, acesso)
                 retorne mova(resposta)
             }
@@ -343,7 +343,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 seja indice_buffer = fluxo.resolver(fonte, nomes, nome_buffer)
                 se indice_buffer >= 0 {
                     se tipos[indice_buffer] == 5 ou tipos[indice_buffer] == 6 ou tipos[indice_buffer] >= 20 {
-                        seja trecho_lista = emislistas.emitir_tamanho(mova(codigo), indice_buffer, tipos[indice_buffer] == 6)
+                        seja trecho_lista = emislistas.emitir_tamanho(mova(codigo), indice_buffer, tipos[indice_buffer] == 6 ou tipos[indice_buffer] >= 30)
                         mova(resposta.codigo, trecho_lista)
                         retorne mova(resposta)
                     }
@@ -891,7 +891,7 @@ privado funcao emitir_predicado(codigo: bytes, fonte: emprestimo[bytes], unidade
 privado funcao emitir_limpeza_escopo(codigo: bytes, nomes: emprestimo[lista[lexico.UnidadeLexica]], tipos: emprestimo[lista[inteiro]], marcador: inteiro) -> bytes {
     seja i = tamanho(nomes) - 1
     enquanto i >= marcador {
-        se tipos[i] == 3 ou tipos[i] == 5 ou tipos[i] >= 20 {
+        se tipos[i] == 3 ou tipos[i] == 5 ou (tipos[i] >= 20 e tipos[i] < 30) {
             seja nome: lexico.UnidadeLexica = nomes[i]
             se nome.classe != 0 {
                 seja liberado = emisbytes.emitir_liberacao_automatica(mova(codigo), i)
@@ -1118,7 +1118,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 resposta.codigo_erro = 5
                 retorne mova(resposta)
             }
-            se tipos[indice_lista] >= 20 {
+            se tipos[indice_lista] >= 20 e tipos[indice_lista] < 30 {
                 // adicione(lista[Registro], registro) copia todos os campos.
                 se instrucao.valor_fim != instrucao.valor_inicio + 1 {
                     resposta.codigo_erro = 18
@@ -1223,7 +1223,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         seja ultimo = instrucao.valor_fim
         se instrucao.categoria == 15 {
             // lista[indice].campo = valor: indice e valor ja sao inteiros.
-            se tipos[indice_local] < 20 {
+            se tipos[indice_local] < 20 ou tipos[indice_local] >= 30 {
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
             }
@@ -1268,7 +1268,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         }
         se instrucao.categoria == 14 {
             // Apenas um campo inteiro de um registro proprietario local.
-            se tipos[indice_local] < 7 {
+            se tipos[indice_local] < 7 ou tipos[indice_local] >= 20 {
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
             }
