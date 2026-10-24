@@ -281,6 +281,9 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 }
                 seja descricoes_lista = esquemas.analisar(fonte, unidades)
                 seja tipo_lista = tipos[lista_local] - 20
+                se tipos[lista_local] >= 30 {
+                    tipo_lista = tipos[lista_local] - 30
+                }
                 seja campo_lista = esquemas.buscar_campo(fonte, unidades, empreste(descricoes_lista), tipo_lista, nome_final)
                 se campo_lista < 0 {
                     resposta.codigo_erro = 5
