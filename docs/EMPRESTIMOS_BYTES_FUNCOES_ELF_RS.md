@@ -45,10 +45,11 @@ sincrona e nao oferece armazenamento de referencias fora da funcao.
 
 ## Restricoes verificadas
 
-- Somente um identificador de buffer dinamico proprietario ou de
-  outro parametro emprestado pode ser argumento do emprestimo.
-- Buffer de literal local (32 bytes), variavel inteira ou expressao
-  temporaria nao pode ser passado como emprestimo neste incremento.
+- Somente um identificador de buffer fixo na pilha, dinamico proprietario
+  ou outro parametro emprestado pode ser argumento do emprestimo.
+- Variavel inteira e expressao temporaria nao podem ser passadas como
+  emprestimo. A forma direta de texto literal como argumento tambem
+  continua sem suporte; primeiro declare uma variavel `bytes`.
 - A funcao emprestada pode chamar `tamanho(dados)` e
   ler `dados[indice]` com os mesmos limites seguros (saida 23).
 - A funcao emprestada nao pode escrever `dados[indice] = ...`,
@@ -66,10 +67,35 @@ O diagnostico 18 cobre incompatibilidades de tipo/emprestimo.
 Este e **um primeiro emprestimo read-only de curta duracao**, e nao
 ownership completo. Ainda nao aceita transferencia de propriedade
 para outra funcao, retorno de buffers, referencia armazenada em
-registro, emprestimo estatico de literal local, alias mutavel, ou
+registro, emprestimo de literal temporario, alias mutavel, ou
 comprovacao geral de ciclos de vida entre referencias.
 
 Os testes cobrem chamadas diretas, encadeadas e com parametros mistos,
 preservacao de propriedade pelo chamador, erros de tipagem e leitura
 apos liberacao. Continuam sendo gerados arquivos ELF64 Linux x86-64;
 o emissor escrito em RS ainda e compilado pelo bootstrap atual.
+
+## Bytes fixos emprestados (incremento seguinte)
+
+`seja dados: bytes = "ABC"` agora tambem pode ser argumento de
+`funcao ler(dados: emprestimo[bytes]) -> inteiro`. O emissor reserva
+**sete qwords de pilha** para cada buffer fixo: comprimento original,
+32 bytes de dados e dois slots contiguos de descritor emprestavel
+(ponteiro, comprimento). `emprestimo[bytes]` continua contendo o
+endereco do slot de ponteiro; assim o destinatario usa a mesma ABI
+read-only para buffers fixos, dinamicos e reemprestados.
+
+Os dois slots extras pertencem ao quadro do chamador. A referencia
+so e valida durante a chamada sincrona; nao pode ser retornada,
+armazenada como referencia persistente, liberada, nem alterada na
+funcao chamada. O proprietario ainda pode alterar o proprio buffer
+apos o retorno, sem refazer o descritor, pois seu comprimento nao muda.
+O limite de 32 bytes permanece para buffers fixos; para comprimentos
+maiores use `criar_bytes`. Nao ha transferencia de propriedade nem
+emprestimo de temporarios.
+
+A regressao O0/O8 cobre texto ASCII, UTF-8, buffer vazio, leituras
+fora de limites, reemprestimo encadeado, atualizacao do proprietario,
+locais intercalados e escopos aninhados. O Python de bootstrap segue
+necessario para compilar o emissor escrito em RS; esta etapa **nao**
+representa autocompilacao integral.
