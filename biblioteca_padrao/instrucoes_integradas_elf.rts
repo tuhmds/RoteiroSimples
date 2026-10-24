@@ -5,6 +5,7 @@
 // 9 pare, 10 continue. Erro 16: desvio de laco invalido.
 importe "lexico.rts" como lexico
 importe "emissao_fluxo_elf.rts" como fluxo
+importe "esquemas_registros_elf.rts" como esquemas
 
 publico tipo Instrucao {
     categoria: inteiro
@@ -16,6 +17,8 @@ publico tipo Instrucao {
     tipo_local: inteiro // 1 inteiro, 2 bytes local, 3 bytes dinamico, 5 lista local
     indice_inicio: inteiro
     indice_fim: inteiro
+    tipo_unidade: inteiro
+    campo_unidade: inteiro
 }
 
 publico tipo Plano {
@@ -30,6 +33,12 @@ publico tipo Plano {
 // ate 12000 tokens. Funcoes anteriores ao inicio sao tratadas fora daqui.
 publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], unidade_inicio: inteiro) -> Plano {
     seja plano: Plano
+    seja registros = esquemas.analisar(fonte, unidades)
+    se registros.codigo_erro != 0 {
+        plano.codigo_erro = registros.codigo_erro
+        plano.unidade_erro = registros.unidade_erro
+        retorne mova(plano)
+    }
     seja total = tamanho(unidades)
     se total > 12000 ou unidade_inicio + 2 >= total {
         plano.codigo_erro = 8
@@ -70,6 +79,8 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
         instrucao.valor_fim = -1
         instrucao.indice_inicio = -1
         instrucao.indice_fim = -1
+        instrucao.tipo_unidade = -1
+        instrucao.campo_unidade = -1
         instrucao.profundidade = profundidade
         // Depois de pare/continue, so o fechamento do bloco alcancado
         // por esse desvio permanece analisavel neste nivel.
@@ -310,6 +321,21 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
         // do buffer inteiro: dados[indice] = valor.
         seja indexado = falso
         se nao declaracao {
+            // registro.campo = expressao, sem indexacao nem copia.
+            seja abertura_campo: lexico.UnidadeLexica = unidades[indice_igual]
+            se fluxo.simbolo(fonte, abertura_campo, 46) {
+                se indice_igual + 2 >= total {
+                    plano.codigo_erro = 3
+                    retorne mova(plano)
+                }
+                seja nome_campo: lexico.UnidadeLexica = unidades[indice_igual + 1]
+                se nome_campo.classe != 1 {
+                    plano.codigo_erro = 3
+                    retorne mova(plano)
+                }
+                instrucao.campo_unidade = indice_igual + 1
+                indice_igual = indice_igual + 2
+            }
             seja abertura_indice: lexico.UnidadeLexica = unidades[indice_igual]
             se fluxo.simbolo(fonte, abertura_indice, 91) {
                 instrucao.indice_inicio = indice_igual + 1
@@ -368,8 +394,15 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
                     indice_igual = indice_igual + 3
                 } senao {
                     se nao fluxo.igual(fonte, unidade_tipo, empreste(texto_inteiro)) {
-                        plano.codigo_erro = 2
-                        retorne mova(plano)
+                        seja indice_registro = esquemas.buscar_tipo(fonte, unidades, empreste(registros), unidade_tipo)
+                        se indice_registro < 0 {
+                            plano.codigo_erro = 2
+                            retorne mova(plano)
+                        }
+                        seja layout: esquemas.TipoRegistro = registros.tipos[indice_registro]
+                        instrucao.tipo_local = 7 + indice_registro
+                        instrucao.tipo_unidade = indice_igual + 1
+                        plano.quantidade_locais = plano.quantidade_locais + layout.quantidade_campos - 1
                     }
                 }
             }
@@ -379,7 +412,7 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
             }
             indice_igual = indice_igual + 2
         }
-        se declaracao e instrucao.tipo_local == 5 {
+        se declaracao e (instrucao.tipo_local == 5 ou instrucao.tipo_local >= 7) {
             // O tipo lista[inteiro] nasce vazio e nao recebe inicializador.
             // O indice ja aponta para a proxima instrucao, ou para ';'.
             seja apos_lista: lexico.UnidadeLexica = unidades[indice_igual]
@@ -411,6 +444,9 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
         }
         se indexado {
             instrucao.categoria = 11
+        }
+        se instrucao.campo_unidade >= 0 {
+            instrucao.categoria = 14
         }
         instrucao.unidade_nome = posicao_nome
         instrucao.valor_inicio = indice_igual + 1
@@ -562,6 +598,12 @@ privado funcao verificar_retorno(plano: emprestimo[Plano]) -> DiagnosticoRetorno
 // Erro 11: existe caminho que termina sem retorne.
 publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], abertura_corpo: inteiro, fechamento_corpo: inteiro) -> Plano {
     seja plano: Plano
+    seja registros = esquemas.analisar(fonte, unidades)
+    se registros.codigo_erro != 0 {
+        plano.codigo_erro = registros.codigo_erro
+        plano.unidade_erro = registros.unidade_erro
+        retorne mova(plano)
+    }
     seja total = tamanho(unidades)
     se total > 12000 ou abertura_corpo < 0 ou fechamento_corpo >= total ou abertura_corpo + 1 >= fechamento_corpo {
         plano.codigo_erro = 8
@@ -601,6 +643,8 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
         instrucao.valor_fim = -1
         instrucao.indice_inicio = -1
         instrucao.indice_fim = -1
+        instrucao.tipo_unidade = -1
+        instrucao.campo_unidade = -1
         instrucao.profundidade = profundidade
         // Apos retorne, apenas o fechamento do mesmo bloco e alcancavel.
         // Um retorno dentro de se/enquanto nao bloqueia comandos fora dele.
@@ -861,6 +905,21 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
         // do buffer inteiro: dados[indice] = valor.
         seja indexado = falso
         se nao declaracao {
+            // registro.campo = expressao, sem indexacao nem copia.
+            seja abertura_campo: lexico.UnidadeLexica = unidades[indice_igual]
+            se fluxo.simbolo(fonte, abertura_campo, 46) {
+                se indice_igual + 2 >= total {
+                    plano.codigo_erro = 3
+                    retorne mova(plano)
+                }
+                seja nome_campo: lexico.UnidadeLexica = unidades[indice_igual + 1]
+                se nome_campo.classe != 1 {
+                    plano.codigo_erro = 3
+                    retorne mova(plano)
+                }
+                instrucao.campo_unidade = indice_igual + 1
+                indice_igual = indice_igual + 2
+            }
             seja abertura_indice: lexico.UnidadeLexica = unidades[indice_igual]
             se fluxo.simbolo(fonte, abertura_indice, 91) {
                 instrucao.indice_inicio = indice_igual + 1
@@ -919,8 +978,15 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
                     indice_igual = indice_igual + 3
                 } senao {
                     se nao fluxo.igual(fonte, unidade_tipo, empreste(texto_inteiro)) {
-                        plano.codigo_erro = 2
-                        retorne mova(plano)
+                        seja indice_registro = esquemas.buscar_tipo(fonte, unidades, empreste(registros), unidade_tipo)
+                        se indice_registro < 0 {
+                            plano.codigo_erro = 2
+                            retorne mova(plano)
+                        }
+                        seja layout: esquemas.TipoRegistro = registros.tipos[indice_registro]
+                        instrucao.tipo_local = 7 + indice_registro
+                        instrucao.tipo_unidade = indice_igual + 1
+                        plano.quantidade_locais = plano.quantidade_locais + layout.quantidade_campos - 1
                     }
                 }
             }
@@ -930,7 +996,7 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
             }
             indice_igual = indice_igual + 2
         }
-        se declaracao e instrucao.tipo_local == 5 {
+        se declaracao e (instrucao.tipo_local == 5 ou instrucao.tipo_local >= 7) {
             // O tipo lista[inteiro] nasce vazio e nao recebe inicializador.
             // O indice ja aponta para a proxima instrucao, ou para ';'.
             seja apos_lista: lexico.UnidadeLexica = unidades[indice_igual]
@@ -962,6 +1028,9 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
         }
         se indexado {
             instrucao.categoria = 11
+        }
+        se instrucao.campo_unidade >= 0 {
+            instrucao.categoria = 14
         }
         instrucao.unidade_nome = posicao_nome
         instrucao.valor_inicio = indice_igual + 1
