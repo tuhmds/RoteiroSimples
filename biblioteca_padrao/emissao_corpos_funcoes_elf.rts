@@ -1273,6 +1273,9 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             seja campo_lista = esquemas.buscar_caminho(fonte, unidades, empreste(descricoes), tipo_lista, instrucao.campo_unidade, instrucao.campo_fim)
             se campo_lista < 0 {
                 resposta.codigo_erro = 5
+                se campo_lista == -2 {
+                    resposta.codigo_erro = 18
+                }
                 retorne mova(resposta)
             }
             seja indice_registro = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, instrucao.indice_inicio, instrucao.indice_fim, funcao_atual, 0)
@@ -1316,6 +1319,9 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             seja indice_campo = esquemas.buscar_caminho(fonte, unidades, empreste(descricoes), tipos[indice_local] - 7, instrucao.campo_unidade, instrucao.campo_fim)
             se indice_campo < 0 {
                 resposta.codigo_erro = 5
+                se indice_campo == -2 {
+                    resposta.codigo_erro = 18
+                }
                 retorne mova(resposta)
             }
             seja calculado = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0)
