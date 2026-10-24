@@ -134,7 +134,7 @@ class TestesRegistrosAninhadosELFRS(unittest.TestCase):
         esquema = (
             "tipo Parte {\n"
             " a: inteiro\n b: inteiro\n c: inteiro\n d: inteiro\n"
-            " e: inteiro\n f: inteiro\n g: inteiro\n h: inteiro\n}\n"
+            " campo_e: inteiro\n f: inteiro\n g: inteiro\n h: inteiro\n}\n"
             "tipo Pacote {\n"
             " id: inteiro\n dados: Parte\n checksum: inteiro\n}\n"
         )
