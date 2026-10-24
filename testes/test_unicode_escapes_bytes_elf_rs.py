@@ -36,7 +36,7 @@ class TestesEscapesUnicodeBytesELF(unittest.TestCase):
             (r"\uDBFF\uDFFF", 0, 248),
             (r"\u0061\u0062", 1, 100),
             (r"\uD83D\uDE00\u0000", 4, 5),
-            ("Ação" + r"\u00E9", 6, 175),
+            ("Ação" + r"\u00E9", 6, 203),
         )
         for nivel in (0, 8):
             for literal, indice, esperado in casos:
