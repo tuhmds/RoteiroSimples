@@ -131,8 +131,8 @@ class TestesListasLocaisELFRS(unittest.TestCase):
 
     def test_crescimento_geometrico_preserva_valores(self):
         casos = (
-            (9, 0, 9),
-            (17, 8, 17),
+            (9, 8, 9),
+            (17, 16, 17),
             (65, 64, 65),
             (1000, 999, 1000),
             (4097, 4096, 4097),
