@@ -1,0 +1,44 @@
+// Emissao x86-64 para registros locais de ate 8 campos inteiro.
+// Cada campo tem 8 bytes; variavel aponta ao primeiro slot do registro.
+// A verificacao dos nomes e feita pelo modulo de esquemas.
+importe "emissao_elf_minima.rts" como elf
+importe "emissao_fluxo_elf.rts" como fluxo
+
+// O campo de numero zero usa o slot do nome do registro;
+// os seguintes ocupam slots ocultos subsequentes.
+publico funcao inicializar(codigo: bytes, indice_local: inteiro, quantidade: inteiro) -> bytes {
+    seja indice = 0
+    enquanto indice < quantidade {
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 199)
+        adicione_byte(codigo, 133) // mov qword [rbp-disp32], 0
+        seja endereco = fluxo.endereco(mova(codigo), indice_local + indice)
+        mova(codigo, endereco)
+        seja zero = elf.anexar_inteiro(mova(codigo), 0, 4)
+        mova(codigo, zero)
+        indice = indice + 1
+    }
+    retorne mova(codigo)
+}
+
+// Carrega o valor de um campo inteiro e o empilha na ABI do emissor.
+publico funcao emitir_leitura(codigo: bytes, indice_local: inteiro, campo: inteiro) -> bytes {
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 133) // mov rax, [rbp-disp32]
+    seja endereco = fluxo.endereco(mova(codigo), indice_local + campo)
+    mova(codigo, endereco)
+    adicione_byte(codigo, 80) // push rax
+    retorne mova(codigo)
+}
+
+// Consome o valor inteiro no topo da pilha, sem alterar outros campos.
+publico funcao emitir_escrita(codigo: bytes, indice_local: inteiro, campo: inteiro) -> bytes {
+    adicione_byte(codigo, 88) // pop rax
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 133) // mov [rbp-disp32], rax
+    seja endereco = fluxo.endereco(mova(codigo), indice_local + campo)
+    mova(codigo, endereco)
+    retorne mova(codigo)
+}
