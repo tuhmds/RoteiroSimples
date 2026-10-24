@@ -206,7 +206,7 @@ class TestesListasLocaisELFRS(unittest.TestCase):
             "funcao executar() -> inteiro {\n"
             " seja repeticao = 0\n"
             " seja soma = 0\n"
-            " enquanto repeticao < 700 {\n"
+            " enquanto repeticao < 1500 {\n"
             " seja valores: lista[inteiro]\n"
             " seja indice = 0\n"
             " enquanto indice < 8192 {\n"
@@ -226,7 +226,7 @@ class TestesListasLocaisELFRS(unittest.TestCase):
             self.assertEqual(codigo, 0)
             self.assertIsNotNone(arquivo)
             if status is not None:
-                self.assertEqual(status, (700 * 8191) % 256)
+                self.assertEqual(status, (1500 * 8191) % 256)
 
     def test_crescimento_e_escopos_com_pare_e_continue(self):
         fonte = (
