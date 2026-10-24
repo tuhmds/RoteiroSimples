@@ -50,10 +50,11 @@ class TestesEscapesBytesFixosELF(unittest.TestCase):
                         self.assertEqual(status, esperado)
 
     def test_limite_32_aplica_apos_decodificacao(self):
+        literal = r"\n" * 32
         for nivel in (0, 8):
             fonte = (
                 "funcao f() -> inteiro {\n"
-                f' seja dados: bytes = "{r"\n" * 32}"\n'
+                f' seja dados: bytes = "{literal}"\n'
                 " retorne dados[31] + tamanho(dados)\n}\n"
                 "inicio { seja r = f() }"
             )
