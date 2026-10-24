@@ -24,7 +24,7 @@ inicio { seja codigo = exemplo() }
 
 ## Representacao e limites
 
-Buffers locais antigos continuam com 40 bytes de pilha: comprimento (8 bytes) e dados (32 bytes).
+Buffers locais fixos conservam 8 bytes de comprimento e 32 bytes de dados, e agora reservam mais 16 bytes para o descritor de emprestimo na pilha (56 bytes no total). Os dados e seu comprimento mantem os enderecos anteriores relativos ao inicio da variavel.
 
 Buffers dinamicos usam cinco slots de pilha para estabilidade do emissor, sendo tres utilizados: ponteiro do `mmap`, comprimento logico e capacidade alocada. A capacidade e comprimento+1 (permite buffer logico vazio). O teto deste incremento experimental e **1 MiB**.
 

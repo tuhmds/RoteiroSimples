@@ -278,8 +278,9 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
                 }
             }
         }
-        // Bytes locais usam 5 slots: comprimento (8 bytes) e 32 bytes
-        // de dados. Outras declaracoes continuam usando apenas um slot.
+        // Bytes locais usam 7 slots: comprimento, 32 bytes de dados e
+        // 2 slots de descritor emprestavel. Dinamicos mantem 5 slots.
+        // Outras declaracoes continuam usando apenas um slot.
         instrucao.tipo_local = 1
         seja separador_tipo: lexico.UnidadeLexica = unidades[indice_igual]
         se declaracao e fluxo.simbolo(fonte, separador_tipo, 58) {
@@ -328,6 +329,16 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
             seja inicializador: lexico.UnidadeLexica = unidades[instrucao.valor_inicio]
             se fluxo.igual(fonte, inicializador, empreste(texto_criar)) {
                 instrucao.tipo_local = 3
+            }
+            // O buffer fixo precisa de dois slots para o descritor
+            // de emprestimo: ponteiro dos dados e comprimento.
+            // O buffer dinamico conserva o layout anterior de 5 slots.
+            se instrucao.tipo_local == 2 {
+                plano.quantidade_locais = plano.quantidade_locais + 2
+                se plano.quantidade_locais > 128 {
+                    plano.codigo_erro = 8
+                    retorne mova(plano)
+                }
             }
         }
         adicione(plano.instrucoes, instrucao)
@@ -724,8 +735,9 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
                 }
             }
         }
-        // Bytes locais usam 5 slots: comprimento (8 bytes) e 32 bytes
-        // de dados. Outras declaracoes continuam usando apenas um slot.
+        // Bytes locais usam 7 slots: comprimento, 32 bytes de dados e
+        // 2 slots de descritor emprestavel. Dinamicos mantem 5 slots.
+        // Outras declaracoes continuam usando apenas um slot.
         instrucao.tipo_local = 1
         seja separador_tipo: lexico.UnidadeLexica = unidades[indice_igual]
         se declaracao e fluxo.simbolo(fonte, separador_tipo, 58) {
@@ -774,6 +786,16 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
             seja inicializador: lexico.UnidadeLexica = unidades[instrucao.valor_inicio]
             se fluxo.igual(fonte, inicializador, empreste(texto_criar)) {
                 instrucao.tipo_local = 3
+            }
+            // O buffer fixo precisa de dois slots para o descritor
+            // de emprestimo: ponteiro dos dados e comprimento.
+            // O buffer dinamico conserva o layout anterior de 5 slots.
+            se instrucao.tipo_local == 2 {
+                plano.quantidade_locais = plano.quantidade_locais + 2
+                se plano.quantidade_locais > 128 {
+                    plano.codigo_erro = 8
+                    retorne mova(plano)
+                }
             }
         }
         adicione(plano.instrucoes, instrucao)
