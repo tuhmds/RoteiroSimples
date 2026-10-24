@@ -20,8 +20,9 @@ O exemplo retorna 135: os bytes ASCII 65 + 67 + comprimento 3.
 
 Cada declaracao `bytes` ocupa **40 bytes** na pilha:
 8 bytes para o comprimento e 32 bytes reservados para o conteudo.
-O inicializador aceita uma string literal de ate 32 bytes de UTF-8,
+O inicializador aceita uma string literal com ate 32 bytes **decodificados** de UTF-8,
 inclusive vazia. A contagem e em **bytes**, nao pontos de codigo Unicode.
+O tamanho bruto do literal pode ser maior quando possui escapes.
 
 O emissor x86-64 utiliza diretamente `mov byte [rbp+disp32], imm8`
 para construir o buffer e `movzx eax, byte [rbp+rax+disp32]` para
@@ -39,8 +40,10 @@ pertence ao quadro da funcao, portanto nao pode escapar do escopo.
 ## Limites intencionais deste primeiro incremento
 
 - Tamanho maximo **32 bytes** por declaracao.
-- Inicializador obrigatoriamente string literal, sem escapes. Literal
-  mais longo ou expressao de outro tipo: diagnostico **17**.
+- Inicializador obrigatoriamente string literal. Escapes JSON ASCII
+  aceitos: `\\n`, `\\r`, `\\t`, `\\b`, `\\f`, `\\\\`, `\\"` e `\\/`.
+  Escapes desconhecidos e `\\uXXXX` continuam recusados, assim como
+  literais que gerem mais de 32 bytes: diagnostico **17**.
 - `bytes` nao aceita reatribuicao neste momento: diagnostico **18**.
 - Nao ha ainda mutacao por indice, leitura de arquivos para um local
   `bytes`, copia de buffers, passagem de `bytes` para funcoes nem
@@ -67,3 +70,20 @@ codigo de maquina gerado por um modulo escrito em RS. **Nao
 significa autocompilacao:** listas, registros completos, strings
 dinamicas, ownership de buffers e o bootstrap independente continuam
 pendentes.
+
+## Decodificacao de escapes no emissor escrito em RS
+
+A rotina `biblioteca_padrao/emissao_bytes_elf.rts` valida primeiro todo
+o literal, calcula seu comprimento depois da decodificacao e so entao
+emite as instrucoes x86-64 que gravam os bytes fixos. Por exemplo,
+`"A\\nB"` usa 3 bytes, incluindo um LF (valor 10), mesmo que o
+fonte contenha 4 caracteres entre aspas.
+
+Escapes Unicode `\\uXXXX`, inclusive pares substitutos UTF-16,
+exigem implementacao posterior e recebem diagnostico **17** nesta
+etapa. Caracteres UTF-8 escritos diretamente continuam conservados
+byte a byte. A capacidade maxima permanece 32 bytes, e buffers fixos
+emprestados compartilham o conteudo ja decodificado sem copia.
+
+Validacao: `python -m unittest testes.test_escapes_bytes_fixos_elf_rs -v`,
+seguida da suite completa.
