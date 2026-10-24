@@ -15,16 +15,43 @@ privado funcao deslocamento(codigo: bytes, distancia: inteiro) -> bytes {
     retorne elf.anexar_inteiro(mova(codigo), 4294967296 - distancia, 4)
 }
 
-// O token literal inclui as aspas. Nesta etapa escapes sao recusados:
-// o armazenamento preserva exatamente os bytes UTF-8 da fonte.
+// Decodifica escapes ASCII compativeis com textos JSON, preservando os
+// demais bytes UTF-8 literalmente. Escapes Unicode \uXXXX exigem uma
+// etapa posterior e continuam recusados (diagnostico 17).
+privado funcao valor_escape(valor: inteiro) -> inteiro {
+    se valor == 34 {
+        retorne 34
+    }
+    se valor == 92 {
+        retorne 92
+    }
+    se valor == 47 {
+        retorne 47
+    }
+    se valor == 98 {
+        retorne 8
+    }
+    se valor == 102 {
+        retorne 12
+    }
+    se valor == 110 {
+        retorne 10
+    }
+    se valor == 114 {
+        retorne 13
+    }
+    se valor == 116 {
+        retorne 9
+    }
+    retorne -1
+}
+
+// Valida o token, calcula o comprimento decodificado e somente depois
+// emite o armazenamento. O limite e de 32 bytes decodificados, nao
+// dos bytes brutos contidos entre as aspas.
 publico funcao inicializar(codigo: bytes, fonte: emprestimo[bytes], literal: lexico.UnidadeLexica, indice_local: inteiro) -> ResultadoBytesELF {
     seja resposta: ResultadoBytesELF
     se literal.classe != 3 ou literal.comprimento_byte < 2 {
-        resposta.codigo_erro = 17
-        retorne mova(resposta)
-    }
-    seja quantidade = literal.comprimento_byte - 2
-    se quantidade > 32 {
         resposta.codigo_erro = 17
         retorne mova(resposta)
     }
@@ -32,22 +59,54 @@ publico funcao inicializar(codigo: bytes, fonte: emprestimo[bytes], literal: lex
         resposta.codigo_erro = 17
         retorne mova(resposta)
     }
-    seja i = 0
-    enquanto i < quantidade {
-        seja valor = fonte[literal.inicio_byte + 1 + i]
-        // Escapes precisam de um decodificador proprio antes de habilitar
-        // a sintaxe entre aspas com barras invertidas.
-        se valor == 92 {
+    seja inicio_conteudo = literal.inicio_byte + 1
+    seja fim_conteudo = literal.inicio_byte + literal.comprimento_byte - 1
+    seja quantidade = 0
+    seja cursor = inicio_conteudo
+    enquanto cursor < fim_conteudo {
+        seja valor = fonte[cursor]
+        // JSON nao permite controles crus em literais de texto.
+        se valor < 32 {
             resposta.codigo_erro = 17
             retorne mova(resposta)
         }
-        // C6 85 disp32 imm8: mov byte [rbp - base + i], valor
+        se valor == 92 {
+            cursor = cursor + 1
+            se cursor >= fim_conteudo {
+                resposta.codigo_erro = 17
+                retorne mova(resposta)
+            }
+            valor = valor_escape(fonte[cursor])
+            se valor < 0 {
+                resposta.codigo_erro = 17
+                retorne mova(resposta)
+            }
+        }
+        quantidade = quantidade + 1
+        se quantidade > 32 {
+            resposta.codigo_erro = 17
+            retorne mova(resposta)
+        }
+        cursor = cursor + 1
+    }
+
+    // Escreve bytes ja validados nos 32 bytes locais, sem copia de texto.
+    cursor = inicio_conteudo
+    seja indice_dado = 0
+    enquanto cursor < fim_conteudo {
+        seja valor = fonte[cursor]
+        se valor == 92 {
+            cursor = cursor + 1
+            valor = valor_escape(fonte[cursor])
+        }
+        // C6 85 disp32 imm8: mov byte [rbp - base + indice], valor
         adicione_byte(codigo, 198)
         adicione_byte(codigo, 133)
-        seja gravado = deslocamento(mova(codigo), (indice_local + 5) * 8 - i)
+        seja gravado = deslocamento(mova(codigo), (indice_local + 5) * 8 - indice_dado)
         mova(codigo, gravado)
         adicione_byte(codigo, valor)
-        i = i + 1
+        indice_dado = indice_dado + 1
+        cursor = cursor + 1
     }
     // 48 C7 85 disp32 imm32: comprimento em slot reservado.
     adicione_byte(codigo, 72)

@@ -1389,7 +1389,7 @@ class TestesCorposFuncoesELFRS(unittest.TestCase):
              ' seja dados: bytes = "0123456789abcdefghijklmnopqrstuvw"\n'
              " retorne 0\n}\n inicio { seja r = f() }"),
             (17, "funcao f() -> inteiro {\n"
-             ' seja dados: bytes = "A\\\\n"\n'
+             ' seja dados: bytes = "A\\q"\n'
              " retorne 0\n}\n inicio { seja r = f() }"),
             (17, "funcao f() -> inteiro {\n"
              " seja dados: bytes = 42\n"
