@@ -16,6 +16,7 @@ importe "emissao_bytes_elf.rts" como emisbytes
 importe "emissao_listas_elf.rts" como emislistas
 importe "esquemas_registros_elf.rts" como esquemas
 importe "emissao_registros_elf.rts" como emisregistros
+importe "emissao_listas_registros_elf.rts" como emisreglistas
 
 publico tipo ResultadoCorposELF {
     arquivo: bytes
@@ -225,6 +226,50 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         retorne mova(resposta)
     }
     seja primeiro_valor: lexico.UnidadeLexica = unidades[primeiro]
+    // Leitura de lista[indice].campo, com indice inteiro validado.
+    se ultimo >= primeiro + 6 {
+        seja ponto_final: lexico.UnidadeLexica = unidades[ultimo - 2]
+        seja nome_final: lexico.UnidadeLexica = unidades[ultimo - 1]
+        seja abre_indice: lexico.UnidadeLexica = unidades[primeiro + 1]
+        se primeiro_valor.classe == 1 e fluxo.simbolo(fonte, abre_indice, 91) e fluxo.simbolo(fonte, ponto_final, 46) e nome_final.classe == 1 {
+            seja fecha_indice: lexico.UnidadeLexica = unidades[ultimo - 3]
+            se fluxo.simbolo(fonte, fecha_indice, 93) {
+                seja lista_local = fluxo.resolver(fonte, nomes, primeiro_valor)
+                se lista_local < 0 {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                se tipos[lista_local] < 20 {
+                    resposta.codigo_erro = 18
+                    retorne mova(resposta)
+                }
+                seja descricoes_lista = esquemas.analisar(fonte, unidades)
+                seja tipo_lista = tipos[lista_local] - 20
+                seja campo_lista = esquemas.buscar_campo(fonte, unidades, empreste(descricoes_lista), tipo_lista, nome_final)
+                se campo_lista < 0 {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                seja layout_lista: esquemas.TipoRegistro = descricoes_lista.tipos[tipo_lista]
+                seja indice_calculado = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 2, ultimo - 3, funcao_atual, nivel + 1)
+                se indice_calculado.codigo_erro != 0 {
+                    resposta.codigo_erro = indice_calculado.codigo_erro
+                    resposta.unidade_erro = indice_calculado.unidade_erro
+                    retorne mova(resposta)
+                }
+                mova(codigo, indice_calculado.codigo)
+                seja indice_ligacao = 0
+                enquanto indice_ligacao < tamanho(indice_calculado.ligacoes) {
+                    seja ligacao: Ligacao = indice_calculado.ligacoes[indice_ligacao]
+                    adicione(resposta.ligacoes, ligacao)
+                    indice_ligacao = indice_ligacao + 1
+                }
+                seja acesso = emisreglistas.emitir_leitura(mova(codigo), lista_local, campo_lista, layout_lista.quantidade_campos)
+                mova(resposta.codigo, acesso)
+                retorne mova(resposta)
+            }
+        }
+    }
     // Leitura registro.campo, com layout conhecido na compilacao.
     se ultimo == primeiro + 3 {
         seja ponto: lexico.UnidadeLexica = unidades[primeiro + 1]
@@ -235,7 +280,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 resposta.codigo_erro = 5
                 retorne mova(resposta)
             }
-            se tipos[indice_registro] < 7 {
+            se tipos[indice_registro] < 7 ou tipos[indice_registro] >= 20 {
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
             }
@@ -261,7 +306,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 seja nome_buffer: lexico.UnidadeLexica = unidades[primeiro + 2]
                 seja indice_buffer = fluxo.resolver(fonte, nomes, nome_buffer)
                 se indice_buffer >= 0 {
-                    se tipos[indice_buffer] == 5 ou tipos[indice_buffer] == 6 {
+                    se tipos[indice_buffer] == 5 ou tipos[indice_buffer] == 6 ou tipos[indice_buffer] >= 20 {
                         seja trecho_lista = emislistas.emitir_tamanho(mova(codigo), indice_buffer, tipos[indice_buffer] == 6)
                         mova(resposta.codigo, trecho_lista)
                         retorne mova(resposta)
@@ -797,7 +842,7 @@ privado funcao emitir_predicado(codigo: bytes, fonte: emprestimo[bytes], unidade
 privado funcao emitir_limpeza_escopo(codigo: bytes, nomes: emprestimo[lista[lexico.UnidadeLexica]], tipos: emprestimo[lista[inteiro]], marcador: inteiro) -> bytes {
     seja i = tamanho(nomes) - 1
     enquanto i >= marcador {
-        se tipos[i] == 3 ou tipos[i] == 5 {
+        se tipos[i] == 3 ou tipos[i] == 5 ou tipos[i] >= 20 {
             seja nome: lexico.UnidadeLexica = nomes[i]
             se nome.classe != 0 {
                 seja liberado = emisbytes.emitir_liberacao_automatica(mova(codigo), i)
