@@ -130,6 +130,40 @@ class TestesRegistrosAninhadosELFRS(unittest.TestCase):
                     if status is not None:
                         self.assertEqual(status, esperado)
 
+    def test_elemento_maior_que_64_bytes_cresce_antes_da_copia(self):
+        esquema = (
+            "tipo Parte {\n"
+            " a: inteiro\n b: inteiro\n c: inteiro\n d: inteiro\n"
+            " e: inteiro\n f: inteiro\n g: inteiro\n h: inteiro\n}\n"
+            "tipo Pacote {\n"
+            " id: inteiro\n dados: Parte\n checksum: inteiro\n}\n"
+        )
+        fonte = (
+            esquema +
+            "funcao executar() -> inteiro {\n"
+            " seja itens: lista[Pacote]\n"
+            " seja p: Pacote\n"
+            " seja i = 0\n"
+            " enquanto i < 17 {\n"
+            " p.id = i\n"
+            " p.dados.a = i + 5\n"
+            " p.dados.h = i + 25\n"
+            " p.checksum = i * 2\n"
+            " adicione(itens, p)\n"
+            " i = i + 1\n"
+            " }\n"
+            " retorne itens[0].dados.a + itens[16].dados.h + itens[16].checksum + tamanho(itens)\n"
+            "}\n inicio { seja r = executar() }"
+        )
+        # 10 campos de 8 bytes = 80 bytes: excede a reserva inicial de 64.
+        # 5 + 41 + 32 + 17 = 95.
+        for nivel in (0, 8):
+            codigo, arquivo, status = self.gerar(fonte, nivel)
+            self.assertEqual(codigo, 0)
+            self.assertIsNotNone(arquivo)
+            if status is not None:
+                self.assertEqual(status, 95)
+
     def test_erros_caminho_e_esquema(self):
         casos = (
             (2, "tipo Local {\n posicao: Coordenada\n}\n"
