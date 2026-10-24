@@ -73,7 +73,7 @@ class TestesParametrosRegistrosValorELFRS(unittest.TestCase):
         casos = (
             (18, ESQUEMAS +
              "funcao usar(p: Pessoa) -> inteiro { retorne p.id }\n"
-             "inicio { seja e: Endereco\n seja r = usar(e) }"),
+             "inicio { seja endereco: Endereco\n seja r = usar(endereco) }"),
             (18, ESQUEMAS +
              "funcao usar(p: Pessoa) -> inteiro { retorne p.id }\n"
              "inicio { seja r = usar(42) }"),
