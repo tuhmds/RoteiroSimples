@@ -364,7 +364,7 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
                         retorne mova(plano)
                     }
                     instrucao.tipo_local = 5
-                    plano.quantidade_locais = plano.quantidade_locais + 8
+                    plano.quantidade_locais = plano.quantidade_locais + 2
                     indice_igual = indice_igual + 3
                 } senao {
                     se nao fluxo.igual(fonte, unidade_tipo, empreste(texto_inteiro)) {
@@ -915,7 +915,7 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
                         retorne mova(plano)
                     }
                     instrucao.tipo_local = 5
-                    plano.quantidade_locais = plano.quantidade_locais + 8
+                    plano.quantidade_locais = plano.quantidade_locais + 2
                     indice_igual = indice_igual + 3
                 } senao {
                     se nao fluxo.igual(fonte, unidade_tipo, empreste(texto_inteiro)) {
