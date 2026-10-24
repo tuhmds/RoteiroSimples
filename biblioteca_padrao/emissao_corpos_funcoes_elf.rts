@@ -232,8 +232,19 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         seja nome_final: lexico.UnidadeLexica = unidades[ultimo - 1]
         seja abre_indice: lexico.UnidadeLexica = unidades[primeiro + 1]
         se primeiro_valor.classe == 1 e fluxo.simbolo(fonte, abre_indice, 91) e fluxo.simbolo(fonte, ponto_final, 46) e nome_final.classe == 1 {
+            // So e um acesso simples quando o PRIMEIRO colchete
+            // fecha imediatamente antes do ponto final. Caso contrario,
+            // a expressao pode conter varias leituras somadas.
+            seja primeiro_fecho = primeiro + 2
+            enquanto primeiro_fecho < ultimo - 2 {
+                seja atual_fecho: lexico.UnidadeLexica = unidades[primeiro_fecho]
+                se fluxo.simbolo(fonte, atual_fecho, 93) {
+                    pare
+                }
+                primeiro_fecho = primeiro_fecho + 1
+            }
             seja fecha_indice: lexico.UnidadeLexica = unidades[ultimo - 3]
-            se fluxo.simbolo(fonte, fecha_indice, 93) {
+            se primeiro_fecho == ultimo - 3 e fluxo.simbolo(fonte, fecha_indice, 93) {
                 seja lista_local = fluxo.resolver(fonte, nomes, primeiro_valor)
                 se lista_local < 0 {
                     resposta.codigo_erro = 5
@@ -1072,6 +1083,10 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                     retorne mova(resposta)
                 }
                 seja token_elemento: lexico.UnidadeLexica = unidades[instrucao.valor_inicio]
+                se token_elemento.classe != 1 {
+                    resposta.codigo_erro = 18
+                    retorne mova(resposta)
+                }
                 seja indice_elemento = fluxo.resolver(fonte, empreste(nomes), token_elemento)
                 se indice_elemento < 0 {
                     resposta.codigo_erro = 5
