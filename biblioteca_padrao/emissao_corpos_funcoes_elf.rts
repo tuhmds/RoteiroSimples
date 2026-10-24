@@ -251,88 +251,125 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         retorne mova(resposta)
     }
     seja primeiro_valor: lexico.UnidadeLexica = unidades[primeiro]
-    // Leitura de lista[indice].campo, com indice inteiro validado.
-    se ultimo >= primeiro + 6 {
-        seja ponto_final: lexico.UnidadeLexica = unidades[ultimo - 2]
-        seja nome_final: lexico.UnidadeLexica = unidades[ultimo - 1]
+    // Leitura de lista[indice].campo, incluindo subcampos aninhados.
+    se ultimo >= primeiro + 6 e primeiro_valor.classe == 1 {
         seja abre_indice: lexico.UnidadeLexica = unidades[primeiro + 1]
-        se primeiro_valor.classe == 1 e fluxo.simbolo(fonte, abre_indice, 91) e fluxo.simbolo(fonte, ponto_final, 46) e nome_final.classe == 1 {
-            // So e um acesso simples quando o PRIMEIRO colchete
-            // fecha imediatamente antes do ponto final. Caso contrario,
-            // a expressao pode conter varias leituras somadas.
-            seja primeiro_fecho = primeiro + 2
-            enquanto primeiro_fecho < ultimo - 2 {
-                seja atual_fecho: lexico.UnidadeLexica = unidades[primeiro_fecho]
-                se fluxo.simbolo(fonte, atual_fecho, 93) {
+        se fluxo.simbolo(fonte, abre_indice, 91) {
+            seja fecha_posicao = primeiro + 2
+            enquanto fecha_posicao < ultimo {
+                seja token_fecho: lexico.UnidadeLexica = unidades[fecha_posicao]
+                se fluxo.simbolo(fonte, token_fecho, 93) {
                     pare
                 }
-                primeiro_fecho = primeiro_fecho + 1
+                fecha_posicao = fecha_posicao + 1
             }
-            seja fecha_indice: lexico.UnidadeLexica = unidades[ultimo - 3]
-            se primeiro_fecho == ultimo - 3 e fluxo.simbolo(fonte, fecha_indice, 93) {
-                seja lista_local = fluxo.resolver(fonte, nomes, primeiro_valor)
-                se lista_local < 0 {
-                    resposta.codigo_erro = 5
-                    retorne mova(resposta)
+            se fecha_posicao + 2 < ultimo {
+                seja primeiro_ponto: lexico.UnidadeLexica = unidades[fecha_posicao + 1]
+                se fluxo.simbolo(fonte, primeiro_ponto, 46) {
+                    seja caminho_inicio = fecha_posicao + 2
+                    seja caminho_posicao = caminho_inicio
+                    enquanto caminho_posicao < ultimo {
+                        seja segmento: lexico.UnidadeLexica = unidades[caminho_posicao]
+                        se segmento.classe != 1 {
+                            pare
+                        }
+                        caminho_posicao = caminho_posicao + 1
+                        se caminho_posicao < ultimo {
+                            seja ponto_seguinte: lexico.UnidadeLexica = unidades[caminho_posicao]
+                            se nao fluxo.simbolo(fonte, ponto_seguinte, 46) {
+                                pare
+                            }
+                            caminho_posicao = caminho_posicao + 1
+                        }
+                    }
+                    se caminho_posicao == ultimo {
+                        seja lista_local = fluxo.resolver(fonte, nomes, primeiro_valor)
+                        se lista_local < 0 {
+                            resposta.codigo_erro = 5
+                            retorne mova(resposta)
+                        }
+                        se tipos[lista_local] < 20 {
+                            resposta.codigo_erro = 18
+                            retorne mova(resposta)
+                        }
+                        seja descricoes_lista = esquemas.analisar(fonte, unidades)
+                        seja tipo_lista = tipos[lista_local] - 20
+                        se tipos[lista_local] >= 30 {
+                            tipo_lista = tipos[lista_local] - 30
+                        }
+                        seja campo_lista = esquemas.buscar_caminho(fonte, unidades, empreste(descricoes_lista), tipo_lista, caminho_inicio, ultimo)
+                        se campo_lista < 0 {
+                            resposta.codigo_erro = 5
+                            se campo_lista == -2 {
+                                resposta.codigo_erro = 18
+                            }
+                            retorne mova(resposta)
+                        }
+                        seja layout_lista: esquemas.TipoRegistro = descricoes_lista.tipos[tipo_lista]
+                        seja indice_calculado = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 2, fecha_posicao, funcao_atual, nivel + 1)
+                        se indice_calculado.codigo_erro != 0 {
+                            resposta.codigo_erro = indice_calculado.codigo_erro
+                            resposta.unidade_erro = indice_calculado.unidade_erro
+                            retorne mova(resposta)
+                        }
+                        mova(codigo, indice_calculado.codigo)
+                        seja indice_ligacao = 0
+                        enquanto indice_ligacao < tamanho(indice_calculado.ligacoes) {
+                            seja ligacao: Ligacao = indice_calculado.ligacoes[indice_ligacao]
+                            adicione(resposta.ligacoes, ligacao)
+                            indice_ligacao = indice_ligacao + 1
+                        }
+                        seja acesso = emisreglistas.emitir_leitura(mova(codigo), lista_local, campo_lista, layout_lista.quantidade_slots, tipos[lista_local] >= 30)
+                        mova(resposta.codigo, acesso)
+                        retorne mova(resposta)
+                    }
                 }
-                se tipos[lista_local] < 20 {
-                    resposta.codigo_erro = 18
-                    retorne mova(resposta)
-                }
-                seja descricoes_lista = esquemas.analisar(fonte, unidades)
-                seja tipo_lista = tipos[lista_local] - 20
-                se tipos[lista_local] >= 30 {
-                    tipo_lista = tipos[lista_local] - 30
-                }
-                seja campo_lista = esquemas.buscar_campo(fonte, unidades, empreste(descricoes_lista), tipo_lista, nome_final)
-                se campo_lista < 0 {
-                    resposta.codigo_erro = 5
-                    retorne mova(resposta)
-                }
-                seja layout_lista: esquemas.TipoRegistro = descricoes_lista.tipos[tipo_lista]
-                seja indice_calculado = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 2, ultimo - 3, funcao_atual, nivel + 1)
-                se indice_calculado.codigo_erro != 0 {
-                    resposta.codigo_erro = indice_calculado.codigo_erro
-                    resposta.unidade_erro = indice_calculado.unidade_erro
-                    retorne mova(resposta)
-                }
-                mova(codigo, indice_calculado.codigo)
-                seja indice_ligacao = 0
-                enquanto indice_ligacao < tamanho(indice_calculado.ligacoes) {
-                    seja ligacao: Ligacao = indice_calculado.ligacoes[indice_ligacao]
-                    adicione(resposta.ligacoes, ligacao)
-                    indice_ligacao = indice_ligacao + 1
-                }
-                seja acesso = emisreglistas.emitir_leitura(mova(codigo), lista_local, campo_lista, layout_lista.quantidade_campos, tipos[lista_local] >= 30)
-                mova(resposta.codigo, acesso)
-                retorne mova(resposta)
             }
         }
     }
-    // Leitura registro.campo, com layout conhecido na compilacao.
-    se ultimo == primeiro + 3 {
+    // Leitura registro.campo[.subcampo], com esquema estatico.
+    se ultimo >= primeiro + 3 {
         seja ponto: lexico.UnidadeLexica = unidades[primeiro + 1]
-        seja campo_nome: lexico.UnidadeLexica = unidades[primeiro + 2]
-        se fluxo.simbolo(fonte, ponto, 46) e campo_nome.classe == 1 {
-            seja indice_registro = fluxo.resolver(fonte, nomes, primeiro_valor)
-            se indice_registro < 0 {
-                resposta.codigo_erro = 5
+        se fluxo.simbolo(fonte, ponto, 46) {
+            seja caminho_posicao = primeiro + 2
+            enquanto caminho_posicao < ultimo {
+                seja segmento: lexico.UnidadeLexica = unidades[caminho_posicao]
+                se segmento.classe != 1 {
+                    pare
+                }
+                caminho_posicao = caminho_posicao + 1
+                se caminho_posicao < ultimo {
+                    seja ponto_seguinte: lexico.UnidadeLexica = unidades[caminho_posicao]
+                    se nao fluxo.simbolo(fonte, ponto_seguinte, 46) {
+                        pare
+                    }
+                    caminho_posicao = caminho_posicao + 1
+                }
+            }
+            se caminho_posicao == ultimo {
+                seja indice_registro = fluxo.resolver(fonte, nomes, primeiro_valor)
+                se indice_registro < 0 {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                se tipos[indice_registro] < 7 ou tipos[indice_registro] >= 20 {
+                    resposta.codigo_erro = 18
+                    retorne mova(resposta)
+                }
+                seja descricoes = esquemas.analisar(fonte, unidades)
+                seja indice_tipo = tipos[indice_registro] - 7
+                seja indice_campo = esquemas.buscar_caminho(fonte, unidades, empreste(descricoes), indice_tipo, primeiro + 2, ultimo)
+                se indice_campo < 0 {
+                    resposta.codigo_erro = 5
+                    se indice_campo == -2 {
+                        resposta.codigo_erro = 18
+                    }
+                    retorne mova(resposta)
+                }
+                seja leitura_registro = emisregistros.emitir_leitura(mova(codigo), indice_registro, indice_campo)
+                mova(resposta.codigo, leitura_registro)
                 retorne mova(resposta)
             }
-            se tipos[indice_registro] < 7 ou tipos[indice_registro] >= 20 {
-                resposta.codigo_erro = 18
-                retorne mova(resposta)
-            }
-            seja descricoes = esquemas.analisar(fonte, unidades)
-            seja indice_tipo = tipos[indice_registro] - 7
-            seja indice_campo = esquemas.buscar_campo(fonte, unidades, empreste(descricoes), indice_tipo, campo_nome)
-            se indice_campo < 0 {
-                resposta.codigo_erro = 5
-                retorne mova(resposta)
-            }
-            seja leitura_registro = emisregistros.emitir_leitura(mova(codigo), indice_registro, indice_campo)
-            mova(resposta.codigo, leitura_registro)
-            retorne mova(resposta)
         }
     }
     // Intrinsecos de bytes imutaveis: tamanho(buffer) e buffer[indice].
@@ -1143,7 +1180,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                     retorne mova(resposta)
                 }
                 seja layout: esquemas.TipoRegistro = descricoes.tipos[tipo_registro]
-                seja adicionado = emisreglistas.emitir_adicionar(mova(codigo), indice_lista, indice_elemento, layout.quantidade_campos)
+                seja adicionado = emisreglistas.emitir_adicionar(mova(codigo), indice_lista, indice_elemento, layout.quantidade_slots)
                 mova(codigo, adicionado)
                 posicao_ir = posicao_ir + 1
                 continue
@@ -1233,9 +1270,12 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             seja tipo_lista = tipos[indice_local] - 20
             seja layout: esquemas.TipoRegistro = descricoes.tipos[tipo_lista]
             seja nome_campo: lexico.UnidadeLexica = unidades[instrucao.campo_unidade]
-            seja campo_lista = esquemas.buscar_campo(fonte, unidades, empreste(descricoes), tipo_lista, nome_campo)
+            seja campo_lista = esquemas.buscar_caminho(fonte, unidades, empreste(descricoes), tipo_lista, instrucao.campo_unidade, instrucao.campo_fim)
             se campo_lista < 0 {
                 resposta.codigo_erro = 5
+                se campo_lista == -2 {
+                    resposta.codigo_erro = 18
+                }
                 retorne mova(resposta)
             }
             seja indice_registro = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, instrucao.indice_inicio, instrucao.indice_fim, funcao_atual, 0)
@@ -1264,7 +1304,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 adicione(ligacoes, pendente)
                 indice_ligacao = indice_ligacao + 1
             }
-            seja escrita_registro = emisreglistas.emitir_escrita(mova(codigo), indice_local, campo_lista, layout.quantidade_campos)
+            seja escrita_registro = emisreglistas.emitir_escrita(mova(codigo), indice_local, campo_lista, layout.quantidade_slots)
             mova(codigo, escrita_registro)
             posicao_ir = posicao_ir + 1
             continue
@@ -1276,9 +1316,12 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 retorne mova(resposta)
             }
             seja campo_nome: lexico.UnidadeLexica = unidades[instrucao.campo_unidade]
-            seja indice_campo = esquemas.buscar_campo(fonte, unidades, empreste(descricoes), tipos[indice_local] - 7, campo_nome)
+            seja indice_campo = esquemas.buscar_caminho(fonte, unidades, empreste(descricoes), tipos[indice_local] - 7, instrucao.campo_unidade, instrucao.campo_fim)
             se indice_campo < 0 {
                 resposta.codigo_erro = 5
+                se indice_campo == -2 {
+                    resposta.codigo_erro = 18
+                }
                 retorne mova(resposta)
             }
             seja calculado = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0)
@@ -1356,13 +1399,13 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 retorne mova(resposta)
             }
             seja layout: esquemas.TipoRegistro = descricoes.tipos[indice_tipo]
-            seja criado = emisregistros.inicializar(mova(codigo), indice_local, layout.quantidade_campos)
+            seja criado = emisregistros.inicializar(mova(codigo), indice_local, layout.quantidade_slots)
             mova(codigo, criado)
             seja nome_registro: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
             adicione(nomes, nome_registro)
             adicione(tipos, instrucao.tipo_local)
             seja indice_oculto = 1
-            enquanto indice_oculto < layout.quantidade_campos {
+            enquanto indice_oculto < layout.quantidade_slots {
                 seja oculto_registro: lexico.UnidadeLexica
                 oculto_registro.classe = 0
                 adicione(nomes, oculto_registro)

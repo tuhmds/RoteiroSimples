@@ -143,7 +143,9 @@ publico funcao emitir_adicionar(codigo: bytes, indice_lista: inteiro, indice_reg
     seja lacuna = elf.anexar_inteiro(mova(codigo), 0, 4)
     mova(codigo, lacuna)
 
-    // Crescimento geometrico de capacidade, na mesma ABI de lista[inteiro].
+    // O elemento completo pode exceder os 64 bytes iniciais.
+    // Repetir mremap ate caber o conjunto de campos.
+    seja inicio_crescimento = tamanho(codigo)
     adicione_byte(codigo, 87) // push rdi, preservar resultado de inicio
     adicione_byte(codigo, 72)
     adicione_byte(codigo, 139)
@@ -193,6 +195,33 @@ publico funcao emitir_adicionar(codigo: bytes, indice_lista: inteiro, indice_reg
     seja nova_capacidade = fluxo.endereco(mova(codigo), indice_lista + 2)
     mova(codigo, nova_capacidade)
     adicione_byte(codigo, 95) // pop rdi
+    // Syscall nao preserva rcx, recalcular bytes necessarios.
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 141)
+    seja comprimento_atual = fluxo.endereco(mova(codigo), indice_lista + 1)
+    mova(codigo, comprimento_atual)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 131)
+    adicione_byte(codigo, 193)
+    adicione_byte(codigo, 1)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 105)
+    adicione_byte(codigo, 201)
+    seja largura_bytes = elf.anexar_inteiro(mova(codigo), largura * 8, 4)
+    mova(codigo, largura_bytes)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 59)
+    adicione_byte(codigo, 141)
+    seja limite_atual = fluxo.endereco(mova(codigo), indice_lista + 2)
+    mova(codigo, limite_atual)
+    adicione_byte(codigo, 15)
+    adicione_byte(codigo, 135) // ja: capacidade insuficiente
+    seja salto_repetir = tamanho(codigo)
+    seja lacuna_repetir = elf.anexar_inteiro(mova(codigo), 0, 4)
+    mova(codigo, lacuna_repetir)
+    seja repetir = fluxo.corrigir(mova(codigo), salto_repetir, inicio_crescimento)
+    mova(codigo, repetir)
     seja depois = tamanho(codigo)
     seja corrigido = fluxo.corrigir(mova(codigo), salto_sem_crescer, depois)
     mova(codigo, corrigido)

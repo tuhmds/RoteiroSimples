@@ -19,6 +19,7 @@ publico tipo Instrucao {
     indice_fim: inteiro
     tipo_unidade: inteiro
     campo_unidade: inteiro
+    campo_fim: inteiro // apos ultimo identificador do caminho aninhado
 }
 
 publico tipo Plano {
@@ -81,6 +82,7 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
         instrucao.indice_fim = -1
         instrucao.tipo_unidade = -1
         instrucao.campo_unidade = -1
+        instrucao.campo_fim = -1
         instrucao.profundidade = profundidade
         // Depois de pare/continue, so o fechamento do bloco alcancado
         // por esse desvio permanece analisavel neste nivel.
@@ -335,6 +337,19 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
                 }
                 instrucao.campo_unidade = indice_igual + 1
                 indice_igual = indice_igual + 2
+                enquanto indice_igual + 1 < total {
+                    seja ponto_extra: lexico.UnidadeLexica = unidades[indice_igual]
+                    se nao fluxo.simbolo(fonte, ponto_extra, 46) {
+                        pare
+                    }
+                    seja parte_extra: lexico.UnidadeLexica = unidades[indice_igual + 1]
+                    se parte_extra.classe != 1 {
+                        plano.codigo_erro = 3
+                        retorne mova(plano)
+                    }
+                    indice_igual = indice_igual + 2
+                }
+                instrucao.campo_fim = indice_igual
             }
             seja abertura_indice: lexico.UnidadeLexica = unidades[indice_igual]
             se fluxo.simbolo(fonte, abertura_indice, 91) {
@@ -372,6 +387,19 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
                     }
                     instrucao.campo_unidade = indice_igual + 1
                     indice_igual = indice_igual + 2
+                    enquanto indice_igual + 1 < total {
+                        seja ponto_extra: lexico.UnidadeLexica = unidades[indice_igual]
+                        se nao fluxo.simbolo(fonte, ponto_extra, 46) {
+                            pare
+                        }
+                        seja parte_extra: lexico.UnidadeLexica = unidades[indice_igual + 1]
+                        se parte_extra.classe != 1 {
+                            plano.codigo_erro = 3
+                            retorne mova(plano)
+                        }
+                        indice_igual = indice_igual + 2
+                    }
+                    instrucao.campo_fim = indice_igual
                 }
             }
         }
@@ -426,7 +454,7 @@ publico funcao analisar(fonte: emprestimo[bytes], unidades: emprestimo[lista[lex
                         seja layout: esquemas.TipoRegistro = registros.tipos[indice_registro]
                         instrucao.tipo_local = 7 + indice_registro
                         instrucao.tipo_unidade = indice_igual + 1
-                        plano.quantidade_locais = plano.quantidade_locais + layout.quantidade_campos - 1
+                        plano.quantidade_locais = plano.quantidade_locais + layout.quantidade_slots - 1
                     }
                 }
             }
@@ -672,6 +700,7 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
         instrucao.indice_fim = -1
         instrucao.tipo_unidade = -1
         instrucao.campo_unidade = -1
+        instrucao.campo_fim = -1
         instrucao.profundidade = profundidade
         // Apos retorne, apenas o fechamento do mesmo bloco e alcancavel.
         // Um retorno dentro de se/enquanto nao bloqueia comandos fora dele.
@@ -946,6 +975,19 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
                 }
                 instrucao.campo_unidade = indice_igual + 1
                 indice_igual = indice_igual + 2
+                enquanto indice_igual + 1 < total {
+                    seja ponto_extra: lexico.UnidadeLexica = unidades[indice_igual]
+                    se nao fluxo.simbolo(fonte, ponto_extra, 46) {
+                        pare
+                    }
+                    seja parte_extra: lexico.UnidadeLexica = unidades[indice_igual + 1]
+                    se parte_extra.classe != 1 {
+                        plano.codigo_erro = 3
+                        retorne mova(plano)
+                    }
+                    indice_igual = indice_igual + 2
+                }
+                instrucao.campo_fim = indice_igual
             }
             seja abertura_indice: lexico.UnidadeLexica = unidades[indice_igual]
             se fluxo.simbolo(fonte, abertura_indice, 91) {
@@ -983,6 +1025,19 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
                     }
                     instrucao.campo_unidade = indice_igual + 1
                     indice_igual = indice_igual + 2
+                    enquanto indice_igual + 1 < total {
+                        seja ponto_extra: lexico.UnidadeLexica = unidades[indice_igual]
+                        se nao fluxo.simbolo(fonte, ponto_extra, 46) {
+                            pare
+                        }
+                        seja parte_extra: lexico.UnidadeLexica = unidades[indice_igual + 1]
+                        se parte_extra.classe != 1 {
+                            plano.codigo_erro = 3
+                            retorne mova(plano)
+                        }
+                        indice_igual = indice_igual + 2
+                    }
+                    instrucao.campo_fim = indice_igual
                 }
             }
         }
@@ -1037,7 +1092,7 @@ publico funcao analisar_corpo(fonte: emprestimo[bytes], unidades: emprestimo[lis
                         seja layout: esquemas.TipoRegistro = registros.tipos[indice_registro]
                         instrucao.tipo_local = 7 + indice_registro
                         instrucao.tipo_unidade = indice_igual + 1
-                        plano.quantidade_locais = plano.quantidade_locais + layout.quantidade_campos - 1
+                        plano.quantidade_locais = plano.quantidade_locais + layout.quantidade_slots - 1
                     }
                 }
             }
