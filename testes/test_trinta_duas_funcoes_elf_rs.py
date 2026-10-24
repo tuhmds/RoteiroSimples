@@ -35,13 +35,13 @@ class TestesTrintaDuasFuncoesELFRS(unittest.TestCase):
             else:
                 corpo = f"retorne etapa_{indice + 1:02d}(x) + 1"
             linhas.append(
-                f"funcao {nome}(x: inteiro) -> inteiro {{\\n"
-                f" {corpo}\\n"
-                "}\\n"
+                f"funcao {nome}(x: inteiro) -> inteiro {{\n"
+                f" {corpo}\n"
+                "}\n"
             )
         if invertida:
             linhas.reverse()
-        return "".join(linhas) + "inicio {\\n seja resultado = etapa_00(7)\\n}"
+        return "".join(linhas) + "inicio {\n seja resultado = etapa_00(7)\n}"
 
     def test_trinta_duas_funcoes_chamadas_para_frente_e_para_tras(self):
         for nivel in (0, 8):
@@ -58,19 +58,19 @@ class TestesTrintaDuasFuncoesELFRS(unittest.TestCase):
         funcoes = []
         for indice in range(31):
             funcoes.append(
-                f"funcao reserva_{indice:02d}() -> inteiro {{\\n"
-                f" retorne {indice}\\n"
-                "}\\n"
+                f"funcao reserva_{indice:02d}() -> inteiro {{\n"
+                f" retorne {indice}\n"
+                "}\n"
             )
         funcoes.append(
-            "funcao consultar(dados: emprestimo[bytes]) -> inteiro {\\n"
-            " retorne dados[0] + tamanho(dados)\\n"
-            "}\\n"
+            "funcao consultar(dados: emprestimo[bytes]) -> inteiro {\n"
+            " retorne dados[0] + tamanho(dados)\n"
+            "}\n"
         )
         fonte = (
             "".join(funcoes)
-            + 'inicio {\\n seja dados: bytes = "ABC"\\n'
-            + " seja r = consultar(dados) + reserva_30()\\n}"
+            + 'inicio {\n seja dados: bytes = "ABC"\n'
+            + " seja r = consultar(dados) + reserva_30()\n}"
         )
         for nivel in (0, 8):
             with self.subTest(nivel=nivel):
