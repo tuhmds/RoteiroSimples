@@ -1138,7 +1138,8 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
 }
 
 // Usa chamadas realmente emitidas para construir um grafo de dependencia.
-// O limite de 16 funcoes torna viavel o fechamento transitivo O(n^3).
+// O limite de 32 funcoes limita o fechamento transitivo O(n^3) a 32768
+// iteracoes da tripla origem/intermediario/destino (sem recursao).
 // O indice de origem -1 representa inicio e nao pode participar de ciclo.
 privado tipo DiagnosticoCiclo {
     codigo: inteiro
@@ -1222,7 +1223,7 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoCorposELF {
         resposta.unidade_erro = assinadas.unidade_erro
         retorne mova(resposta)
     }
-    se tamanho(assinadas.funcoes) < 1 ou tamanho(assinadas.funcoes) > 16 {
+    se tamanho(assinadas.funcoes) < 1 ou tamanho(assinadas.funcoes) > 32 {
         resposta.codigo_erro = 2
         retorne mova(resposta)
     }
