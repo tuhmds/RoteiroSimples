@@ -1065,6 +1065,29 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 resposta.codigo_erro = 5
                 retorne mova(resposta)
             }
+            se tipos[indice_lista] >= 20 {
+                // adicione(lista[Registro], registro) copia todos os campos.
+                se instrucao.valor_fim != instrucao.valor_inicio + 1 {
+                    resposta.codigo_erro = 18
+                    retorne mova(resposta)
+                }
+                seja token_elemento: lexico.UnidadeLexica = unidades[instrucao.valor_inicio]
+                seja indice_elemento = fluxo.resolver(fonte, empreste(nomes), token_elemento)
+                se indice_elemento < 0 {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                seja tipo_registro = tipos[indice_lista] - 20
+                se tipos[indice_elemento] != 7 + tipo_registro {
+                    resposta.codigo_erro = 18
+                    retorne mova(resposta)
+                }
+                seja layout: esquemas.TipoRegistro = descricoes.tipos[tipo_registro]
+                seja adicionado = emisreglistas.emitir_adicionar(mova(codigo), indice_lista, indice_elemento, layout.quantidade_campos)
+                mova(codigo, adicionado)
+                posicao_ir = posicao_ir + 1
+                continue
+            }
             se tipos[indice_lista] != 5 {
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
@@ -1104,7 +1127,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             posicao_ir = posicao_ir + 1
             continue
         }
-        se instrucao.categoria != 1 e instrucao.categoria != 2 e instrucao.categoria != 7 e instrucao.categoria != 11 e instrucao.categoria != 14 {
+        se instrucao.categoria != 1 e instrucao.categoria != 2 e instrucao.categoria != 7 e instrucao.categoria != 11 e instrucao.categoria != 14 e instrucao.categoria != 15 {
             resposta.codigo_erro = 3
             retorne mova(resposta)
         }
@@ -1141,6 +1164,51 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         }
         seja primeiro = instrucao.valor_inicio
         seja ultimo = instrucao.valor_fim
+        se instrucao.categoria == 15 {
+            // lista[indice].campo = valor: indice e valor ja sao inteiros.
+            se tipos[indice_local] < 20 {
+                resposta.codigo_erro = 18
+                retorne mova(resposta)
+            }
+            seja tipo_lista = tipos[indice_local] - 20
+            seja layout: esquemas.TipoRegistro = descricoes.tipos[tipo_lista]
+            seja nome_campo: lexico.UnidadeLexica = unidades[instrucao.campo_unidade]
+            seja campo_lista = esquemas.buscar_campo(fonte, unidades, empreste(descricoes), tipo_lista, nome_campo)
+            se campo_lista < 0 {
+                resposta.codigo_erro = 5
+                retorne mova(resposta)
+            }
+            seja indice_registro = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, instrucao.indice_inicio, instrucao.indice_fim, funcao_atual, 0)
+            se indice_registro.codigo_erro != 0 {
+                resposta.codigo_erro = indice_registro.codigo_erro
+                resposta.unidade_erro = indice_registro.unidade_erro
+                retorne mova(resposta)
+            }
+            mova(codigo, indice_registro.codigo)
+            seja indice_ligacao = 0
+            enquanto indice_ligacao < tamanho(indice_registro.ligacoes) {
+                seja pendente: Ligacao = indice_registro.ligacoes[indice_ligacao]
+                adicione(ligacoes, pendente)
+                indice_ligacao = indice_ligacao + 1
+            }
+            seja valor_campo = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0)
+            se valor_campo.codigo_erro != 0 {
+                resposta.codigo_erro = valor_campo.codigo_erro
+                resposta.unidade_erro = valor_campo.unidade_erro
+                retorne mova(resposta)
+            }
+            mova(codigo, valor_campo.codigo)
+            indice_ligacao = 0
+            enquanto indice_ligacao < tamanho(valor_campo.ligacoes) {
+                seja pendente: Ligacao = valor_campo.ligacoes[indice_ligacao]
+                adicione(ligacoes, pendente)
+                indice_ligacao = indice_ligacao + 1
+            }
+            seja escrita_registro = emisreglistas.emitir_escrita(mova(codigo), indice_local, campo_lista, layout.quantidade_campos)
+            mova(codigo, escrita_registro)
+            posicao_ir = posicao_ir + 1
+            continue
+        }
         se instrucao.categoria == 14 {
             // Apenas um campo inteiro de um registro proprietario local.
             se tipos[indice_local] < 7 {
@@ -1220,7 +1288,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 retorne mova(resposta)
             }
         }
-        se instrucao.categoria == 1 e instrucao.tipo_local >= 7 {
+        se instrucao.categoria == 1 e instrucao.tipo_local >= 7 e instrucao.tipo_local < 20 {
             // Registro local com campos inteiros zerados no prologo.
             seja indice_tipo = instrucao.tipo_local - 7
             se indice_tipo >= tamanho(descricoes.tipos) {
@@ -1244,13 +1312,13 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             posicao_ir = posicao_ir + 1
             continue
         }
-        se instrucao.categoria == 1 e instrucao.tipo_local == 5 {
-            // Lista dinamica: tres slots (ponteiro, comprimento e capacidade).
+        se instrucao.categoria == 1 e (instrucao.tipo_local == 5 ou instrucao.tipo_local >= 20) {
+            // Lista dinamica de inteiros ou registros com tres slots.
             seja lista_vazia = emislistas.inicializar(mova(codigo), indice_local)
             mova(codigo, lista_vazia)
             seja nome_lista: lexico.UnidadeLexica = unidades[instrucao.unidade_nome]
             adicione(nomes, nome_lista)
-            adicione(tipos, 5)
+            adicione(tipos, instrucao.tipo_local)
             seja reservado_lista = 0
             enquanto reservado_lista < 2 {
                 seja oculto_lista: lexico.UnidadeLexica
