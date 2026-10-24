@@ -19,8 +19,8 @@ class TestesListasLocaisELFRS(unittest.TestCase):
     def tearDownClass(cls):
         base_corpos.TestesCorposFuncoesELFRS.tearDownClass()
 
-    def gerar(self, fonte, nivel):
-        return self.gerador.gerar(fonte, nivel)
+    def gerar(self, fonte, nivel, limite_memoria=None):
+        return self.gerador.gerar(fonte, nivel, limite_memoria=limite_memoria)
 
     def test_declaracao_adicao_leitura_e_comprimento(self):
         casos = (
@@ -151,6 +151,35 @@ class TestesListasLocaisELFRS(unittest.TestCase):
                     "}\n inicio { seja r = executar() }"
                 )
                 with self.subTest(nivel=nivel, tamanho=tamanho):
+                    codigo, arquivo, status = self.gerar(fonte, nivel)
+                    self.assertEqual(codigo, 0)
+                    self.assertIsNotNone(arquivo)
+                    if status is not None:
+                        self.assertEqual(status, esperado % 256)
+
+    def test_inspecao_do_remapeamento_em_indice_de_fronteira(self):
+        casos = (
+            (9, "valores[8]", 8),
+            (9, "valores[7]", 7),
+            (9, "tamanho(valores)", 9),
+            (17, "valores[16]", 16),
+            (17, "valores[8]", 8),
+            (17, "tamanho(valores)", 17),
+        )
+        for nivel in (0, 8):
+            for quantidade, retorno, esperado in casos:
+                fonte = (
+                    "funcao executar() -> inteiro {\n"
+                    " seja valores: lista[inteiro]\n"
+                    " seja indice = 0\n"
+                    f" enquanto indice < {quantidade} {{\n"
+                    " adicione(valores, indice)\n"
+                    " indice = indice + 1\n"
+                    " }\n"
+                    f" retorne {retorno}\n"
+                    "}\n inicio { seja r = executar() }"
+                )
+                with self.subTest(nivel=nivel, quantidade=quantidade, retorno=retorno):
                     codigo, arquivo, status = self.gerar(fonte, nivel)
                     self.assertEqual(codigo, 0)
                     self.assertIsNotNone(arquivo)
