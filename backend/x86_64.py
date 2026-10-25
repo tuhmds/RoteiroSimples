@@ -238,36 +238,39 @@ def _transferir_registro_proprietario(g, variaveis, tipos, destino, origem, wind
         valores_dinamicos.inativar(g, variaveis, nome, windows)
 
 
-def _copiar_palavras(g, origem, destino, quantidade):
-    """Copia valores completos sem extrapolar os quadros de pilha locais."""
-    if origem == destino:
-        return
-    numero = g.proxima_condicao
-    g.proxima_condicao += 1
-    rotulo = f'copiar_composto_{numero}'
-    g.bytes(b'\x4C\x8D\x95' + struct.pack('<i', origem))  # lea r10,[rbp+origem]
-    g.bytes(b'\x4C\x8D\x9D' + struct.pack('<i', destino)) # lea r11,[rbp+destino]
-    g.bytes(b'\xB9' + struct.pack('<I', quantidade))           # mov ecx, quantidade
-    g.marcar(rotulo)
-    g.bytes(b'\x49\x8B\x02\x49\x89\x03')      # mov rax,[r10]; mov [r11],rax
-    g.bytes(b'\x49\x83\xEA\x08\x49\x83\xEB\x08')  # sub ponteiros,8
-    g.bytes(b'\xFF\xC9')
-    g.salto(rotulo, 'jnz')
-
-
-def _copiar_para_retorno(g, origem, quantidade, windows=False):
-    """O chamador fornece endereço de destino na palavra oculta de retorno."""
-    numero = g.proxima_condicao
-    g.proxima_condicao += 1
-    rotulo = f'retornar_composto_{numero}'
-    g.bytes(b'\x4C\x8D\x95' + struct.pack('<i', origem))
-    g.bytes(b'\x4C\x8B\x5D' + bytes((80 if windows else 24,)))
-    g.bytes(b'\xB9' + struct.pack('<I', quantidade)) # mov ecx,count
+def _emitir_copia_palavras(g, quantidade, rotulo):
+    """Copia palavras de r10 para r11, avançando ambos os ponteiros para baixo."""
+    if quantidade <= 0:
+        raise ValueError("Cópia de agregado exige quantidade positiva de palavras.")
+    # A ABI de registros guarda campos consecutivos em endereços decrescentes.
+    g.bytes(b'\xB9' + struct.pack('<I', quantidade))
     g.marcar(rotulo)
     g.bytes(b'\x49\x8B\x02\x49\x89\x03')
     g.bytes(b'\x49\x83\xEA\x08\x49\x83\xEB\x08')
     g.bytes(b'\xFF\xC9')
     g.salto(rotulo, 'jnz')
+
+
+def _copiar_palavras(g, origem, destino, quantidade):
+    """Copia valores completos entre posições do quadro local."""
+    if origem == destino:
+        return
+    numero = g.proxima_condicao
+    g.proxima_condicao += 1
+    rotulo = f'copiar_composto_{numero}'
+    g.bytes(b'\x4C\x8D\x95' + struct.pack('<i', origem))
+    g.bytes(b'\x4C\x8D\x9D' + struct.pack('<i', destino))
+    _emitir_copia_palavras(g, quantidade, rotulo)
+
+
+def _copiar_para_retorno(g, origem, quantidade, windows=False):
+    """Copia o agregado para o destino oculto fornecido pelo chamador."""
+    numero = g.proxima_condicao
+    g.proxima_condicao += 1
+    rotulo = f'retornar_composto_{numero}'
+    g.bytes(b'\x4C\x8D\x95' + struct.pack('<i', origem))
+    g.bytes(b'\x4C\x8B\x5D' + bytes((80 if windows else 24,)))
+    _emitir_copia_palavras(g, quantidade, rotulo)
 
 
 def _carregar_uso_pilha(g, variaveis, windows):
