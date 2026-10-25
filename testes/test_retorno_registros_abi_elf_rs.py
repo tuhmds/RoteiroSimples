@@ -76,7 +76,7 @@ def executar_copia(trecho, por_referencia):
     funcao.extend(trecho)
     funcao.extend(bytes.fromhex("c9 c3"))
     # O deslocamento relativo de call parte do byte seguinte ao imm32.
-    call_imediato = 19
+    call_imediato = 20
     deslocamento = len(entrada) - (call_imediato + 4)
     struct.pack_into("<i", entrada, call_imediato, deslocamento)
     return imagem_elf(bytes(entrada + funcao))
