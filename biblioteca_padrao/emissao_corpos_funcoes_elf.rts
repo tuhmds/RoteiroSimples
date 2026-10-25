@@ -1699,6 +1699,10 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                     retorne mova(resposta)
                 }
                 seja origem_nome: lexico.UnidadeLexica = unidades[primeiro]
+                se origem_nome.classe != 1 {
+                    resposta.codigo_erro = 18
+                    retorne mova(resposta)
+                }
                 seja origem_local = fluxo.resolver(fonte, empreste(nomes), origem_nome)
                 se origem_local < 0 {
                     resposta.codigo_erro = 5
