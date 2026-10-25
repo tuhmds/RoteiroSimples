@@ -163,6 +163,15 @@ privado funcao tipo_registro_por_valor(fonte: emprestimo[bytes], unidades: empre
     retorne esquemas.buscar_tipo(fonte, unidades, empreste(descricoes), nome)
 }
 
+// Retornos aceitos: inteiro ou um registro declarado, por valor.
+privado funcao tipo_registro_retorno(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], descricoes: emprestimo[esquemas.EsquemasRegistros], assinatura: assinaturas.AssinaturaFuncao) -> inteiro {
+    se assinatura.retorno_fim != assinatura.retorno_inicio + 1 {
+        retorne -1
+    }
+    seja nome: lexico.UnidadeLexica = unidades[assinatura.retorno_inicio]
+    retorne esquemas.buscar_tipo(fonte, unidades, descricoes, nome)
+}
+
 // Verifica a assinatura e o corpo inteiro: retorne expressao.
 // Diagnostico: 2 assinatura, 3 corpo, 4 duplicidade.
 privado funcao validar_funcoes(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], grupo: emprestimo[assinaturas.Assinaturas]) -> inteiro {
@@ -192,7 +201,9 @@ privado funcao validar_funcoes(fonte: emprestimo[bytes], unidades: emprestimo[li
         }
         seja tipo_retorno: lexico.UnidadeLexica = unidades[atual.retorno_inicio]
         se nao fluxo.igual(fonte, tipo_retorno, empreste(retorno)) {
-            retorne 2
+            se tipo_registro_retorno(fonte, unidades, empreste(tipos_registro), atual) < 0 {
+                retorne 2
+            }
         }
         seja j = 0
         enquanto j < i {
@@ -272,7 +283,7 @@ privado tipo ValorEmitido {
 // Uma chamada pode ser argumento integral de outra chamada. A emissao
 // recursiva limita a profundidade e preserva os argumentos em ordem inversa
 // na pilha, conforme a ABI interna. Expressoes e chamadas podem ser misturadas.
-privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], tipos: emprestimo[lista[inteiro]], assinadas: emprestimo[assinaturas.Assinaturas], primeiro: inteiro, ultimo: inteiro, funcao_atual: inteiro, nivel: inteiro) -> ValorEmitido {
+privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], nomes: emprestimo[lista[lexico.UnidadeLexica]], tipos: emprestimo[lista[inteiro]], assinadas: emprestimo[assinaturas.Assinaturas], primeiro: inteiro, ultimo: inteiro, funcao_atual: inteiro, nivel: inteiro, destino_registro: inteiro) -> ValorEmitido {
     seja resposta: ValorEmitido
     resposta.unidade_erro = primeiro
     se primeiro >= ultimo ou nivel > 8 {
@@ -280,6 +291,39 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         retorne mova(resposta)
     }
     seja primeiro_valor: lexico.UnidadeLexica = unidades[primeiro]
+    se destino_registro >= 0 {
+        // Somente chamada direta como fonte de registro por valor.
+        se ultimo < primeiro + 3 {
+            resposta.codigo_erro = 18
+            retorne mova(resposta)
+        }
+        seja abertura_resultado: lexico.UnidadeLexica = unidades[primeiro + 1]
+        seja fechamento_resultado: lexico.UnidadeLexica = unidades[ultimo - 1]
+        se primeiro_valor.classe != 1 ou nao fluxo.simbolo(fonte, abertura_resultado, 40) ou nao fluxo.simbolo(fonte, fechamento_resultado, 41) {
+            resposta.codigo_erro = 18
+            retorne mova(resposta)
+        }
+        seja profundidade_resultado = 0
+        seja indice_resultado = primeiro + 1
+        enquanto indice_resultado < ultimo {
+            seja token_resultado: lexico.UnidadeLexica = unidades[indice_resultado]
+            se fluxo.simbolo(fonte, token_resultado, 40) {
+                profundidade_resultado = profundidade_resultado + 1
+            }
+            se fluxo.simbolo(fonte, token_resultado, 41) {
+                profundidade_resultado = profundidade_resultado - 1
+                se profundidade_resultado == 0 e indice_resultado != ultimo - 1 {
+                    resposta.codigo_erro = 18
+                    retorne mova(resposta)
+                }
+            }
+            indice_resultado = indice_resultado + 1
+        }
+        se profundidade_resultado != 0 {
+            resposta.codigo_erro = 18
+            retorne mova(resposta)
+        }
+    }
     // Leitura de lista[indice].campo, incluindo subcampos aninhados.
     se ultimo >= primeiro + 6 e primeiro_valor.classe == 1 {
         seja abre_indice: lexico.UnidadeLexica = unidades[primeiro + 1]
@@ -335,7 +379,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                             retorne mova(resposta)
                         }
                         seja layout_lista: esquemas.TipoRegistro = descricoes_lista.tipos[tipo_lista]
-                        seja indice_calculado = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 2, fecha_posicao, funcao_atual, nivel + 1)
+                        seja indice_calculado = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 2, fecha_posicao, funcao_atual, nivel + 1, -1)
                         se indice_calculado.codigo_erro != 0 {
                             resposta.codigo_erro = indice_calculado.codigo_erro
                             resposta.unidade_erro = indice_calculado.unidade_erro
@@ -453,7 +497,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 seja indice_buffer = fluxo.resolver(fonte, nomes, primeiro_valor)
             se indice_buffer >= 0 {
                 se tipos[indice_buffer] == 2 ou tipos[indice_buffer] == 3 ou tipos[indice_buffer] == 4 ou tipos[indice_buffer] == 5 ou tipos[indice_buffer] == 6 {
-                    seja parte_indice = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 2, ultimo - 1, funcao_atual, nivel + 1)
+                    seja parte_indice = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 2, ultimo - 1, funcao_atual, nivel + 1, -1)
                     se parte_indice.codigo_erro != 0 {
                         resposta.codigo_erro = parte_indice.codigo_erro
                         resposta.unidade_erro = parte_indice.unidade_erro
@@ -576,7 +620,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 }
             }
             // Cada operando deixa um inteiro na pilha, como o backend original.
-            seja esquerda = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro, corte, funcao_atual, nivel + 1)
+            seja esquerda = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro, corte, funcao_atual, nivel + 1, -1)
             se esquerda.codigo_erro != 0 {
                 resposta.codigo_erro = esquerda.codigo_erro
                 resposta.unidade_erro = esquerda.unidade_erro
@@ -589,7 +633,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 adicione(resposta.ligacoes, ligacao_esquerda)
                 j = j + 1
             }
-            seja direita = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, corte + 1, ultimo, funcao_atual, nivel + 1)
+            seja direita = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, corte + 1, ultimo, funcao_atual, nivel + 1, -1)
             se direita.codigo_erro != 0 {
                 resposta.codigo_erro = direita.codigo_erro
                 resposta.unidade_erro = direita.unidade_erro
@@ -649,14 +693,14 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 i = i + 1
             }
             se externa e profundidade_externa == 0 {
-                retorne emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 1, ultimo - 1, funcao_atual, nivel + 1)
+                retorne emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 1, ultimo - 1, funcao_atual, nivel + 1, -1)
             }
         }
         // Sinais unarios na frente de chamadas e subexpressoes.
         se primeiro_valor.classe == 4 e primeiro_valor.comprimento_byte == 1 {
             seja sinal_inicial = fonte[primeiro_valor.inicio_byte]
             se sinal_inicial == 43 ou sinal_inicial == 45 {
-                seja interior = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 1, ultimo, funcao_atual, nivel + 1)
+                seja interior = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro + 1, ultimo, funcao_atual, nivel + 1, -1)
                 se interior.codigo_erro != 0 {
                     resposta.codigo_erro = interior.codigo_erro
                     resposta.unidade_erro = interior.unidade_erro
@@ -747,6 +791,19 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         retorne mova(resposta)
     }
     seja funcao_alvo: assinaturas.AssinaturaFuncao = assinadas.funcoes[indice_funcao]
+    seja tipos_chamada = esquemas.analisar(fonte, unidades)
+    seja retorno_registro = tipo_registro_retorno(fonte, unidades, empreste(tipos_chamada), funcao_alvo)
+    se retorno_registro >= 0 {
+        se destino_registro < 0 ou tipos[destino_registro] != 7 + retorno_registro {
+            resposta.codigo_erro = 18
+            retorne mova(resposta)
+        }
+    } senao {
+        se destino_registro >= 0 {
+            resposta.codigo_erro = 18
+            retorne mova(resposta)
+        }
+    }
     seja inicios: lista[inteiro]
     seja finais: lista[inteiro]
     seja nivel_parenteses = 1
@@ -885,7 +942,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             seja argumento_buffer = emisbytes.emitir_argumento_emprestado(mova(codigo), indice_buffer, modo_buffer)
             mova(codigo, argumento_buffer)
         } senao {
-            seja parte = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, inicios[argumento], finais[argumento], funcao_atual, nivel + 1)
+            seja parte = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, inicios[argumento], finais[argumento], funcao_atual, nivel + 1, -1)
             se parte.codigo_erro != 0 {
                 resposta.codigo_erro = parte.codigo_erro
                 resposta.unidade_erro = parte.unidade_erro
@@ -902,7 +959,17 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         }
         argumento = argumento - 1
     }
-    // ABI interna: call rel32; caller limpa argumentos; retorno em rax.
+    // O ponteiro oculto de retorno fica no topo, apos os argumentos
+    // explicitos. Assim o callee o encontra em [rbp + 16].
+    se retorno_registro >= 0 {
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 141)
+        adicione_byte(codigo, 133) // lea rax, [rbp - destino]
+        seja destino_copia = fluxo.endereco(mova(codigo), destino_registro)
+        mova(codigo, destino_copia)
+        adicione_byte(codigo, 80) // push rax
+    }
+    // ABI interna: call rel32; caller limpa argumentos e buffer oculto.
     adicione_byte(codigo, 232)
     seja ligacao: Ligacao
     ligacao.indice_funcao = indice_funcao
@@ -915,14 +982,20 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         adicione_byte(codigo, 0)
         j = j + 1
     }
-    se tamanho(inicios) > 0 {
+    seja argumentos_pilha = tamanho(inicios)
+    se retorno_registro >= 0 {
+        argumentos_pilha = argumentos_pilha + 1
+    }
+    se argumentos_pilha > 0 {
         adicione_byte(codigo, 72)
         adicione_byte(codigo, 129)
         adicione_byte(codigo, 196)
-        seja limpeza = elf.anexar_inteiro(mova(codigo), tamanho(inicios) * 8, 4)
+        seja limpeza = elf.anexar_inteiro(mova(codigo), argumentos_pilha * 8, 4)
         mova(codigo, limpeza)
     }
-    adicione_byte(codigo, 80)
+    se retorno_registro < 0 {
+        adicione_byte(codigo, 80)
+    }
     mova(resposta.codigo, codigo)
     retorne mova(resposta)
 }
@@ -967,7 +1040,7 @@ privado funcao emitir_predicado(codigo: bytes, fonte: emprestimo[bytes], unidade
         resposta.codigo_erro = 7
         retorne mova(resposta)
     }
-    seja esquerda = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro, posicao, funcao_atual, 0)
+    seja esquerda = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, primeiro, posicao, funcao_atual, 0, -1)
     se esquerda.codigo_erro != 0 {
         resposta.codigo_erro = esquerda.codigo_erro
         resposta.unidade_erro = esquerda.unidade_erro
@@ -980,7 +1053,7 @@ privado funcao emitir_predicado(codigo: bytes, fonte: emprestimo[bytes], unidade
         adicione(resposta.ligacoes, ligacao_esquerda)
         j = j + 1
     }
-    seja direita = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, posicao + 1, ultimo, funcao_atual, 0)
+    seja direita = emitir_valor(mova(codigo), fonte, unidades, nomes, tipos, assinadas, posicao + 1, ultimo, funcao_atual, 0, -1)
     se direita.codigo_erro != 0 {
         resposta.codigo_erro = direita.codigo_erro
         resposta.unidade_erro = direita.unidade_erro
@@ -1281,7 +1354,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
             }
-            seja elemento_lista = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, instrucao.valor_inicio, instrucao.valor_fim, funcao_atual, 0)
+            seja elemento_lista = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, instrucao.valor_inicio, instrucao.valor_fim, funcao_atual, 0, -1)
             se elemento_lista.codigo_erro != 0 {
                 resposta.codigo_erro = elemento_lista.codigo_erro
                 resposta.unidade_erro = elemento_lista.unidade_erro
@@ -1370,7 +1443,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 }
                 retorne mova(resposta)
             }
-            seja indice_registro = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, instrucao.indice_inicio, instrucao.indice_fim, funcao_atual, 0)
+            seja indice_registro = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, instrucao.indice_inicio, instrucao.indice_fim, funcao_atual, 0, -1)
             se indice_registro.codigo_erro != 0 {
                 resposta.codigo_erro = indice_registro.codigo_erro
                 resposta.unidade_erro = indice_registro.unidade_erro
@@ -1383,7 +1456,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 adicione(ligacoes, pendente)
                 indice_ligacao = indice_ligacao + 1
             }
-            seja valor_campo = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0)
+            seja valor_campo = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0, -1)
             se valor_campo.codigo_erro != 0 {
                 resposta.codigo_erro = valor_campo.codigo_erro
                 resposta.unidade_erro = valor_campo.unidade_erro
@@ -1420,7 +1493,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 }
                 retorne mova(resposta)
             }
-            seja calculado = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0)
+            seja calculado = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0, -1)
             se calculado.codigo_erro != 0 {
                 resposta.codigo_erro = calculado.codigo_erro
                 resposta.unidade_erro = calculado.unidade_erro
@@ -1450,7 +1523,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
             }
-            seja indice_calculado = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, instrucao.indice_inicio, instrucao.indice_fim, funcao_atual, 0)
+            seja indice_calculado = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, instrucao.indice_inicio, instrucao.indice_fim, funcao_atual, 0, -1)
             se indice_calculado.codigo_erro != 0 {
                 resposta.codigo_erro = indice_calculado.codigo_erro
                 resposta.unidade_erro = indice_calculado.unidade_erro
@@ -1463,7 +1536,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 adicione(ligacoes, pendente_indice)
                 l = l + 1
             }
-            seja dado_calculado = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0)
+            seja dado_calculado = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0, -1)
             se dado_calculado.codigo_erro != 0 {
                 resposta.codigo_erro = dado_calculado.codigo_erro
                 resposta.unidade_erro = dado_calculado.unidade_erro
@@ -1482,6 +1555,25 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             } senao {
                 seja escrita = emisbytes.emitir_escrita(mova(codigo), indice_local, tipos[indice_local] == 3)
                 mova(codigo, escrita)
+            }
+            posicao_ir = posicao_ir + 1
+            continue
+        }
+        se instrucao.categoria == 2 e tipos[indice_local] >= 7 e tipos[indice_local] < 20 {
+            // O resultado estruturado e escrito diretamente nos slots do dono.
+            // Uma atribuicao a registro so aceita chamada do mesmo tipo.
+            seja chamada_registro = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0, indice_local)
+            se chamada_registro.codigo_erro != 0 {
+                resposta.codigo_erro = chamada_registro.codigo_erro
+                resposta.unidade_erro = chamada_registro.unidade_erro
+                retorne mova(resposta)
+            }
+            mova(codigo, chamada_registro.codigo)
+            seja indice_ligacao_registro = 0
+            enquanto indice_ligacao_registro < tamanho(chamada_registro.ligacoes) {
+                seja ligacao_registro: Ligacao = chamada_registro.ligacoes[indice_ligacao_registro]
+                adicione(ligacoes, ligacao_registro)
+                indice_ligacao_registro = indice_ligacao_registro + 1
             }
             posicao_ir = posicao_ir + 1
             continue
@@ -1560,7 +1652,7 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                     resposta.codigo_erro = 17
                     retorne mova(resposta)
                 }
-                seja pedido = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro + 2, ultimo - 1, funcao_atual, 0)
+                seja pedido = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro + 2, ultimo - 1, funcao_atual, 0, -1)
                 se pedido.codigo_erro != 0 {
                     resposta.codigo_erro = pedido.codigo_erro
                     resposta.unidade_erro = pedido.unidade_erro
@@ -1596,7 +1688,51 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             posicao_ir = posicao_ir + 1
             continue
         }
-        seja valor = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0)
+        se instrucao.categoria == 7 {
+            seja assinatura_retorno: assinaturas.AssinaturaFuncao = assinadas.funcoes[funcao_atual]
+            seja tipo_retorno_registro = tipo_registro_retorno(fonte, unidades, empreste(descricoes), assinatura_retorno)
+            se tipo_retorno_registro >= 0 {
+                // Nao se permite retorno de expressao temporaria ou
+                // de registro de outro esquema. A copia cruza a ABI.
+                se ultimo != primeiro + 1 {
+                    resposta.codigo_erro = 18
+                    retorne mova(resposta)
+                }
+                seja origem_nome: lexico.UnidadeLexica = unidades[primeiro]
+                se origem_nome.classe != 1 {
+                    resposta.codigo_erro = 18
+                    retorne mova(resposta)
+                }
+                seja origem_local = fluxo.resolver(fonte, empreste(nomes), origem_nome)
+                se origem_local < 0 {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                seja origem_tipo = tipos[origem_local]
+                se origem_tipo != 7 + tipo_retorno_registro e origem_tipo != 40 + tipo_retorno_registro e origem_tipo != 50 + tipo_retorno_registro {
+                    resposta.codigo_erro = 18
+                    retorne mova(resposta)
+                }
+                seja esquema_retorno: esquemas.TipoRegistro = descricoes.tipos[tipo_retorno_registro]
+                seja referenciado = origem_tipo >= 40
+                seja copiado = emisregistros.copiar_para_retorno(mova(codigo), origem_local, esquema_retorno.quantidade_slots, referenciado)
+                mova(codigo, copiado)
+                seja limpeza_retorno = emitir_limpeza_escopo(mova(codigo), empreste(nomes), empreste(tipos), 0)
+                mova(codigo, limpeza_retorno)
+                // O resultado em rax nao depende dos registradores usados
+                // durante a limpeza: recuperar endereco do buffer oculto.
+                adicione_byte(codigo, 72)
+                adicione_byte(codigo, 139)
+                adicione_byte(codigo, 133)
+                seja retorno_ponteiro = elf.anexar_inteiro(mova(codigo), 16, 4)
+                mova(codigo, retorno_ponteiro)
+                adicione_byte(codigo, 201)
+                adicione_byte(codigo, 195)
+                posicao_ir = posicao_ir + 1
+                continue
+            }
+        }
+        seja valor = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0, -1)
         se valor.codigo_erro != 0 {
             resposta.codigo_erro = valor.codigo_erro
             resposta.unidade_erro = valor.unidade_erro
@@ -1815,11 +1951,16 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoCorposELF {
             seja parametro: assinaturas.ParametroFuncao = assinadas.parametros[assinatura.primeiro_parametro + j]
             seja token_parametro: lexico.UnidadeLexica = unidades[parametro.unidade_nome]
             adicione(parametros, token_parametro)
-            // mov rax, [rbp + 16+8*j], cdecl interno com pilha.
+            // Retorno de registro adiciona ponteiro oculto em [rbp + 16].
+            seja deslocamento_argumento = 16 + j * 8
+            seja indice_retorno = tipo_registro_retorno(fonte, empreste(unidades), empreste(layouts), assinatura)
+            se indice_retorno >= 0 {
+                deslocamento_argumento = deslocamento_argumento + 8
+            }
             adicione_byte(codigo, 72)
             adicione_byte(codigo, 139)
             adicione_byte(codigo, 133)
-            seja entrada = elf.anexar_inteiro(mova(codigo), 16 + j * 8, 4)
+            seja entrada = elf.anexar_inteiro(mova(codigo), deslocamento_argumento, 4)
             mova(codigo, entrada)
             adicione_byte(codigo, 80) // push rax
             seja transferido = guardar_local(mova(codigo), j)
