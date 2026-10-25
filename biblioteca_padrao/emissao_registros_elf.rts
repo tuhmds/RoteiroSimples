@@ -60,3 +60,54 @@ publico funcao emitir_leitura_emprestada(codigo: bytes, indice_local: inteiro, c
     adicione_byte(codigo, 80)
     retorne mova(codigo)
 }
+
+// Copia um registro do endereco do argumento para slots exclusivos do callee.
+// Substitui o valor do parametro pelo endereco da nova copia local.
+publico funcao copiar_parametro(codigo: bytes, indice_parametro: inteiro, primeiro_slot: inteiro, quantidade: inteiro) -> bytes {
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 149) // mov rdx, [rbp - parametro]
+    seja origem = fluxo.endereco(mova(codigo), indice_parametro)
+    mova(codigo, origem)
+    seja i = 0
+    enquanto i < quantidade {
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 139)
+        adicione_byte(codigo, 130) // mov rax, [rdx - i*8]
+        seja deslocamento_origem = elf.anexar_inteiro(mova(codigo), 4294967296 - i * 8, 4)
+        mova(codigo, deslocamento_origem)
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 137)
+        adicione_byte(codigo, 133) // mov [rbp - destino], rax
+        seja destino = fluxo.endereco(mova(codigo), primeiro_slot + i)
+        mova(codigo, destino)
+        i = i + 1
+    }
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 141)
+    adicione_byte(codigo, 133) // lea rax, [rbp - primeiro_slot]
+    seja endereco_local = fluxo.endereco(mova(codigo), primeiro_slot)
+    mova(codigo, endereco_local)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 133) // mov [rbp - parametro], rax
+    seja endereco_parametro = fluxo.endereco(mova(codigo), indice_parametro)
+    mova(codigo, endereco_parametro)
+    retorne mova(codigo)
+}
+
+// Escreve somente na copia local de um parametro por valor.
+publico funcao emitir_escrita_referenciada(codigo: bytes, indice_parametro: inteiro, campo: inteiro) -> bytes {
+    adicione_byte(codigo, 88) // pop rax
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 149) // mov rdx, [rbp - parametro]
+    seja referencia = fluxo.endereco(mova(codigo), indice_parametro)
+    mova(codigo, referencia)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 130) // mov [rdx - campo*8], rax
+    seja endereco_campo = elf.anexar_inteiro(mova(codigo), 4294967296 - campo * 8, 4)
+    mova(codigo, endereco_campo)
+    retorne mova(codigo)
+}

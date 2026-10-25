@@ -152,6 +152,17 @@ privado funcao tipo_registro_emprestado(fonte: emprestimo[bytes], unidades: empr
     retorne esquemas.buscar_tipo(fonte, unidades, empreste(descricoes), nome)
 }
 
+// Parametros por valor transportam um ponteiro na ABI interna,
+// mas recebem uma copia privada dos slots no quadro da funcao.
+privado funcao tipo_registro_por_valor(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], parametro: assinaturas.ParametroFuncao) -> inteiro {
+    se parametro.tipo_fim != parametro.tipo_inicio + 1 {
+        retorne -1
+    }
+    seja nome: lexico.UnidadeLexica = unidades[parametro.tipo_inicio]
+    seja descricoes = esquemas.analisar(fonte, unidades)
+    retorne esquemas.buscar_tipo(fonte, unidades, empreste(descricoes), nome)
+}
+
 // Verifica a assinatura e o corpo inteiro: retorne expressao.
 // Diagnostico: 2 assinatura, 3 corpo, 4 duplicidade.
 privado funcao validar_funcoes(fonte: emprestimo[bytes], unidades: emprestimo[lista[lexico.UnidadeLexica]], grupo: emprestimo[assinaturas.Assinaturas]) -> inteiro {
@@ -196,7 +207,7 @@ privado funcao validar_funcoes(fonte: emprestimo[bytes], unidades: emprestimo[li
         j = 0
         enquanto j < atual.quantidade_parametros {
             seja p: assinaturas.ParametroFuncao = grupo.parametros[atual.primeiro_parametro + j]
-            seja parametro_valido = parametro_bytes_emprestado(fonte, unidades, p) ou parametro_lista_emprestada(fonte, unidades, p) ou tipo_lista_registro_emprestada(fonte, unidades, p) >= 0 ou tipo_registro_emprestado(fonte, unidades, p) >= 0
+            seja parametro_valido = parametro_bytes_emprestado(fonte, unidades, p) ou parametro_lista_emprestada(fonte, unidades, p) ou tipo_lista_registro_emprestada(fonte, unidades, p) >= 0 ou tipo_registro_emprestado(fonte, unidades, p) >= 0 ou tipo_registro_por_valor(fonte, unidades, p) >= 0
             se p.tipo_fim == p.tipo_inicio + 1 {
                 seja tipo_parametro: lexico.UnidadeLexica = unidades[p.tipo_inicio]
                 se fluxo.igual(fonte, tipo_parametro, empreste(retorno)) {
@@ -370,7 +381,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                     resposta.codigo_erro = 5
                     retorne mova(resposta)
                 }
-                se tipos[indice_registro] < 7 ou (tipos[indice_registro] >= 20 e tipos[indice_registro] < 40) ou tipos[indice_registro] >= 48 {
+                se tipos[indice_registro] < 7 ou (tipos[indice_registro] >= 20 e tipos[indice_registro] < 40) ou (tipos[indice_registro] >= 48 e tipos[indice_registro] < 50) ou tipos[indice_registro] >= 58 {
                     resposta.codigo_erro = 18
                     retorne mova(resposta)
                 }
@@ -379,6 +390,9 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 seja indice_tipo = tipos[indice_registro] - 7
                 se emprestado_registro {
                     indice_tipo = tipos[indice_registro] - 40
+                    se tipos[indice_registro] >= 50 {
+                        indice_tipo = tipos[indice_registro] - 50
+                    }
                 }
                 seja indice_campo = esquemas.buscar_caminho(fonte, unidades, empreste(descricoes), indice_tipo, primeiro + 2, ultimo)
                 se indice_campo < 0 {
@@ -781,6 +795,36 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
     seja argumento = tamanho(inicios) - 1
     enquanto argumento >= 0 {
         seja p_alvo: assinaturas.ParametroFuncao = assinadas.parametros[funcao_alvo.primeiro_parametro + argumento]
+        seja tipo_por_valor = tipo_registro_por_valor(fonte, unidades, p_alvo)
+        se tipo_por_valor >= 0 {
+            // Apenas uma variavel tipada: o destino criara sua copia.
+            resposta.unidade_erro = inicios[argumento]
+            se finais[argumento] != inicios[argumento] + 1 {
+                resposta.codigo_erro = 18
+                retorne mova(resposta)
+            }
+            seja nome_copia: lexico.UnidadeLexica = unidades[inicios[argumento]]
+            se nome_copia.classe != 1 {
+                resposta.codigo_erro = 18
+                retorne mova(resposta)
+            }
+            seja indice_copia_local = fluxo.resolver(fonte, nomes, nome_copia)
+            se indice_copia_local < 0 {
+                resposta.codigo_erro = 5
+                retorne mova(resposta)
+            }
+            seja modo_copia = tipos[indice_copia_local]
+            se modo_copia != 7 + tipo_por_valor e modo_copia != 40 + tipo_por_valor e modo_copia != 50 + tipo_por_valor {
+                resposta.codigo_erro = 18
+                retorne mova(resposta)
+            }
+            seja passagem = 3
+            se modo_copia != 7 + tipo_por_valor {
+                passagem = 4
+            }
+            seja argumento_copiado = emisbytes.emitir_argumento_emprestado(mova(codigo), indice_copia_local, passagem)
+            mova(codigo, argumento_copiado)
+        } senao {
         se parametro_bytes_emprestado(fonte, unidades, p_alvo) ou parametro_lista_emprestada(fonte, unidades, p_alvo) ou tipo_lista_registro_emprestada(fonte, unidades, p_alvo) >= 0 ou tipo_registro_emprestado(fonte, unidades, p_alvo) >= 0 {
             // O argumento deve ser exclusivamente um identificador
             // bytes fixo, dono dinamico ou emprestimo. Sem temporarios.
@@ -798,12 +842,12 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             seja modo_buffer = tipos[indice_buffer]
             seja tipo_registro_pedido = tipo_registro_emprestado(fonte, unidades, p_alvo)
             se tipo_registro_pedido >= 0 {
-                se modo_buffer != 7 + tipo_registro_pedido e modo_buffer != 40 + tipo_registro_pedido {
+                se modo_buffer != 7 + tipo_registro_pedido e modo_buffer != 40 + tipo_registro_pedido e modo_buffer != 50 + tipo_registro_pedido {
                     resposta.codigo_erro = 18
                     retorne mova(resposta)
                 }
                 modo_buffer = 3
-                se tipos[indice_buffer] == 40 + tipo_registro_pedido {
+                se tipos[indice_buffer] == 40 + tipo_registro_pedido ou tipos[indice_buffer] == 50 + tipo_registro_pedido {
                     modo_buffer = 4
                 }
             } senao {
@@ -854,6 +898,7 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 adicione(resposta.ligacoes, ligacao_filha)
                 l = l + 1
             }
+        }
         }
         argumento = argumento - 1
     }
@@ -1012,6 +1057,10 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             seja tipo_registro_parametro = tipo_registro_emprestado(fonte, unidades, parametro_atual)
             se tipo_registro_parametro >= 0 {
                 tipo_parametro = 40 + tipo_registro_parametro
+            }
+            seja registro_copiado = tipo_registro_por_valor(fonte, unidades, parametro_atual)
+            se registro_copiado >= 0 {
+                tipo_parametro = 50 + registro_copiado
             }
         }
         adicione(tipos, tipo_parametro)
@@ -1354,12 +1403,16 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         }
         se instrucao.categoria == 14 {
             // Apenas um campo inteiro de um registro proprietario local.
-            se tipos[indice_local] < 7 ou tipos[indice_local] >= 20 {
+            se tipos[indice_local] < 7 ou (tipos[indice_local] >= 20 e tipos[indice_local] < 50) ou tipos[indice_local] >= 58 {
                 resposta.codigo_erro = 18
                 retorne mova(resposta)
             }
             seja campo_nome: lexico.UnidadeLexica = unidades[instrucao.campo_unidade]
-            seja indice_campo = esquemas.buscar_caminho(fonte, unidades, empreste(descricoes), tipos[indice_local] - 7, instrucao.campo_unidade, instrucao.campo_fim)
+            seja indice_tipo_escrita = tipos[indice_local] - 7
+            se tipos[indice_local] >= 50 {
+                indice_tipo_escrita = tipos[indice_local] - 50
+            }
+            seja indice_campo = esquemas.buscar_caminho(fonte, unidades, empreste(descricoes), indice_tipo_escrita, instrucao.campo_unidade, instrucao.campo_fim)
             se indice_campo < 0 {
                 resposta.codigo_erro = 5
                 se indice_campo == -2 {
@@ -1380,8 +1433,13 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
                 adicione(ligacoes, nova_ligacao)
                 indice_ligacao = indice_ligacao + 1
             }
-            seja escrito = emisregistros.emitir_escrita(mova(codigo), indice_local, indice_campo)
-            mova(codigo, escrito)
+            se tipos[indice_local] >= 50 {
+                seja escrito_copiado = emisregistros.emitir_escrita_referenciada(mova(codigo), indice_local, indice_campo)
+                mova(codigo, escrito_copiado)
+            } senao {
+                seja escrito = emisregistros.emitir_escrita(mova(codigo), indice_local, indice_campo)
+                mova(codigo, escrito)
+            }
             posicao_ir = posicao_ir + 1
             continue
         }
@@ -1737,10 +1795,22 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoCorposELF {
             retorne mova(resposta)
         }
         seja total_funcao = assinatura.quantidade_parametros + plano_funcao.quantidade_locais
-        seja preparo_funcao = prologo(mova(codigo), total_funcao)
+        seja slots_copia = 0
+        seja indice_parametro_copia = 0
+        enquanto indice_parametro_copia < assinatura.quantidade_parametros {
+            seja p_copia: assinaturas.ParametroFuncao = assinadas.parametros[assinatura.primeiro_parametro + indice_parametro_copia]
+            seja tipo_copia = tipo_registro_por_valor(fonte, empreste(unidades), p_copia)
+            se tipo_copia >= 0 {
+                seja layout_copia: esquemas.TipoRegistro = layouts.tipos[tipo_copia]
+                slots_copia = slots_copia + layout_copia.quantidade_slots
+            }
+            indice_parametro_copia = indice_parametro_copia + 1
+        }
+        seja preparo_funcao = prologo(mova(codigo), total_funcao + slots_copia)
         mova(codigo, preparo_funcao)
         seja parametros: lista[lexico.UnidadeLexica]
         seja j = 0
+        seja proximo_slot_copia = total_funcao
         enquanto j < assinatura.quantidade_parametros {
             seja parametro: assinaturas.ParametroFuncao = assinadas.parametros[assinatura.primeiro_parametro + j]
             seja token_parametro: lexico.UnidadeLexica = unidades[parametro.unidade_nome]
@@ -1754,6 +1824,13 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoCorposELF {
             adicione_byte(codigo, 80) // push rax
             seja transferido = guardar_local(mova(codigo), j)
             mova(codigo, transferido)
+            seja tipo_parametro_copiado = tipo_registro_por_valor(fonte, empreste(unidades), parametro)
+            se tipo_parametro_copiado >= 0 {
+                seja esquema_copiado: esquemas.TipoRegistro = layouts.tipos[tipo_parametro_copiado]
+                seja copia_entrada = emisregistros.copiar_parametro(mova(codigo), j, proximo_slot_copia, esquema_copiado.quantidade_slots)
+                mova(codigo, copia_entrada)
+                proximo_slot_copia = proximo_slot_copia + esquema_copiado.quantidade_slots
+            }
             j = j + 1
         }
         seja corpo_funcao = emitir_corpo(mova(codigo), fonte, empreste(unidades), empreste(assinadas), empreste(plano_funcao), empreste(parametros), f)
