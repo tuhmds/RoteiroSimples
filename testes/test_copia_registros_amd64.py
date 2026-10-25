@@ -53,6 +53,21 @@ class TestesCopiaRegistrosAMD64(unittest.TestCase):
                 ))
                 self.assertEqual(g.proxima_condicao, 8)
 
+    def test_quantidade_invalida_nao_emite_laco_infinito(self):
+        for quantidade in (0, -1):
+            with self.subTest(quantidade=quantidade):
+                g = EmissorEspiao()
+                with self.assertRaisesRegex(ValueError, "quantidade positiva"):
+                    _copiar_palavras(g, -8, -16, quantidade)
+                self.assertEqual(g.proxima_condicao, 8)
+                self.assertEqual(len(g.eventos), 2)
+
+                g = EmissorEspiao()
+                with self.assertRaisesRegex(ValueError, "quantidade positiva"):
+                    _copiar_para_retorno(g, -8, quantidade)
+                self.assertEqual(g.proxima_condicao, 8)
+                self.assertEqual(len(g.eventos), 2)
+
     def test_destinos_identicos_nao_geram_instrucao(self):
         g = EmissorEspiao()
         _copiar_palavras(g, -24, -24, 3)
