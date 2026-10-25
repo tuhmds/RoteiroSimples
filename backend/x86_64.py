@@ -1012,6 +1012,24 @@ def preparar_saida_fatal_windows(g):
     g.bytes(b'\x48\x83\xEC\x30')  # sub rsp,48
 
 
+
+def _emitir_erro_fatal(g, mensagens, rotulo, mensagem, windows):
+    """Registra um erro e emite a sua saída nativa, sem retornar ao programa."""
+    indice = len(mensagens)
+    mensagens[indice] = mensagem
+    g.marcar(rotulo)
+    if windows:
+        # Chamadas Win64 exigem pilha alinhada mesmo quando o erro ocorre
+        # durante a avaliação de uma expressão com valores empilhados.
+        preparar_saida_fatal_windows(g)
+    escreve_literal(g, indice, mensagem, windows, 'saida' if windows else 'erro')
+    if windows:
+        g.bytes(b'\xB9\x01\x00\x00\x00')
+        g.relativo(b'\xFF\x15', 'ExitProcess')
+    else:
+        g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+
+
 def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes=None):
     g = Gerador()
     g.desenrolamentos = []  # contratos reais para .pdata/.xdata
@@ -1676,160 +1694,78 @@ def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes
     if any(op[0] == 'leia_texto' for op in percorrer_instrucoes(programa.instrucoes)):
         ler_buffer_texto(g, windows)
 
-    primeiro_erro = len(mensagens)
-    for indice, msg in [(primeiro_erro, 'Erro: divisão por zero.\n'),
-                        (primeiro_erro + 1, 'Erro: divisão inteira fora do limite.\n'),
-                        (primeiro_erro + 2, 'Erro: estouro aritmético em inteiro de 64 bits.\n')]:
-        rotulo = {primeiro_erro: 'erro_divisao_zero', primeiro_erro + 1: 'erro_estouro',
-                  primeiro_erro + 2: 'erro_overflow_aritmetico'}[indice]
-        g.marcar(rotulo)
-        mensagens[indice] = msg
-        if windows:
-            # Uma expressao pode ter deixado operandos no stack ao falhar.
-            # Antes de chamar WriteFile/ExitProcess restauramos o alinhamento
-            # obrigatorio de 16 bytes da ABI Windows x64.
-            preparar_saida_fatal_windows(g)  # and rsp, -16
-            escreve_literal(g, indice, msg, True)
-            g.bytes(b'\xB9\x01\x00\x00\x00')
-            g.relativo(b'\xFF\x15', 'ExitProcess')
-        else:
-            escreve_literal(g, indice, msg, False, 'erro')
-            g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+    # A ordem dos rótulos é parte do contrato de emissão: preserva
+    # os índices de mensagens e a disposição do código nativo.
+    for rotulo, mensagem in (
+        ('erro_divisao_zero', 'Erro: divisão por zero.\n'),
+        ('erro_estouro', 'Erro: divisão inteira fora do limite.\n'),
+        ('erro_overflow_aritmetico', 'Erro: estouro aritmético em inteiro de 64 bits.\n'),
+    ):
+        _emitir_erro_fatal(g, mensagens, rotulo, mensagem, windows)
+
     if getattr(programa, 'funcoes', {}):
-        indice = len(mensagens)
-        msg = 'Erro: limite seguro de pilha em chamada de função.\n'
-        mensagens[indice] = msg
-        g.marcar('erro_recursao_limite')
-        if windows:
-            preparar_saida_fatal_windows(g)
-        escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
-        if windows:
-            g.bytes(b'\xB9\x01\x00\x00\x00')
-            g.relativo(b'\xFF\x15', 'ExitProcess')
-        else:
-            g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+        _emitir_erro_fatal(
+            g, mensagens, 'erro_recursao_limite',
+            'Erro: limite seguro de pilha em chamada de função.\n', windows)
+
     if tem_listas:
-        indice = len(mensagens)
-        msg = 'Erro: índice fora dos limites da lista.\n'
-        mensagens[indice] = msg
-        g.marcar('erro_indice_lista')
-        if windows:
-            preparar_saida_fatal_windows(g)  # and rsp, -16
-        escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
-        if windows:
-            g.bytes(b'\xB9\x01\x00\x00\x00')
-            g.relativo(b'\xFF\x15', 'ExitProcess')
-        else:
-            g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
-    if tem_leitura and any(op[0] in ('leia_int', 'leia_indice', 'leia_indice_dinamico') for op in percorrer_instrucoes(programa.instrucoes)):
-        for indice, msg, rotulo in [
-            (len(mensagens), 'Erro: entrada invalida; digite um numero inteiro.\n', 'erro_entrada_invalida'),
-            (len(mensagens)+1, 'Erro: numero fora do limite de 64 bits.\n', 'erro_entrada_limite'),
-        ]:
-            mensagens[indice] = msg
-            g.marcar(rotulo)
-            if windows:
-                preparar_saida_fatal_windows(g)  # and rsp, -16
-            escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
-            if windows:
-                g.bytes(b'\xB9\x01\x00\x00\x00')
-                g.relativo(b'\xFF\x15', 'ExitProcess')
-            else:
-                g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+        _emitir_erro_fatal(
+            g, mensagens, 'erro_indice_lista',
+            'Erro: índice fora dos limites da lista.\n', windows)
+
+    if tem_leitura and any(
+        op[0] in ('leia_int', 'leia_indice', 'leia_indice_dinamico')
+        for op in percorrer_instrucoes(programa.instrucoes)
+    ):
+        for rotulo, mensagem in (
+            ('erro_entrada_invalida', 'Erro: entrada invalida; digite um numero inteiro.\n'),
+            ('erro_entrada_limite', 'Erro: numero fora do limite de 64 bits.\n'),
+        ):
+            _emitir_erro_fatal(g, mensagens, rotulo, mensagem, windows)
+
     if tem_textos:
-        for msg, rotulo in [
-            ('Erro: texto excede a capacidade do buffer.\n', 'erro_texto_capacidade'),
-            ('Erro: sequencia UTF-8 invalida.\n', 'erro_texto_utf8'),
-            ('Erro: falha ao ler texto.\n', 'erro_texto_entrada'),
-            ('Erro: falha ao escrever texto.\n', 'erro_texto_saida'),
-            ('Erro: indice de byte fora dos limites do texto.\n', 'erro_indice_texto'),
-        ]:
-            indice = len(mensagens)
-            mensagens[indice] = msg
-            g.marcar(rotulo)
-            if windows:
-                preparar_saida_fatal_windows(g)  # and rsp, -16
-            escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
-            if windows:
-                g.bytes(b'\xB9\x01\x00\x00\x00')
-                g.relativo(b'\xFF\x15', 'ExitProcess')
-            else:
-                g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+        for rotulo, mensagem in (
+            ('erro_texto_capacidade', 'Erro: texto excede a capacidade do buffer.\n'),
+            ('erro_texto_utf8', 'Erro: sequencia UTF-8 invalida.\n'),
+            ('erro_texto_entrada', 'Erro: falha ao ler texto.\n'),
+            ('erro_texto_saida', 'Erro: falha ao escrever texto.\n'),
+            ('erro_indice_texto', 'Erro: indice de byte fora dos limites do texto.\n'),
+        ):
+            _emitir_erro_fatal(g, mensagens, rotulo, mensagem, windows)
+
     if tem_dinamicas:
-        for rotulo, msg in [
+        for rotulo, mensagem in (
             ('erro_lista_liberada', 'Erro: lista dinamica usada depois da liberacao.\n'),
             ('erro_lista_memoria', 'Erro: nao foi possivel reservar ou liberar memoria.\n'),
             ('erro_valor_inativo', 'Erro: valor dinamico usado depois da movimentacao ou liberacao.\n'),
-        ]:
-            indice = len(mensagens)
-            mensagens[indice] = msg
-            g.marcar(rotulo)
-            if windows:
-                preparar_saida_fatal_windows(g)
-            escreve_literal(g, indice, msg, windows, 'saida' if windows else 'erro')
-            if windows:
-                g.bytes(b'\xB9\x01\x00\x00\x00')
-                g.relativo(b'\xFF\x15', 'ExitProcess')
-            else:
-                g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+        ):
+            _emitir_erro_fatal(g, mensagens, rotulo, mensagem, windows)
+
     if tem_bytes:
-        for nome, mensagem in (
+        for rotulo, mensagem in (
             ('erro_indice_bytes', 'Erro: indice fora dos bytes validos.\n'),
             ('erro_valor_byte', 'Erro: byte deve estar entre 0 e 255.\n'),
-            ('erro_bytes_capacidade', 'Erro: capacidade do buffer binario excedida.\n')):
-            indice = len(mensagens)
-            mensagens[indice] = mensagem
-            g.marcar(nome)
-            if windows:
-                preparar_saida_fatal_windows(g)
-            escreve_literal(g, indice, mensagem, windows, 'saida' if windows else 'erro')
-            if windows:
-                g.bytes(b'\xB9\x01\x00\x00\x00')
-                g.relativo(b'\xFF\x15', 'ExitProcess')
-            else:
-                g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+            ('erro_bytes_capacidade', 'Erro: capacidade do buffer binario excedida.\n'),
+        ):
+            _emitir_erro_fatal(g, mensagens, rotulo, mensagem, windows)
+
     if tem_encerre:
-        indice = len(mensagens)
-        mensagem = 'Erro: codigo de saida deve estar entre 0 e 255.\n'
-        mensagens[indice] = mensagem
-        g.marcar('erro_codigo_saida')
-        if windows:
-            preparar_saida_fatal_windows(g)
-        escreve_literal(g, indice, mensagem, windows, 'saida' if windows else 'erro')
-        if windows:
-            g.bytes(b'\xB9\x01\x00\x00\x00')
-            g.relativo(b'\xFF\x15', 'ExitProcess')
-        else:
-            g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+        _emitir_erro_fatal(
+            g, mensagens, 'erro_codigo_saida',
+            'Erro: codigo de saida deve estar entre 0 e 255.\n', windows)
+
     if tem_recursos:
-        indice = len(mensagens)
-        mensagem = 'Erro: nao foi possivel fechar automaticamente um arquivo.\n'
-        mensagens[indice] = mensagem
-        g.marcar('erro_fechamento_implicito')
-        if windows:
-            preparar_saida_fatal_windows(g)
-        escreve_literal(g, indice, mensagem, windows, 'saida' if windows else 'erro')
-        if windows:
-            g.bytes(b'\xB9\x01\x00\x00\x00')
-            g.relativo(b'\xFF\x15', 'ExitProcess')
-        else:
-            g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+        _emitir_erro_fatal(
+            g, mensagens, 'erro_fechamento_implicito',
+            'Erro: nao foi possivel fechar automaticamente um arquivo.\n', windows)
+
     if tem_arquivos:
-        for nome, mensagem in (
-                ('erro_arquivo_abrir', 'Erro: nao foi possivel abrir o arquivo.\n'),
-                ('erro_arquivo_leitura', 'Erro: falha na leitura do arquivo.\n'),
-                ('erro_arquivo_gravacao', 'Erro: falha na gravacao do arquivo.\n'),
-                ('erro_arquivo_capacidade', 'Erro: arquivo excede a capacidade do texto.\n'),
-                ('erro_arquivo_fechar', 'Erro: nao foi possivel fechar o arquivo.\n')):
-            indice = len(mensagens)
-            mensagens[indice] = mensagem
-            g.marcar(nome)
-            if windows:
-                preparar_saida_fatal_windows(g)
-            escreve_literal(g, indice, mensagem, windows, 'saida' if windows else 'erro')
-            if windows:
-                g.bytes(b'\xB9\x01\x00\x00\x00')
-                g.relativo(b'\xFF\x15', 'ExitProcess')
-            else:
-                g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
+        for rotulo, mensagem in (
+            ('erro_arquivo_abrir', 'Erro: nao foi possivel abrir o arquivo.\n'),
+            ('erro_arquivo_leitura', 'Erro: falha na leitura do arquivo.\n'),
+            ('erro_arquivo_gravacao', 'Erro: falha na gravacao do arquivo.\n'),
+            ('erro_arquivo_capacidade', 'Erro: arquivo excede a capacidade do texto.\n'),
+            ('erro_arquivo_fechar', 'Erro: nao foi possivel fechar o arquivo.\n'),
+        ):
+            _emitir_erro_fatal(g, mensagens, rotulo, mensagem, windows)
     return g, mensagens
