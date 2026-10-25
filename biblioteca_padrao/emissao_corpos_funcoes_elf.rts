@@ -291,6 +291,39 @@ privado funcao emitir_valor(codigo: bytes, fonte: emprestimo[bytes], unidades: e
         retorne mova(resposta)
     }
     seja primeiro_valor: lexico.UnidadeLexica = unidades[primeiro]
+    se destino_registro >= 0 {
+        // Somente chamada direta como fonte de registro por valor.
+        se ultimo < primeiro + 3 {
+            resposta.codigo_erro = 18
+            retorne mova(resposta)
+        }
+        seja abertura_resultado: lexico.UnidadeLexica = unidades[primeiro + 1]
+        seja fechamento_resultado: lexico.UnidadeLexica = unidades[ultimo - 1]
+        se primeiro_valor.classe != 1 ou nao fluxo.simbolo(fonte, abertura_resultado, 40) ou nao fluxo.simbolo(fonte, fechamento_resultado, 41) {
+            resposta.codigo_erro = 18
+            retorne mova(resposta)
+        }
+        seja profundidade_resultado = 0
+        seja indice_resultado = primeiro + 1
+        enquanto indice_resultado < ultimo {
+            seja token_resultado: lexico.UnidadeLexica = unidades[indice_resultado]
+            se fluxo.simbolo(fonte, token_resultado, 40) {
+                profundidade_resultado = profundidade_resultado + 1
+            }
+            se fluxo.simbolo(fonte, token_resultado, 41) {
+                profundidade_resultado = profundidade_resultado - 1
+                se profundidade_resultado == 0 e indice_resultado != ultimo - 1 {
+                    resposta.codigo_erro = 18
+                    retorne mova(resposta)
+                }
+            }
+            indice_resultado = indice_resultado + 1
+        }
+        se profundidade_resultado != 0 {
+            resposta.codigo_erro = 18
+            retorne mova(resposta)
+        }
+    }
     // Leitura de lista[indice].campo, incluindo subcampos aninhados.
     se ultimo >= primeiro + 6 e primeiro_valor.classe == 1 {
         seja abre_indice: lexico.UnidadeLexica = unidades[primeiro + 1]
@@ -1526,6 +1559,25 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             posicao_ir = posicao_ir + 1
             continue
         }
+        se instrucao.categoria == 2 e tipos[indice_local] >= 7 e tipos[indice_local] < 20 {
+            // O resultado estruturado e escrito diretamente nos slots do dono.
+            // Uma atribuicao a registro so aceita chamada do mesmo tipo.
+            seja chamada_registro = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0, indice_local)
+            se chamada_registro.codigo_erro != 0 {
+                resposta.codigo_erro = chamada_registro.codigo_erro
+                resposta.unidade_erro = chamada_registro.unidade_erro
+                retorne mova(resposta)
+            }
+            mova(codigo, chamada_registro.codigo)
+            seja indice_ligacao_registro = 0
+            enquanto indice_ligacao_registro < tamanho(chamada_registro.ligacoes) {
+                seja ligacao_registro: Ligacao = chamada_registro.ligacoes[indice_ligacao_registro]
+                adicione(ligacoes, ligacao_registro)
+                indice_ligacao_registro = indice_ligacao_registro + 1
+            }
+            posicao_ir = posicao_ir + 1
+            continue
+        }
         se instrucao.categoria == 2 {
             se tipos[indice_local] == 2 ou tipos[indice_local] == 3 ou tipos[indice_local] == 4 ou tipos[indice_local] == 5 ou tipos[indice_local] >= 7 {
                 resposta.codigo_erro = 18
@@ -1635,6 +1687,46 @@ privado funcao emitir_corpo(codigo: bytes, fonte: emprestimo[bytes], unidades: e
             }
             posicao_ir = posicao_ir + 1
             continue
+        }
+        se instrucao.categoria == 7 {
+            seja assinatura_retorno: assinaturas.AssinaturaFuncao = assinadas.funcoes[funcao_atual]
+            seja tipo_retorno_registro = tipo_registro_retorno(fonte, unidades, empreste(descricoes), assinatura_retorno)
+            se tipo_retorno_registro >= 0 {
+                // Nao se permite retorno de expressao temporaria ou
+                // de registro de outro esquema. A copia cruza a ABI.
+                se ultimo != primeiro + 1 {
+                    resposta.codigo_erro = 18
+                    retorne mova(resposta)
+                }
+                seja origem_nome: lexico.UnidadeLexica = unidades[primeiro]
+                seja origem_local = fluxo.resolver(fonte, empreste(nomes), origem_nome)
+                se origem_local < 0 {
+                    resposta.codigo_erro = 5
+                    retorne mova(resposta)
+                }
+                seja origem_tipo = tipos[origem_local]
+                se origem_tipo != 7 + tipo_retorno_registro e origem_tipo != 40 + tipo_retorno_registro e origem_tipo != 50 + tipo_retorno_registro {
+                    resposta.codigo_erro = 18
+                    retorne mova(resposta)
+                }
+                seja esquema_retorno: esquemas.TipoRegistro = descricoes.tipos[tipo_retorno_registro]
+                seja referenciado = origem_tipo >= 40
+                seja copiado = emisregistros.copiar_para_retorno(mova(codigo), origem_local, esquema_retorno.quantidade_slots, referenciado)
+                mova(codigo, copiado)
+                seja limpeza_retorno = emitir_limpeza_escopo(mova(codigo), empreste(nomes), empreste(tipos), 0)
+                mova(codigo, limpeza_retorno)
+                // O resultado em rax nao depende dos registradores usados
+                // durante a limpeza: recuperar endereco do buffer oculto.
+                adicione_byte(codigo, 72)
+                adicione_byte(codigo, 139)
+                adicione_byte(codigo, 133)
+                seja retorno_ponteiro = elf.anexar_inteiro(mova(codigo), 16, 4)
+                mova(codigo, retorno_ponteiro)
+                adicione_byte(codigo, 201)
+                adicione_byte(codigo, 195)
+                posicao_ir = posicao_ir + 1
+                continue
+            }
         }
         seja valor = emitir_valor(mova(codigo), fonte, unidades, empreste(nomes), empreste(tipos), assinadas, primeiro, ultimo, funcao_atual, 0, -1)
         se valor.codigo_erro != 0 {
@@ -1855,11 +1947,16 @@ publico funcao compilar(fonte: emprestimo[bytes]) -> ResultadoCorposELF {
             seja parametro: assinaturas.ParametroFuncao = assinadas.parametros[assinatura.primeiro_parametro + j]
             seja token_parametro: lexico.UnidadeLexica = unidades[parametro.unidade_nome]
             adicione(parametros, token_parametro)
-            // mov rax, [rbp + 16+8*j], cdecl interno com pilha.
+            // Retorno de registro adiciona ponteiro oculto em [rbp + 16].
+            seja deslocamento_argumento = 16 + j * 8
+            seja indice_retorno = tipo_registro_retorno(fonte, empreste(unidades), empreste(layouts), assinatura)
+            se indice_retorno >= 0 {
+                deslocamento_argumento = deslocamento_argumento + 8
+            }
             adicione_byte(codigo, 72)
             adicione_byte(codigo, 139)
             adicione_byte(codigo, 133)
-            seja entrada = elf.anexar_inteiro(mova(codigo), 16 + j * 8, 4)
+            seja entrada = elf.anexar_inteiro(mova(codigo), deslocamento_argumento, 4)
             mova(codigo, entrada)
             adicione_byte(codigo, 80) // push rax
             seja transferido = guardar_local(mova(codigo), j)
