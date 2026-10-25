@@ -1,8 +1,16 @@
 name: Testes RS
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
+
+# Uma matriz por PR. Um novo commit cancela execuções obsoletas da mesma PR.
+# Em main, o push do merge roda a verificação da linha principal.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   compilador:
     strategy:
