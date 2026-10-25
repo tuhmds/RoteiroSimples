@@ -1024,10 +1024,10 @@ def _emitir_erro_fatal(g, mensagens, rotulo, mensagem, windows):
         preparar_saida_fatal_windows(g)
     escreve_literal(g, indice, mensagem, windows, 'saida' if windows else 'erro')
     if windows:
-        g.bytes(b'\\xB9\\x01\\x00\\x00\\x00')
-        g.relativo(b'\\xFF\\x15', 'ExitProcess')
+        g.bytes(b'\xB9\x01\x00\x00\x00')
+        g.relativo(b'\xFF\x15', 'ExitProcess')
     else:
-        g.bytes(b'\\xB8\\x3C\\x00\\x00\\x00\\xBF\\x01\\x00\\x00\\x00\\x0F\\x05')
+        g.bytes(b'\xB8\x3C\x00\x00\x00\xBF\x01\x00\x00\x00\x0F\x05')
 
 
 def montar_codigo(programa, windows, emissor_alternativo=None, emissores_funcoes=None):
