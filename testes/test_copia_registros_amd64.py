@@ -59,14 +59,50 @@ class TestesCopiaRegistrosAMD64(unittest.TestCase):
                 g = EmissorEspiao()
                 with self.assertRaisesRegex(ValueError, "quantidade positiva"):
                     _copiar_palavras(g, -8, -16, quantidade)
-                self.assertEqual(g.proxima_condicao, 8)
-                self.assertEqual(len(g.eventos), 2)
+                self.assertEqual(g.proxima_condicao, 7)
+                self.assertEqual(g.eventos, [])
 
                 g = EmissorEspiao()
                 with self.assertRaisesRegex(ValueError, "quantidade positiva"):
                     _copiar_para_retorno(g, -8, quantidade)
-                self.assertEqual(g.proxima_condicao, 8)
-                self.assertEqual(len(g.eventos), 2)
+                self.assertEqual(g.proxima_condicao, 7)
+                self.assertEqual(g.eventos, [])
+
+    def test_contagem_fora_de_32_bits_nao_altera_gerador(self):
+        for quantidade in (2**32, 2**64):
+            for metodo in (
+                lambda g: _copiar_palavras(g, -8, -16, quantidade),
+                lambda g: _copiar_para_retorno(g, -8, quantidade),
+            ):
+                with self.subTest(quantidade=quantidade):
+                    g = EmissorEspiao()
+                    with self.assertRaisesRegex(ValueError, "32 bits"):
+                        metodo(g)
+                    self.assertEqual(g.proxima_condicao, 7)
+                    self.assertEqual(g.eventos, [])
+
+    def test_deslocamentos_invalidos_nao_geram_codigo_parcial(self):
+        for origem, destino in ((2**31, -8), (-8, -(2**31)-1)):
+            with self.subTest(origem=origem, destino=destino):
+                g = EmissorEspiao()
+                with self.assertRaises(struct.error):
+                    _copiar_palavras(g, origem, destino, 3)
+                self.assertEqual(g.proxima_condicao, 7)
+                self.assertEqual(g.eventos, [])
+        g = EmissorEspiao()
+        with self.assertRaises(struct.error):
+            _copiar_para_retorno(g, -(2**31)-1, 3)
+        self.assertEqual(g.proxima_condicao, 7)
+        self.assertEqual(g.eventos, [])
+
+    def test_tipo_de_quantidade_invalido_nao_altera_gerador(self):
+        for quantidade in (True, 2.5, "3", None):
+            with self.subTest(quantidade=quantidade):
+                g = EmissorEspiao()
+                with self.assertRaisesRegex(ValueError, "quantidade positiva"):
+                    _copiar_palavras(g, -8, -16, quantidade)
+                self.assertEqual(g.proxima_condicao, 7)
+                self.assertEqual(g.eventos, [])
 
     def test_destinos_identicos_nao_geram_instrucao(self):
         g = EmissorEspiao()
