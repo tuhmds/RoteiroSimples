@@ -111,3 +111,53 @@ publico funcao emitir_escrita_referenciada(codigo: bytes, indice_parametro: inte
     mova(codigo, endereco_campo)
     retorne mova(codigo)
 }
+
+// Copia o registro devolvido para o buffer do chamador.
+// ABI experimental de retorno: ponteiro oculto em [rbp + 16].
+// O destino e obrigatoriamente um buffer proprio e com "quantidade"
+// slots de oito bytes, reservado pelo chamador. O emissor chamador
+// ainda sera integrado; esta rotina apenas implementa a transferencia.
+// Para origem_referenciada, o slot de origem contem um ponteiro para
+// o primeiro campo do registro. Caso contrario, os campos estao
+// diretamente nos slots consecutivos do quadro atual.
+// O resultado em rax e o endereco do buffer de retorno.
+publico funcao copiar_para_retorno(codigo: bytes, origem_local: inteiro, quantidade: inteiro, origem_referenciada: logico) -> bytes {
+    // mov rdx, [rbp + 16] (ponteiro oculto de retorno)
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 139)
+    adicione_byte(codigo, 149)
+    seja ponteiro_retorno = elf.anexar_inteiro(mova(codigo), 16, 4)
+    mova(codigo, ponteiro_retorno)
+    se origem_referenciada {
+        // mov rcx, [rbp - origem_local] (endereco dos campos)
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 139)
+        adicione_byte(codigo, 141)
+        seja ponteiro_origem = fluxo.endereco(mova(codigo), origem_local)
+        mova(codigo, ponteiro_origem)
+    }
+    seja indice = 0
+    enquanto indice < quantidade {
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 139)
+        se origem_referenciada {
+            adicione_byte(codigo, 129) // mov rax, [rcx - indice*8]
+            seja deslocamento_origem = elf.anexar_inteiro(mova(codigo), 4294967296 - indice * 8, 4)
+            mova(codigo, deslocamento_origem)
+        } senao {
+            adicione_byte(codigo, 133) // mov rax, [rbp - slot]
+            seja origem = fluxo.endereco(mova(codigo), origem_local + indice)
+            mova(codigo, origem)
+        }
+        adicione_byte(codigo, 72)
+        adicione_byte(codigo, 137)
+        adicione_byte(codigo, 130) // mov [rdx - indice*8], rax
+        seja deslocamento_destino = elf.anexar_inteiro(mova(codigo), 4294967296 - indice * 8, 4)
+        mova(codigo, deslocamento_destino)
+        indice = indice + 1
+    }
+    adicione_byte(codigo, 72)
+    adicione_byte(codigo, 137)
+    adicione_byte(codigo, 208) // mov rax, rdx
+    retorne mova(codigo)
+}

@@ -1,0 +1,12 @@
+// Gera trechos x86-64 para testar o contrato do buffer de retorno.
+importe "padrao/emissao_registros_elf.rts" como registros
+
+inicio {
+    seja local: bytes
+    seja trecho_local = registros.copiar_para_retorno(mova(local), 0, 2, falso)
+    grave_arquivo("trecho_retorno_local.bin", trecho_local)
+
+    seja referencia: bytes
+    seja trecho_referencia = registros.copiar_para_retorno(mova(referencia), 0, 2, verdadeiro)
+    grave_arquivo("trecho_retorno_referencia.bin", trecho_referencia)
+}
