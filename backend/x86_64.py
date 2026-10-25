@@ -240,6 +240,8 @@ def _transferir_registro_proprietario(g, variaveis, tipos, destino, origem, wind
 
 def _emitir_copia_palavras(g, quantidade, rotulo):
     """Copia palavras de r10 para r11, avançando ambos os ponteiros para baixo."""
+    if quantidade <= 0:
+        raise ValueError("Cópia de agregado exige quantidade positiva de palavras.")
     # A ABI de registros guarda campos consecutivos em endereços decrescentes.
     g.bytes(b'\xB9' + struct.pack('<I', quantidade))
     g.marcar(rotulo)
