@@ -52,7 +52,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
             nome_tipo = str(cab[1])
             if nome_tipo in PALAVRAS_LOGICAS:
                 raise ErroCompilacao(f'Linha {n}: palavra {nome_tipo!r} reservada para operador lógico; não pode nomear um tipo.')
-            if nome_tipo in registros or nome_tipo in ('inteiro', 'logico', 'texto', 'bytes', 'lista', 'emprestimo', 'empreste', 'retire', 'codifique_utf8', 'decodifique_utf8', 'consulte_arquivo', 'seja', 'se', 'senao', 'inicio', 'funcao', 'retorne', 'para', 'enquanto', 'tipo', 'leia', 'escreva') or nome_tipo.startswith('__rs_'):
+            if nome_tipo in registros or nome_tipo in ('inteiro', 'logico', 'texto', 'bytes', 'lista', 'emprestimo', 'empreste', 'retire', 'codifique_utf8', 'decodifique_utf8', 'consulte_arquivo', 'seja', 'se', 'senao', 'inicio', 'funcao', 'retorne', 'para', 'enquanto', 'tipo', 'leia', 'escreva', 'janela_mensagem') or nome_tipo.startswith('__rs_'):
                 raise ErroCompilacao(f'Linha {n}: nome de tipo duplicado ou reservado.')
             campos = []
             while linhas and linhas[0][1] != ['}']:
@@ -185,7 +185,7 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
     contexto = _contexto or ContextoSemantico(importa, assinaturas, registros)
     variaveis, tipos = contexto.variaveis, contexto.tipos
     expressao_tipada, registrar = contexto.expressao_tipada, contexto.registrar
-    reservadas = {'retire', 'codifique_utf8', 'decodifique_utf8', 'consulte_arquivo', 'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'reserve_capacidade', 'encerre', 'arquivo', 'abra_arquivo', 'grave_em', 'carregue_de', 'sincronize_arquivo', 'feche_arquivo', 'publique_arquivo', 'bloqueie_arquivo', 'funcao', 'retorne', 'tipo'}
+    reservadas = {'retire', 'codifique_utf8', 'decodifique_utf8', 'consulte_arquivo', 'grave_trecho', 'carregue_trecho', 'grave_arquivo', 'carregue_arquivo', 'empreste', 'emprestimo', 'mova', 'adicione', 'remova_ultimo', 'limpe_lista', 'libere', 'importe', 'inicio', 'seja', 'escreva', 'janela_mensagem', 'leia', 'inclua', 'se', 'senao', 'enquanto', 'para', 'de', 'ate', 'passo', 'pare', 'continue', 'inteiro', 'logico', 'verdadeiro', 'falso', 'lista', 'tamanho', 'texto', 'bytes', 'capacidade', 'copie', 'junte', 'limpe', 'adicione_byte', 'reserve_capacidade', 'encerre', 'arquivo', 'abra_arquivo', 'grave_em', 'carregue_de', 'sincronize_arquivo', 'feche_arquivo', 'publique_arquivo', 'bloqueie_arquivo', 'funcao', 'retorne', 'tipo'}
     reservadas.update(PALAVRAS_LOGICAS)
 
     def indice_lista(partes, linha):
@@ -410,6 +410,26 @@ def analisar_programa(fonte, _linhas=None, _contexto=None, _assinaturas=None, _r
                     if tipo_impresso not in ('inteiro', 'logico'):
                         raise ErroCompilacao(f'Linha {n}: escreva exige número, lógico ou buffer de texto.')
                     adicionar(('imprima_num', arvore), n, t)
+            elif t[0] == 'janela_mensagem' and t[1:2] == ['('] and t[-1:] == [')']:
+                # Primeiro recurso grafico da RS: dialogo modal nativo Win32.
+                # Literais eliminam ambiguidade de propriedade e tempo de vida.
+                partes = argumentos_externos(t, n)
+                if len(partes) != 2 or any(len(parte) != 1 or not parte[0].startswith('"')
+                                            for parte in partes):
+                    raise ErroCompilacao(
+                        f'Linha {n}: use janela_mensagem("Titulo", "Mensagem") com dois textos literais.')
+                try:
+                    titulo, mensagem = (json.loads(parte[0]) for parte in partes)
+                    if any(not isinstance(item, str) or '\x00' in item for item in (titulo, mensagem)):
+                        raise ValueError('texto NUL proibido')
+                    if not titulo:
+                        raise ValueError('titulo vazio')
+                    if any(len(item.encode('utf-16-le')) > 8192 for item in (titulo, mensagem)):
+                        raise ValueError('texto acima de 4096 unidades UTF-16')
+                except (ValueError, TypeError, UnicodeError) as exc:
+                    raise ErroCompilacao(
+                        f'Linha {n}: titulo ou mensagem invalidos (UTF-16, sem NUL, ate 4096 unidades).') from exc
+                adicionar(('janela_mensagem', titulo, mensagem), n, t)
             elif t[0] == 'encerre' and t[1:2] == ['('] and t[-1:] == [')']:
                 if len(t) < 4:
                     raise ErroCompilacao(f'Linha {n}: use encerre(codigo_inteiro).')
