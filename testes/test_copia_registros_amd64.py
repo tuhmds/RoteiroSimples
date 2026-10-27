@@ -110,6 +110,24 @@ class TestesCopiaRegistrosAMD64(unittest.TestCase):
         self.assertEqual(g.eventos, [])
         self.assertEqual(g.proxima_condicao, 7)
 
+    def test_copia_identica_valida_parametros_antes_de_ignorar(self):
+        # A otimizacao de auto-copia nao pode esconder entradas invalidas.
+        for quantidade in (0, -1, True, 2.5, "3", None, 2**32):
+            with self.subTest(quantidade=quantidade):
+                g = EmissorEspiao()
+                with self.assertRaises(ValueError):
+                    _copiar_palavras(g, -24, -24, quantidade)
+                self.assertEqual(g.eventos, [])
+                self.assertEqual(g.proxima_condicao, 7)
+
+        for deslocamento in (2**31, -(2**31) - 1):
+            with self.subTest(deslocamento=deslocamento):
+                g = EmissorEspiao()
+                with self.assertRaises(struct.error):
+                    _copiar_palavras(g, deslocamento, deslocamento, 1)
+                self.assertEqual(g.eventos, [])
+                self.assertEqual(g.proxima_condicao, 7)
+
     def test_retorno_composto_preserva_abi_linux_windows(self):
         for windows in (False, True):
             for quantidade in (1, 2, 16):
