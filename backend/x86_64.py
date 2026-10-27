@@ -261,9 +261,9 @@ def _emitir_copia_palavras(g, quantidade_codificada, rotulo):
 
 def _copiar_palavras(g, origem, destino, quantidade):
     """Copia valores completos entre posições do quadro local."""
+    fonte, alvo, contagem = _preparar_copia_palavras(origem, quantidade, destino)
     if origem == destino:
         return
-    fonte, alvo, contagem = _preparar_copia_palavras(origem, quantidade, destino)
     numero = g.proxima_condicao
     g.proxima_condicao += 1
     rotulo = f'copiar_composto_{numero}'
